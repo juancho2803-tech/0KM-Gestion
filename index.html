@@ -3129,7 +3129,7 @@
 
     entregados.forEach(r => {
       const fp = parseDateFlexible(r['Fecha Patentamiento']);
-      const feu = parseDateFlexible(r['Fecha Entrega Unidad']) || parseDateFlexible(r['Fecha Turno Entrega']);
+      const feu = parseDateFlexible(r['Fecha Turno Entrega']) || parseDateFlexible(r['Fecha Entrega Unidad']);
       if (!fp || !feu) return;
       const dh = diasHabilesSLA(fp, feu);
       if (dh === null || dh < 0) return;
@@ -7003,20 +7003,24 @@
   // "Fecha Ubicacion" (cuándo se registró ese movimiento) como mejor aproximación disponible;
   // si tampoco hay eso, se cae al turno de entrega ya vencido.
   function fechaEntregaEfectiva(row){
+    // El turno es "cuándo se fue" el auto de verdad — Fecha Entrega Unidad muchas veces
+    // se carga después, demorada por trámites/bloqueos administrativos, así que si hay
+    // turno YA CUMPLIDO se prioriza por sobre la fecha de entrega final (pedido de
+    // Juancho, 25/09, tras detectar casos con Fecha Entrega Unidad mal cargada a futuro).
+    const fTurno = parseDateFlexible(row['Fecha Turno Entrega']);
+    if (fTurno){
+      const hoy = new Date();
+      const hoyMid = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
+      const turnoMid = new Date(fTurno.getFullYear(), fTurno.getMonth(), fTurno.getDate());
+      if (turnoMid <= hoyMid) return fTurno;
+    }
     const fEntrega = parseDateFlexible(row['Fecha Entrega Unidad']);
     if (fEntrega) return fEntrega;
     const motivo = (row['Motivo Cambio Ubicacion'] || '').toString().trim().toUpperCase();
-    const fTurno = parseDateFlexible(row['Fecha Turno Entrega']);
     if (ENTREGA_MOTIVOS.includes(motivo)){
       const fUbic = parseDateFlexible(row['Fecha Ubicacion']);
       if (fUbic) return fUbic;
       if (fTurno) return fTurno;
-    }
-    if (fTurno){
-      const hoy = new Date();
-      const hoyMid = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
-      const dMid = new Date(fTurno.getFullYear(), fTurno.getMonth(), fTurno.getDate());
-      if (dMid <= hoyMid) return fTurno;
     }
     return null;
   }
