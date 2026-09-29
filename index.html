@@ -9114,7 +9114,16 @@
   // v24: la base viaja comprimida (gzip) y en formato columnas+filas: ~10x menos datos.
   const CAN_GZ = typeof DecompressionStream === 'function';
   // v24f: los pedidos comprimidos van por fetch (no JSONP) — muestra el error real si falla.
-  function fetchGet(params, timeoutMs){
+  function fetchGet(params, timeoutMs, attempt){
+    attempt = attempt || 0;
+    return fetchGetOnce(params, timeoutMs).catch(err => {
+      if (attempt >= 3) throw err;
+      const wait = 1500 * (attempt + 1);
+      console.warn(`↻ Reintento ${attempt + 1}/3 de ${params.action} en ${wait/1000}s (${err.message})`);
+      return new Promise(r => setTimeout(r, wait)).then(() => fetchGet(Object.assign({}, params, {_: String(Date.now())}), timeoutMs, attempt + 1));
+    });
+  }
+  function fetchGetOnce(params, timeoutMs){
     const controller = ('AbortController' in window) ? new AbortController() : null;
     const timer = controller ? setTimeout(() => controller.abort(), timeoutMs || 120000) : null;
     const qs = Object.keys(params).map(k => `${k}=${encodeURIComponent(params[k])}`).join('&');
@@ -9180,7 +9189,6 @@
       return {data:null, error:(payload && payload.error) || 'Respuesta inválida del servidor'};
     }).catch(err => {
       console.error('Error cargando appData:', err);
-      if (useGz) return fetchAppData(true); // respaldo: formato viejo sin comprimir
       return {data:null, error: err.message};
     });
   }
