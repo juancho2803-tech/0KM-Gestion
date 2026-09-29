@@ -9152,7 +9152,14 @@
         perfAdd('descomprimir base', performance.now() - tUn);
         payload.data.base = {filename: c.filename, fecha: c.fecha, rows: expandCompact(c)};
         delete payload.data.baseGz;
-        return payload;
+        if (!payload.data.baseExtraGz) return payload;
+        const tEx = performance.now();
+        return unpackGz({gz: payload.data.baseExtraGz}).then(x => {
+          perfAdd('descomprimir datos extra', performance.now() - tEx);
+          payload.data.baseExtraRows = expandCompact(x);
+          delete payload.data.baseExtraGz;
+          return payload;
+        });
       });
     }).then(payload => {
       handleAuthResult(payload);
@@ -9227,10 +9234,15 @@
     // appData (base+observaciones+auditoría+usuarios+objetivos) y baseExtra (Chasis/
     // Localidad/Provincia/contacto — los usan SLA/Le Bomb/Aceleración/Gestoría) se piden
     // EN PARALELO, no uno después del otro, para no duplicar la espera.
-    const baseExtraPromise = fetchBaseExtra();
+    // v24h: los datos extra vienen dentro de appData (un solo pedido); si no vinieran,
+    // se piden aparte como antes.
+    let resolveExtra;
+    const baseExtraPromise = new Promise(r => { resolveExtra = r; });
 
     fetchAppData().then(result => {
       const data = result.data;
+      if (data && Array.isArray(data.baseExtraRows)) { resolveExtra(data.baseExtraRows); delete data.baseExtraRows; }
+      else fetchBaseExtra().then(resolveExtra);
       if (!data){
         // Un fallo (típicamente timeout por "arranque en frío" de Apps Script) se
         // reintenta UNA vez sola, automáticamente, antes de mostrar el error al usuario.
