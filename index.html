@@ -9113,38 +9113,36 @@
     return c.data.map(arr => { const o = {}; c.cols.forEach((k, i) => { o[k] = arr[i] === null || arr[i] === undefined ? '' : arr[i]; }); return o; });
   }
 
-  function fetchAppData(){
+  function fetchAppData(noGz){
     if (!obsConfigured() || !currentToken()) return Promise.resolve({data:null, error:null});
-    const q = {action:'appData', token: currentToken(), compact:'1'};
-    if (CAN_GZ) q.gz = '1';
+    const useGz = CAN_GZ && !noGz;
+    const q = {action:'appData', token: currentToken()};
+    if (useGz) q.gz = '1';
     return jsonpGet(q, 180000).then(payload => {
-      if (!payload || !payload.ok) return payload;
-      return unpackGz(payload.data).then(d => {
-        if (d && d.base && Array.isArray(d.base.cols)) d.base = {filename: d.base.filename, fecha: d.base.fecha, rows: expandCompact(d.base)};
-        payload.data = d; return payload;
+      if (!payload || !payload.ok || !payload.data || !payload.data.baseGz) return payload;
+      return unpackGz({gz: payload.data.baseGz}).then(c => {
+        payload.data.base = {filename: c.filename, fecha: c.fecha, rows: expandCompact(c)};
+        delete payload.data.baseGz;
+        return payload;
       });
     }).then(payload => {
       handleAuthResult(payload);
-      // Diagnóstico temporal de velocidad: si el backend mandó el desglose de
-      // tiempos, lo mostramos clarito en la consola — así se puede copiar/pegar
-      // sin tener que andar buscando en Cloud Logging.
-      if (payload && payload.data && payload.data._debugTiming){
-        console.log('⏱️ Tiempos del backend (appData):', payload.data._debugTiming);
-      }
       if (payload && payload.ok && payload.data) return {data: payload.data, error:null};
       return {data:null, error:(payload && payload.error) || 'Respuesta inválida del servidor'};
     }).catch(err => {
       console.error('Error cargando appData:', err);
+      if (useGz) return fetchAppData(true); // respaldo: formato viejo sin comprimir
       return {data:null, error: err.message};
     });
   }
 
   function fetchBaseExtra(isRetry){
     if (!obsConfigured() || !currentToken()) return Promise.resolve(null);
-    const q = {action:'baseExtra', token: currentToken(), compact:'1'};
-    if (CAN_GZ) q.gz = '1';
+    const useGz = CAN_GZ && !isRetry;
+    const q = {action:'baseExtra', token: currentToken()};
+    if (useGz) q.gz = '1';
     return jsonpGet(q, 90000).then(payload => {
-      if (!payload || !payload.ok) return payload;
+      if (!payload || !payload.ok || !payload.data || typeof payload.data.gz !== 'string') return payload;
       return unpackGz(payload.data).then(d => { payload.data = expandCompact(d); return payload; });
     }).then(payload => {
       handleAuthResult(payload);
@@ -9153,13 +9151,12 @@
     }).catch(err => {
       console.error('Error cargando datos extra (SLA):', err);
       if (!isRetry){
-        // Un solo reintento automático — este pedido lee bastantes columnas de
-        // toda la base y a veces el primer intento se queda esperando de más.
         return new Promise(resolve => setTimeout(resolve, 3000)).then(() => fetchBaseExtra(true));
       }
       return null;
     });
   }
+
 
   function mergeBaseExtra(extraRows){
     if (!extraRows || !extraRows.length || !ALL_ROWS.length) return;
