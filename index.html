@@ -9760,7 +9760,7 @@
       }
     }, 30000);
 
-    jsonpGet({action:'needsBootstrap'}).then(payload => {
+    jsonpGet({action:'needsBootstrap'}, 20000).then(payload => {
       clearTimeout(loadTimeout);
       $('authLoading').style.display = 'none';
       if (payload && payload.ok && payload.data && payload.data.needsBootstrap){
@@ -9770,8 +9770,10 @@
       }
     }).catch(err => {
       clearTimeout(loadTimeout);
-      $('authLoadingText').textContent = '❌ No se pudo conectar con el servidor.';
-      $('authLoadingRetryBtn').style.display = 'block';
+      // v24: la cuenta admin ya existe, así que si este chequeo falla (servidor
+      // lento/saturado) mostramos igual el login en vez de bloquear la entrada.
+      $('authLoading').style.display = 'none';
+      $('authLoginForm').style.display = 'block';
     });
 
     // Event listener para el botón de reintentar
