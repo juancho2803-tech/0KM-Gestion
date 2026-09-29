@@ -9061,20 +9061,8 @@
   // Cada paso va envuelto en su propio try/catch: si UNO falla (por ejemplo al procesar
   // datos que vinieron de la caché guardada), no corta la cadena — los pasos siguientes
   // (Averías, Aceleración, etc.) igual se ejecutan en vez de quedar todos vacíos.
-  // v24g: medición de tiempos — en consola: __perfReport()
-  window.__perf = [];
-  function perfAdd(label, ms){ window.__perf.push({paso: label, ms: Math.round(ms)}); }
-  window.__perfReport = function(){
-    const agg = {};
-    window.__perf.forEach(p => { agg[p.paso] = agg[p.paso] || {paso: p.paso, veces: 0, ms_total: 0}; agg[p.paso].veces++; agg[p.paso].ms_total += p.ms; });
-    const arr = Object.values(agg).sort((a, b) => b.ms_total - a.ms_total);
-    console.table(arr.slice(0, 30));
-    return arr;
-  };
   function safeStep(fn, label){
-    const t0 = performance.now();
     try{ fn(); }catch(err){ console.error(`Error en ${label}:`, err); }
-    perfAdd(label, performance.now() - t0);
   }
 
   function loadFromRows(rows, meta){
@@ -9111,81 +9099,16 @@
     safeStep(() => renderLeBombSection(), 'renderLeBombSection');
   }
 
-  // v24: la base viaja comprimida (gzip) y en formato columnas+filas: ~10x menos datos.
-  const CAN_GZ = typeof DecompressionStream === 'function';
-  // v24f: los pedidos comprimidos van por fetch (no JSONP) — muestra el error real si falla.
-  function fetchGet(params, timeoutMs, attempt){
-    attempt = attempt || 0;
-    return fetchGetOnce(params, timeoutMs).catch(err => {
-      if (attempt >= 3) throw err;
-      const wait = 1500 * (attempt + 1);
-      console.warn(`↻ Reintento ${attempt + 1}/3 de ${params.action} en ${wait/1000}s (${err.message})`);
-      return new Promise(r => setTimeout(r, wait)).then(() => fetchGet(Object.assign({}, params, {_: String(Date.now())}), timeoutMs, attempt + 1));
-    });
-  }
-  function fetchGetOnce(params, timeoutMs){
-    const controller = ('AbortController' in window) ? new AbortController() : null;
-    const timer = controller ? setTimeout(() => controller.abort(), timeoutMs || 120000) : null;
-    const qs = Object.keys(params).map(k => `${k}=${encodeURIComponent(params[k])}`).join('&');
-    return fetch(`${OBSERVATIONS_API_URL}?${qs}`, {signal: controller ? controller.signal : undefined})
-      .then(r => r.text().then(t => {
-        if (timer) clearTimeout(timer);
-        try { return JSON.parse(t); }
-        catch(e){ console.error('Respuesta no-JSON (' + r.status + '):', t.slice(0, 500)); throw new Error('HTTP ' + r.status + ' respuesta inválida'); }
-      }));
-  }
-  function getChunk(part, i, attempt){
-    const q = {action:'gzChunk', token: currentToken(), part, i: String(i), _: String(Date.now())};
-    return jsonpGet(q, 60000).catch(() => fetchGet(q, 60000, 2)).then(p => {
-      if (p && p.ok && p.data && typeof p.data.s === 'string') return p.data.s;
-      throw new Error((p && p.error) || 'parte inválida');
-    }).catch(err => {
-      if ((attempt || 0) < 2) return new Promise(r => setTimeout(r, 1500)).then(() => getChunk(part, i, (attempt || 0) + 1));
-      throw err;
-    });
-  }
-  function downloadGzParts(part, n){
-    const ps = []; for (let i = 0; i < n; i++) ps.push(getChunk(part, i));
-    return Promise.all(ps).then(arr => arr.join(''));
-  }
-  function unpackGz(d){
-    if (!d || typeof d.gz !== 'string') return Promise.resolve(d);
-    const bin = atob(d.gz); const bytes = new Uint8Array(bin.length);
-    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-    const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'));
-    return new Response(stream).text().then(t => JSON.parse(t));
-  }
-  function expandCompact(c){
-    if (!c || !Array.isArray(c.cols) || !Array.isArray(c.data)) return c;
-    return c.data.map(arr => { const o = {}; c.cols.forEach((k, i) => { o[k] = arr[i] === null || arr[i] === undefined ? '' : arr[i]; }); return o; });
-  }
-
-  function fetchAppData(noGz){
+  function fetchAppData(){
     if (!obsConfigured() || !currentToken()) return Promise.resolve({data:null, error:null});
-    const useGz = CAN_GZ && !noGz;
-    const q = {action:'appData', token: currentToken()};
-    if (useGz) q.gz = '1';
-    const tNet = performance.now();
-    // v24k: appData ahora es chico → JSONP (lo que funcionó siempre); si falla, prueba fetch.
-    return jsonpGet(q, 60000).catch(() => fetchGet(q, 60000, 2)).then(payload => {
-      perfAdd('RED appData (servidor + descarga)' + (useGz ? '' : ' sin gz'), performance.now() - tNet);
-      if (payload && payload.data && payload.data._debugTiming) console.log('⏱️ Tiempos del servidor (appData):', payload.data._debugTiming);
-      if (!payload || !payload.ok || !payload.data || !payload.data.baseChunks) return payload;
-      const bc = payload.data.baseChunks;
-      const tDl = performance.now();
-      return Promise.all([downloadGzParts('core', bc.core), downloadGzParts('extra', bc.extra)]).then(([coreB64, extraB64]) => {
-        perfAdd('RED base en partes (' + (bc.core + bc.extra) + ' partes)', performance.now() - tDl);
-        const tUn = performance.now();
-        return Promise.all([unpackGz({gz: coreB64}), unpackGz({gz: extraB64})]).then(([c, x]) => {
-          perfAdd('descomprimir base', performance.now() - tUn);
-          payload.data.base = {filename: c.filename, fecha: c.fecha, rows: expandCompact(c)};
-          payload.data.baseExtraRows = expandCompact(x);
-          delete payload.data.baseChunks;
-          return payload;
-        });
-      });
-    }).then(payload => {
+    return jsonpGet({action:'appData', token: currentToken()}, 180000).then(payload => {
       handleAuthResult(payload);
+      // Diagnóstico temporal de velocidad: si el backend mandó el desglose de
+      // tiempos, lo mostramos clarito en la consola — así se puede copiar/pegar
+      // sin tener que andar buscando en Cloud Logging.
+      if (payload && payload.data && payload.data._debugTiming){
+        console.log('⏱️ Tiempos del backend (appData):', payload.data._debugTiming);
+      }
       if (payload && payload.ok && payload.data) return {data: payload.data, error:null};
       return {data:null, error:(payload && payload.error) || 'Respuesta inválida del servidor'};
     }).catch(err => {
@@ -9196,27 +9119,20 @@
 
   function fetchBaseExtra(isRetry){
     if (!obsConfigured() || !currentToken()) return Promise.resolve(null);
-    const useGz = CAN_GZ && !isRetry;
-    const q = {action:'baseExtra', token: currentToken()};
-    if (useGz) q.gz = '1';
-    const tNet = performance.now();
-    return (useGz ? fetchGet(q, 90000) : jsonpGet(q, 90000)).then(payload => {
-      perfAdd('RED baseExtra (servidor + descarga)', performance.now() - tNet);
-      if (!payload || !payload.ok || !payload.data || typeof payload.data.gz !== 'string') return payload;
-      return unpackGz(payload.data).then(d => { payload.data = expandCompact(d); return payload; });
-    }).then(payload => {
+    return jsonpGet({action:'baseExtra', token: currentToken()}, 90000).then(payload => {
       handleAuthResult(payload);
       if (payload && payload.ok && Array.isArray(payload.data)) return payload.data;
       return null;
     }).catch(err => {
       console.error('Error cargando datos extra (SLA):', err);
       if (!isRetry){
+        // Un solo reintento automático — este pedido lee bastantes columnas de
+        // toda la base y a veces el primer intento se queda esperando de más.
         return new Promise(resolve => setTimeout(resolve, 3000)).then(() => fetchBaseExtra(true));
       }
       return null;
     });
   }
-
 
   function mergeBaseExtra(extraRows){
     if (!extraRows || !extraRows.length || !ALL_ROWS.length) return;
@@ -9256,15 +9172,10 @@
     // appData (base+observaciones+auditoría+usuarios+objetivos) y baseExtra (Chasis/
     // Localidad/Provincia/contacto — los usan SLA/Le Bomb/Aceleración/Gestoría) se piden
     // EN PARALELO, no uno después del otro, para no duplicar la espera.
-    // v24h: los datos extra vienen dentro de appData (un solo pedido); si no vinieran,
-    // se piden aparte como antes.
-    let resolveExtra;
-    const baseExtraPromise = new Promise(r => { resolveExtra = r; });
+    const baseExtraPromise = fetchBaseExtra();
 
     fetchAppData().then(result => {
       const data = result.data;
-      if (data && Array.isArray(data.baseExtraRows)) { resolveExtra(data.baseExtraRows); delete data.baseExtraRows; }
-      else fetchBaseExtra().then(resolveExtra);
       if (!data){
         // Un fallo (típicamente timeout por "arranque en frío" de Apps Script) se
         // reintenta UNA vez sola, automáticamente, antes de mostrar el error al usuario.
@@ -9324,12 +9235,10 @@
           fecha: data.base.fecha || new Date().toLocaleString('es-AR'),
           registros: rows.length
         };
-        safeStep(() => {
-          try{
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(rows));
-            localStorage.setItem(META_KEY, JSON.stringify(meta));
-          }catch(e){ /* ignore */ }
-        }, 'guardar base en navegador');
+        try{
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(rows));
+          localStorage.setItem(META_KEY, JSON.stringify(meta));
+        }catch(e){ /* ignore */ }
 
         loadFromRows(rows, meta);
         setBaseSyncStatus('Base compartida sincronizada ✓', 'var(--green)');
@@ -9338,12 +9247,12 @@
       }
 
       // Refleja las observaciones frescas en las tablas ya renderizadas
-      safeStep(() => renderPatentadosSection(), 'renderPatentadosSection (obs)');
-      safeStep(() => renderAveriasSection(), 'renderAveriasSection (obs)');
-      safeStep(() => renderFueraDQSection(), 'renderFueraDQSection (obs)');
-      safeStep(() => renderAccesoriosSection(), 'renderAccesoriosSection (obs)');
-      safeStep(() => renderObjetivosSection(), 'renderObjetivosSection (obs)');
-      safeStep(() => renderAceleracionSection(), 'renderAceleracionSection (obs)');
+      renderPatentadosSection();
+      renderAveriasSection();
+      renderFueraDQSection();
+      renderAccesoriosSection();
+      renderObjetivosSection();
+      renderAceleracionSection();
 
       // La base de la nube trae solo columnas "core" (carga más rápida);
       // las columnas específicas del SLA (Chasis, Localidad, Canal, etc.) se piden
@@ -9388,7 +9297,6 @@
             safeStep(() => renderGestoriaSection(), 'renderGestoriaSection (post-extra)');
             safeStep(() => renderInformeGermanSection(), 'renderInformeGermanSection (post-extra)');
             setBaseSyncStatus('Base compartida sincronizada ✓', 'var(--green)');
-            console.log('⏱️ Carga completa. Ranking de demoras (ms):'); window.__perfReport();
           } else {
             setBaseSyncStatus('Base compartida sincronizada ✓ (faltó completar Localidad/Provincia — probá "Actualizar" de nuevo)', 'var(--amber)');
           }
