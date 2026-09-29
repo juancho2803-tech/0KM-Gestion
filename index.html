@@ -9101,6 +9101,18 @@
 
   // v24: la base viaja comprimida (gzip) y en formato columnas+filas: ~10x menos datos.
   const CAN_GZ = typeof DecompressionStream === 'function';
+  // v24f: los pedidos comprimidos van por fetch (no JSONP) — muestra el error real si falla.
+  function fetchGet(params, timeoutMs){
+    const controller = ('AbortController' in window) ? new AbortController() : null;
+    const timer = controller ? setTimeout(() => controller.abort(), timeoutMs || 120000) : null;
+    const qs = Object.keys(params).map(k => `${k}=${encodeURIComponent(params[k])}`).join('&');
+    return fetch(`${OBSERVATIONS_API_URL}?${qs}`, {signal: controller ? controller.signal : undefined})
+      .then(r => r.text().then(t => {
+        if (timer) clearTimeout(timer);
+        try { return JSON.parse(t); }
+        catch(e){ console.error('Respuesta no-JSON (' + r.status + '):', t.slice(0, 500)); throw new Error('HTTP ' + r.status + ' respuesta inválida'); }
+      }));
+  }
   function unpackGz(d){
     if (!d || typeof d.gz !== 'string') return Promise.resolve(d);
     const bin = atob(d.gz); const bytes = new Uint8Array(bin.length);
@@ -9118,7 +9130,7 @@
     const useGz = CAN_GZ && !noGz;
     const q = {action:'appData', token: currentToken()};
     if (useGz) q.gz = '1';
-    return jsonpGet(q, 180000).then(payload => {
+    return (useGz ? fetchGet(q, 180000) : jsonpGet(q, 180000)).then(payload => {
       if (!payload || !payload.ok || !payload.data || !payload.data.baseGz) return payload;
       return unpackGz({gz: payload.data.baseGz}).then(c => {
         payload.data.base = {filename: c.filename, fecha: c.fecha, rows: expandCompact(c)};
@@ -9141,7 +9153,7 @@
     const useGz = CAN_GZ && !isRetry;
     const q = {action:'baseExtra', token: currentToken()};
     if (useGz) q.gz = '1';
-    return jsonpGet(q, 90000).then(payload => {
+    return (useGz ? fetchGet(q, 90000) : jsonpGet(q, 90000)).then(payload => {
       if (!payload || !payload.ok || !payload.data || typeof payload.data.gz !== 'string') return payload;
       return unpackGz(payload.data).then(d => { payload.data = expandCompact(d); return payload; });
     }).then(payload => {
