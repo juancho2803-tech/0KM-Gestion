@@ -9136,7 +9136,7 @@
   }
   function getChunk(part, i, attempt){
     const q = {action:'gzChunk', token: currentToken(), part, i: String(i), _: String(Date.now())};
-    return fetchGet(q, 60000).catch(() => jsonpGet(q, 60000)).then(p => {
+    return jsonpGet(q, 60000).catch(() => fetchGet(q, 60000, 2)).then(p => {
       if (p && p.ok && p.data && typeof p.data.s === 'string') return p.data.s;
       throw new Error((p && p.error) || 'parte inválida');
     }).catch(err => {
@@ -9166,7 +9166,8 @@
     const q = {action:'appData', token: currentToken()};
     if (useGz) q.gz = '1';
     const tNet = performance.now();
-    return (useGz ? fetchGet(q, 180000) : jsonpGet(q, 180000)).then(payload => {
+    // v24k: appData ahora es chico → JSONP (lo que funcionó siempre); si falla, prueba fetch.
+    return jsonpGet(q, 60000).catch(() => fetchGet(q, 60000, 2)).then(payload => {
       perfAdd('RED appData (servidor + descarga)' + (useGz ? '' : ' sin gz'), performance.now() - tNet);
       if (payload && payload.data && payload.data._debugTiming) console.log('⏱️ Tiempos del servidor (appData):', payload.data._debugTiming);
       if (!payload || !payload.ok || !payload.data || !payload.data.baseChunks) return payload;
