@@ -9099,9 +9099,31 @@
     safeStep(() => renderLeBombSection(), 'renderLeBombSection');
   }
 
+  // v24: la base viaja comprimida (gzip) y en formato columnas+filas: ~10x menos datos.
+  const CAN_GZ = typeof DecompressionStream === 'function';
+  function unpackGz(d){
+    if (!d || typeof d.gz !== 'string') return Promise.resolve(d);
+    const bin = atob(d.gz); const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'));
+    return new Response(stream).text().then(t => JSON.parse(t));
+  }
+  function expandCompact(c){
+    if (!c || !Array.isArray(c.cols) || !Array.isArray(c.data)) return c;
+    return c.data.map(arr => { const o = {}; c.cols.forEach((k, i) => { o[k] = arr[i] === null || arr[i] === undefined ? '' : arr[i]; }); return o; });
+  }
+
   function fetchAppData(){
     if (!obsConfigured() || !currentToken()) return Promise.resolve({data:null, error:null});
-    return jsonpGet({action:'appData', token: currentToken()}, 180000).then(payload => {
+    const q = {action:'appData', token: currentToken(), compact:'1'};
+    if (CAN_GZ) q.gz = '1';
+    return jsonpGet(q, 180000).then(payload => {
+      if (!payload || !payload.ok) return payload;
+      return unpackGz(payload.data).then(d => {
+        if (d && d.base && Array.isArray(d.base.cols)) d.base = {filename: d.base.filename, fecha: d.base.fecha, rows: expandCompact(d.base)};
+        payload.data = d; return payload;
+      });
+    }).then(payload => {
       handleAuthResult(payload);
       // Diagnóstico temporal de velocidad: si el backend mandó el desglose de
       // tiempos, lo mostramos clarito en la consola — así se puede copiar/pegar
@@ -9119,7 +9141,12 @@
 
   function fetchBaseExtra(isRetry){
     if (!obsConfigured() || !currentToken()) return Promise.resolve(null);
-    return jsonpGet({action:'baseExtra', token: currentToken()}, 90000).then(payload => {
+    const q = {action:'baseExtra', token: currentToken(), compact:'1'};
+    if (CAN_GZ) q.gz = '1';
+    return jsonpGet(q, 90000).then(payload => {
+      if (!payload || !payload.ok) return payload;
+      return unpackGz(payload.data).then(d => { payload.data = expandCompact(d); return payload; });
+    }).then(payload => {
       handleAuthResult(payload);
       if (payload && payload.ok && Array.isArray(payload.data)) return payload.data;
       return null;
