@@ -9125,6 +9125,20 @@
         catch(e){ console.error('Respuesta no-JSON (' + r.status + '):', t.slice(0, 500)); throw new Error('HTTP ' + r.status + ' respuesta inválida'); }
       }));
   }
+  function getChunk(part, i, attempt){
+    const q = {action:'gzChunk', token: currentToken(), part, i: String(i), _: String(Date.now())};
+    return fetchGet(q, 60000).catch(() => jsonpGet(q, 60000)).then(p => {
+      if (p && p.ok && p.data && typeof p.data.s === 'string') return p.data.s;
+      throw new Error((p && p.error) || 'parte inválida');
+    }).catch(err => {
+      if ((attempt || 0) < 2) return new Promise(r => setTimeout(r, 1500)).then(() => getChunk(part, i, (attempt || 0) + 1));
+      throw err;
+    });
+  }
+  function downloadGzParts(part, n){
+    const ps = []; for (let i = 0; i < n; i++) ps.push(getChunk(part, i));
+    return Promise.all(ps).then(arr => arr.join(''));
+  }
   function unpackGz(d){
     if (!d || typeof d.gz !== 'string') return Promise.resolve(d);
     const bin = atob(d.gz); const bytes = new Uint8Array(bin.length);
@@ -9146,18 +9160,17 @@
     return (useGz ? fetchGet(q, 180000) : jsonpGet(q, 180000)).then(payload => {
       perfAdd('RED appData (servidor + descarga)' + (useGz ? '' : ' sin gz'), performance.now() - tNet);
       if (payload && payload.data && payload.data._debugTiming) console.log('⏱️ Tiempos del servidor (appData):', payload.data._debugTiming);
-      if (!payload || !payload.ok || !payload.data || !payload.data.baseGz) return payload;
-      const tUn = performance.now();
-      return unpackGz({gz: payload.data.baseGz}).then(c => {
-        perfAdd('descomprimir base', performance.now() - tUn);
-        payload.data.base = {filename: c.filename, fecha: c.fecha, rows: expandCompact(c)};
-        delete payload.data.baseGz;
-        if (!payload.data.baseExtraGz) return payload;
-        const tEx = performance.now();
-        return unpackGz({gz: payload.data.baseExtraGz}).then(x => {
-          perfAdd('descomprimir datos extra', performance.now() - tEx);
+      if (!payload || !payload.ok || !payload.data || !payload.data.baseChunks) return payload;
+      const bc = payload.data.baseChunks;
+      const tDl = performance.now();
+      return Promise.all([downloadGzParts('core', bc.core), downloadGzParts('extra', bc.extra)]).then(([coreB64, extraB64]) => {
+        perfAdd('RED base en partes (' + (bc.core + bc.extra) + ' partes)', performance.now() - tDl);
+        const tUn = performance.now();
+        return Promise.all([unpackGz({gz: coreB64}), unpackGz({gz: extraB64})]).then(([c, x]) => {
+          perfAdd('descomprimir base', performance.now() - tUn);
+          payload.data.base = {filename: c.filename, fecha: c.fecha, rows: expandCompact(c)};
           payload.data.baseExtraRows = expandCompact(x);
-          delete payload.data.baseExtraGz;
+          delete payload.data.baseChunks;
           return payload;
         });
       });
