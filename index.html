@@ -9061,8 +9061,20 @@
   // Cada paso va envuelto en su propio try/catch: si UNO falla (por ejemplo al procesar
   // datos que vinieron de la caché guardada), no corta la cadena — los pasos siguientes
   // (Averías, Aceleración, etc.) igual se ejecutan en vez de quedar todos vacíos.
+  // v24g: medición de tiempos — en consola: __perfReport()
+  window.__perf = [];
+  function perfAdd(label, ms){ window.__perf.push({paso: label, ms: Math.round(ms)}); }
+  window.__perfReport = function(){
+    const agg = {};
+    window.__perf.forEach(p => { agg[p.paso] = agg[p.paso] || {paso: p.paso, veces: 0, ms_total: 0}; agg[p.paso].veces++; agg[p.paso].ms_total += p.ms; });
+    const arr = Object.values(agg).sort((a, b) => b.ms_total - a.ms_total);
+    console.table(arr.slice(0, 30));
+    return arr;
+  };
   function safeStep(fn, label){
+    const t0 = performance.now();
     try{ fn(); }catch(err){ console.error(`Error en ${label}:`, err); }
+    perfAdd(label, performance.now() - t0);
   }
 
   function loadFromRows(rows, meta){
@@ -9130,9 +9142,14 @@
     const useGz = CAN_GZ && !noGz;
     const q = {action:'appData', token: currentToken()};
     if (useGz) q.gz = '1';
+    const tNet = performance.now();
     return (useGz ? fetchGet(q, 180000) : jsonpGet(q, 180000)).then(payload => {
+      perfAdd('RED appData (servidor + descarga)' + (useGz ? '' : ' sin gz'), performance.now() - tNet);
+      if (payload && payload.data && payload.data._debugTiming) console.log('⏱️ Tiempos del servidor (appData):', payload.data._debugTiming);
       if (!payload || !payload.ok || !payload.data || !payload.data.baseGz) return payload;
+      const tUn = performance.now();
       return unpackGz({gz: payload.data.baseGz}).then(c => {
+        perfAdd('descomprimir base', performance.now() - tUn);
         payload.data.base = {filename: c.filename, fecha: c.fecha, rows: expandCompact(c)};
         delete payload.data.baseGz;
         return payload;
@@ -9153,7 +9170,9 @@
     const useGz = CAN_GZ && !isRetry;
     const q = {action:'baseExtra', token: currentToken()};
     if (useGz) q.gz = '1';
+    const tNet = performance.now();
     return (useGz ? fetchGet(q, 90000) : jsonpGet(q, 90000)).then(payload => {
+      perfAdd('RED baseExtra (servidor + descarga)', performance.now() - tNet);
       if (!payload || !payload.ok || !payload.data || typeof payload.data.gz !== 'string') return payload;
       return unpackGz(payload.data).then(d => { payload.data = expandCompact(d); return payload; });
     }).then(payload => {
@@ -9271,10 +9290,12 @@
           fecha: data.base.fecha || new Date().toLocaleString('es-AR'),
           registros: rows.length
         };
-        try{
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(rows));
-          localStorage.setItem(META_KEY, JSON.stringify(meta));
-        }catch(e){ /* ignore */ }
+        safeStep(() => {
+          try{
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(rows));
+            localStorage.setItem(META_KEY, JSON.stringify(meta));
+          }catch(e){ /* ignore */ }
+        }, 'guardar base en navegador');
 
         loadFromRows(rows, meta);
         setBaseSyncStatus('Base compartida sincronizada ✓', 'var(--green)');
@@ -9283,12 +9304,12 @@
       }
 
       // Refleja las observaciones frescas en las tablas ya renderizadas
-      renderPatentadosSection();
-      renderAveriasSection();
-      renderFueraDQSection();
-      renderAccesoriosSection();
-      renderObjetivosSection();
-      renderAceleracionSection();
+      safeStep(() => renderPatentadosSection(), 'renderPatentadosSection (obs)');
+      safeStep(() => renderAveriasSection(), 'renderAveriasSection (obs)');
+      safeStep(() => renderFueraDQSection(), 'renderFueraDQSection (obs)');
+      safeStep(() => renderAccesoriosSection(), 'renderAccesoriosSection (obs)');
+      safeStep(() => renderObjetivosSection(), 'renderObjetivosSection (obs)');
+      safeStep(() => renderAceleracionSection(), 'renderAceleracionSection (obs)');
 
       // La base de la nube trae solo columnas "core" (carga más rápida);
       // las columnas específicas del SLA (Chasis, Localidad, Canal, etc.) se piden
@@ -9333,6 +9354,7 @@
             safeStep(() => renderGestoriaSection(), 'renderGestoriaSection (post-extra)');
             safeStep(() => renderInformeGermanSection(), 'renderInformeGermanSection (post-extra)');
             setBaseSyncStatus('Base compartida sincronizada ✓', 'var(--green)');
+            console.log('⏱️ Carga completa. Ranking de demoras (ms):'); window.__perfReport();
           } else {
             setBaseSyncStatus('Base compartida sincronizada ✓ (faltó completar Localidad/Provincia — probá "Actualizar" de nuevo)', 'var(--amber)');
           }
