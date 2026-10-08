@@ -2145,7 +2145,7 @@
         <div class="panel">
           <div class="panel-head">
             <h3>🚚 Entregas fuera de plazo</h3>
-            <div class="hint">Plazo = Fecha venta + SLA de patentamiento (Cba 2-3 dh · Otras 10-11 dh · Sur 15-16 dh) + 48 hs (2 dh) hasta la entrega · fecha de entrega = fecha del turno (col. BR), no la del aviso · solo autos con chasis válido y turno ya cumplido</div>
+            <div class="hint">Plazo = Fecha venta + plazo de patentamiento según zona + 48 hs hasta la entrega (todos editables abajo, en objetivos) · fecha de entrega = fecha del turno (col. BR), no la del aviso · solo autos con chasis válido y turno ya cumplido</div>
           </div>
           <div class="filter-row ent-filters">
             <div class="pill-group">
@@ -8002,8 +8002,8 @@
 
   // Objetivos por etapa (días hábiles salvo certificado: días corridos). Editables en la
   // pantalla; se guardan en este navegador. Alistaje/Accesorios/Certificado = los de Aceleración.
-  const ENT_OBJ_DEFAULT = {plazoEntrega:2, arribo:0, alistaje:2, averia:0, accesorios:2, pagofab:0, certificado:3, geac:2, credito:5, turno:2};
-  const ENT_OBJ_LABELS = {plazoEntrega:'Plazo entrega (desde patentam.)', arribo:'Arribo (desde venta)', alistaje:'Alistaje (desde arribo)', averia:'Avería (0 = todo cuenta)', accesorios:'Accesorios', pagofab:'Pago fábrica (desde venta)', certificado:'Certificado (corridos)', geac:'Carpeta GEAC', credito:'Crédito', turno:'Turno (desde auto listo)'};
+  const ENT_OBJ_DEFAULT = {patCba:2, patOtras:10, patSur:15, patPlan:1, plazoEntrega:2, arribo:0, alistaje:2, averia:0, accesorios:2, pagofab:0, certificado:3, geac:2, credito:5, turno:2};
+  const ENT_OBJ_LABELS = {patCba:'Patentam. Córdoba', patOtras:'Patentam. otras prov.', patSur:'Patentam. Sur', patPlan:'+ si es Plan de Ahorro', plazoEntrega:'Entrega (desde patentam.)', arribo:'Arribo (desde venta)', alistaje:'Alistaje (desde arribo/venta)', averia:'Avería (0 = todo cuenta)', accesorios:'Accesorios', pagofab:'Pago fábrica (desde venta)', certificado:'Certificado (corridos)', geac:'Carpeta GEAC', credito:'Crédito', turno:'Turno (desde auto listo)'};
   // v28: los objetivos se guardan en el servidor (hoja Objetivos, marca "OBJ_ENTREGAS"),
   // así son los mismos para todos y no se pierden. Solo un admin los puede cambiar.
   const ENT_OBJ_MARCA = 'OBJ_ENTREGAS';
@@ -8023,7 +8023,9 @@
     const E = entFechaEntrega(r);
     if (!fv || !E || E < fv) return null;
 
-    const slaPat = getSLAFacPat(r);
+    // Plazo de patentamiento por zona (editable en objetivos de esta pestaña; +N si es Plan de Ahorro)
+    const OBJp = entObjetivos();
+    const slaPat = (esCbaSLA(r) ? OBJp.patCba : (esSurPatagonicoSLA(r) ? OBJp.patSur : OBJp.patOtras)) + (esCreditoSLA(r) ? OBJp.patPlan : 0);
     const dPat = addBusinessDaysSLA(fv, slaPat);
     // Plazo real de entrega: 48 hs (2 dh) desde el patentamiento — editable en objetivos
     const D = addBusinessDaysSLA(dPat, entObjetivos().plazoEntrega);
@@ -8076,8 +8078,8 @@
     };
     // Físico
     etapa('arribo', 'arribo', 'Arribo unidad', 'fisico', A, [{d:fv}], OBJ.arribo);
-    // Alistaje: el objetivo corre desde el ARRIBO; si al vender ya debía estar alistado, todo lo posterior es demora
-    etapa('alistaje', 'alistaje', 'Alistaje', 'fisico', L, [{d: A || fv, k: A ? 'arribo' : null}], OBJ.alistaje);
+    // Alistaje: corre desde lo último entre arribo y venta
+    etapa('alistaje', 'alistaje', 'Alistaje', 'fisico', L, [{d:fv}, {d:A, k:'arribo'}], OBJ.alistaje);
     // Avería: no es esperable → sin margen (objetivo 0)
     etapa('averia', 'averia', 'Cierre avería', 'fisico', Vc, [{d: fAv || A}], OBJ.averia);
     const iniAcc = [{d:fv}, {d:L, k:'alistaje'}];
@@ -8240,7 +8242,6 @@
         box.dataset.ready = '1';
         box.innerHTML = '<b style="margin-right:4px;">🎯 Objetivos por etapa (dh):</b>' +
           Object.keys(ENT_OBJ_LABELS).map(k => `<label>${ENT_OBJ_LABELS[k]} <input type="number" min="0" step="1" data-k="${k}"></label>`).join('') +
-          '<label style="opacity:.8;">Patentamiento: según zona (2–16)</label>' +
           '<span id="entObjNote" style="font-size:11px; color:var(--text-faint);"></span>';
         box.querySelectorAll('input').forEach(inp => inp.addEventListener('change', () => {
           const k = inp.dataset.k;
@@ -8444,7 +8445,7 @@
     const dh = (a,b) => (a && b && b > a) ? (diasHabilesSLA(a,b) || 0) : 0;
     const filas = u.etapas.slice().sort((a,b) => a.end - b.end).map(e => {
       const icon = e.track === 'fisico' ? '🔧' : '📄';
-      const tardo = e.start && e.end >= e.start ? dh(e.start, e.end) : null;
+      const tardo = e.start && e.end >= e.start ? dh(e.start, e.end) : null; // desde que estuvo disponible
       const obj = e.obj === null || e.obj === undefined ? '—' : `${e.obj} ${e.corridos ? 'días' : 'dh'}`;
       const est = e.impacto ? '<span class="ent-tag main">aportó demora</span>'
         : (e.exceso > 0 ? '<span class="ent-tag" style="color:var(--amber);">se pasó, pero no aportó</span>' : '<span class="ent-tag" style="color:var(--green);">cumplió</span>');
