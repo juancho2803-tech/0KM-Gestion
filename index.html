@@ -662,15 +662,17 @@
   .ent-kpi .s{font-size:11px; color:var(--text-faint); margin-top:3px;}
   .ent-grid2{display:grid; grid-template-columns:1.1fr 1fr; gap:16px;}
   @media (max-width:1000px){ .ent-grid2{grid-template-columns:1fr;} }
-  .ent-rank-row{display:grid; grid-template-columns:22px minmax(150px,1.3fr) 2fr 150px; gap:10px; align-items:center; padding:7px 6px; border-radius:8px; cursor:pointer;}
+  .ent-rank-row{display:grid; grid-template-columns:22px minmax(190px,1.3fr) 2fr 150px; gap:10px; align-items:center; padding:7px 6px; border-radius:8px; cursor:pointer;}
   .ent-rank-row:hover{background:var(--surface-2);}
   .ent-rank-row.sel{background:var(--surface-3); box-shadow:inset 3px 0 0 var(--amber);}
   .ent-rank-row .pos{font-family:'JetBrains Mono',monospace; color:var(--text-faint); font-size:12px;}
   .ent-rank-row .name{font-size:12.5px; font-weight:600;}
-  .ent-rank-row .track{background:var(--surface-3); border-radius:6px; height:18px; position:relative; overflow:hidden;}
-  .ent-rank-row .fill{height:100%; border-radius:6px; background:var(--red); display:flex; align-items:center; padding-left:6px; font-size:11px; font-weight:700; color:#fff; white-space:nowrap; min-width:28px;}
+  .ent-rank-row .track{background:var(--surface-3); border-radius:6px; height:20px; position:relative; overflow:hidden; display:flex; align-items:center;}
+  .ent-rank-row .track .pct{position:absolute; right:4px; font-family:'JetBrains Mono',monospace; font-size:11.5px; font-weight:700; color:var(--text); background:var(--surface); border-radius:5px; padding:0 6px; line-height:16px;}
+  .ent-trk{display:inline-block; font-size:11px; opacity:.75; margin-right:4px;}
+  .ent-rank-row .fill{height:100%; border-radius:6px; background:var(--red);}
   .ent-rank-row .meta{font-size:11px; color:var(--text-dim); text-align:right; line-height:1.35;}
-  .ent-rank-head{display:grid; grid-template-columns:22px minmax(150px,1.3fr) 2fr 150px; gap:10px; padding:0 6px 6px; font-size:10.5px; text-transform:uppercase; letter-spacing:.6px; color:var(--text-faint);}
+  .ent-rank-head{display:grid; grid-template-columns:22px minmax(190px,1.3fr) 2fr 150px; gap:10px; padding:0 6px 6px; font-size:10.5px; text-transform:uppercase; letter-spacing:.6px; color:var(--text-faint);}
   table.ent-matrix td, table.ent-matrix th{text-align:center; white-space:nowrap;}
   table.ent-matrix td:first-child, table.ent-matrix th:first-child{text-align:left;}
   .ent-cell{display:inline-block; min-width:54px; padding:3px 6px; border-radius:6px; font-family:'JetBrains Mono',monospace; font-size:11.5px;}
@@ -2197,7 +2199,7 @@
                 <button class="active" data-v="separado" type="button">🔧📄 Por circuito</button>
                 <button data-v="junto" type="button">Todo junto</button>
               </div>
-              <div class="hint">Unidades fuera de plazo donde el área aportó días a la demora de la entrega (solo cuenta el circuito que terminó último y el turno) · un interno puede sumar en varias áreas · clic para filtrar</div>
+              <div class="hint">% de los autos entregados fuera de plazo en los que cada área aportó demora (solo cuenta el circuito que terminó último y el turno) · un auto puede sumar en varias áreas, por eso los % no suman 100 · clic para filtrar</div>
             </div>
             <div id="entRanking"></div>
           </div>
@@ -8299,7 +8301,7 @@
     const maxN = Math.max(1, ...rank.map(x => x.n));
     const totDias = rank.reduce((s,x) => s + x.dias, 0) || 1;
     $('entRanking').innerHTML = !rank.length ? '<div class="hint">Sin entregas fuera de plazo con estos filtros 🎉</div>' :
-      `<div class="ent-rank-head"><span>#</span><span>Área</span><span>Unidades donde generó demora</span><span style="text-align:right;">Días aportados · causa principal</span></div>` +
+      `<div class="ent-rank-head"><span>#</span><span>Área</span><span>% de los autos fuera de plazo en los que aportó demora</span><span style="text-align:right;">Autos · causa principal</span></div>` +
       (ENT_STATE.vista === 'junto'
         ? [[null, '']]
         : [['fisico','🔧 Circuito físico'],['documental','📄 Circuito documental'],['turno','📅 Con el auto listo']]
@@ -8310,11 +8312,12 @@
         return (titulo ? `<div class="ent-rank-group">${titulo}</div>` : '') + grupo.map((x,i) => {
         const a = ENT_AREAS[x.k];
         const p = tarde.length ? Math.round(x.n / tarde.length * 100) : 0;
-        return `<div class="ent-rank-row ${ENT_STATE.area === x.k ? 'sel' : ''}" data-area="${x.k}">
+        const pp = tarde.length ? Math.round(x.inv / tarde.length * 100) : 0;
+        return `<div class="ent-rank-row ${ENT_STATE.area === x.k ? 'sel' : ''}" data-area="${x.k}" title="Aportó demora en ${x.n} de ${tarde.length} autos fuera de plazo · fue la causa principal en ${x.inv}">
           <span class="pos">${i+1}</span>
-          <span class="name">${a.icon} ${escapeHtml(a.label)}${tr ? '' : ` <small style="opacity:.7;">${trIcon(x.k)}</small>`}</span>
-          <div class="track"><div class="fill" style="width:${Math.max(x.n / maxN * 100, 2)}%; background:${a.color};">${x.n} · ${p}%</div></div>
-          <span class="meta">${x.dias.toLocaleString('es-AR')} dh (prom. ${x.prom.toFixed(1)})<br>principal en ${x.inv}</span>
+          <span class="name">${tr || x.k === 'turno' ? '' : `<span class="ent-trk">${trIcon(x.k)}</span>`}${a.icon} ${escapeHtml(a.label)}</span>
+          <div class="track"><div class="fill" style="width:${Math.max(p, 1)}%; background:${a.color};"></div><span class="pct">${p}%</span></div>
+          <span class="meta"><b>${x.n.toLocaleString('es-AR')}</b> de ${tarde.length.toLocaleString('es-AR')} autos<br>principal: ${x.inv.toLocaleString('es-AR')} (${pp}%)</span>
         </div>`;
       }).join('');
       }).join('');
