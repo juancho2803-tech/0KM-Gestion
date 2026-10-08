@@ -650,6 +650,44 @@
   .legend-row i{width:10px; height:10px; border-radius:3px; display:inline-block;}
 
   footer{text-align:center; color:var(--text-faint); font-size:12px; margin-top:30px;}
+  /* ---- Aceleración > Entregas fuera de plazo ---- */
+  .ent-filters{display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-bottom:14px;}
+  .ent-filters .ent-search{margin:0 0 0 auto !important; width:300px;}
+  .ent-filters .ent-search input{border:2px solid var(--blue);}
+  @media (max-width:700px){ .ent-filters .ent-search{width:100%;} }
+  .ent-kpis{display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:10px;}
+  .ent-kpi{background:var(--surface-2); border:1px solid var(--border); border-left:3px solid var(--kc,var(--amber)); border-radius:10px; padding:11px 13px;}
+  .ent-kpi .l{font-family:'Barlow Condensed',sans-serif; font-size:11.5px; text-transform:uppercase; letter-spacing:.8px; color:var(--text-dim); font-weight:600;}
+  .ent-kpi .v{font-family:'JetBrains Mono',monospace; font-weight:700; font-size:24px; margin-top:4px; color:var(--kc,var(--text));}
+  .ent-kpi .s{font-size:11px; color:var(--text-faint); margin-top:3px;}
+  .ent-grid2{display:grid; grid-template-columns:1.1fr 1fr; gap:16px;}
+  @media (max-width:1000px){ .ent-grid2{grid-template-columns:1fr;} }
+  .ent-rank-row{display:grid; grid-template-columns:22px minmax(150px,1.3fr) 2fr 150px; gap:10px; align-items:center; padding:7px 6px; border-radius:8px; cursor:pointer;}
+  .ent-rank-row:hover{background:var(--surface-2);}
+  .ent-rank-row.sel{background:var(--surface-3); box-shadow:inset 3px 0 0 var(--amber);}
+  .ent-rank-row .pos{font-family:'JetBrains Mono',monospace; color:var(--text-faint); font-size:12px;}
+  .ent-rank-row .name{font-size:12.5px; font-weight:600;}
+  .ent-rank-row .track{background:var(--surface-3); border-radius:6px; height:18px; position:relative; overflow:hidden;}
+  .ent-rank-row .fill{height:100%; border-radius:6px; background:var(--red); display:flex; align-items:center; padding-left:6px; font-size:11px; font-weight:700; color:#fff; white-space:nowrap; min-width:28px;}
+  .ent-rank-row .meta{font-size:11px; color:var(--text-dim); text-align:right; line-height:1.35;}
+  .ent-rank-head{display:grid; grid-template-columns:22px minmax(150px,1.3fr) 2fr 150px; gap:10px; padding:0 6px 6px; font-size:10.5px; text-transform:uppercase; letter-spacing:.6px; color:var(--text-faint);}
+  table.ent-matrix td, table.ent-matrix th{text-align:center; white-space:nowrap;}
+  table.ent-matrix td:first-child, table.ent-matrix th:first-child{text-align:left;}
+  .ent-cell{display:inline-block; min-width:54px; padding:3px 6px; border-radius:6px; font-family:'JetBrains Mono',monospace; font-size:11.5px;}
+  .ent-chip{font-size:11.5px; background:var(--amber); color:#1a1206; border-radius:14px; padding:4px 10px; cursor:pointer; font-weight:600;}
+  .ent-tag{display:inline-block; font-size:10.5px; padding:2px 7px; border-radius:10px; background:var(--surface-3); color:var(--text-dim); margin:1px 2px; white-space:nowrap;}
+  .ent-tag.main{background:rgba(255,92,77,.15); color:var(--red); font-weight:600;}
+  #entTableBody tr.ent-row{cursor:pointer;}
+  #entTableBody tr.ent-detail td{background:var(--surface-2);}
+  .ent-tl{display:flex; flex-wrap:wrap; gap:6px; padding:6px 0;}
+  .ent-tl .step{border:1px solid var(--border); border-radius:8px; padding:6px 9px; background:var(--surface); min-width:118px;}
+  .ent-tl .step .k{font-size:10.5px; text-transform:uppercase; letter-spacing:.5px; color:var(--text-faint);}
+  .ent-tl .step .d{font-family:'JetBrains Mono',monospace; font-size:12.5px; font-weight:600; margin-top:2px;}
+  .ent-tl .step .n{font-size:10.5px; color:var(--text-dim); margin-top:2px;}
+  .ent-tl .step.late{border-color:var(--red); background:rgba(255,92,77,.08);}
+  .ent-tl .step.late .d{color:var(--red);}
+  .ent-tl .step.ref{border-style:dashed;}
+  .ent-tl .step.ok .d{color:var(--green);}
 </style>
 </head>
 <body data-theme="dark">
@@ -1461,6 +1499,7 @@
           <button class="subtab-btn" data-subtab="pagofabrica" type="button">🏭 Pago a fábrica</button>
           <button class="subtab-btn" data-subtab="geac" type="button">📋 GEAC</button>
           <button class="subtab-btn" data-subtab="credito" type="button">💳 Créditos</button>
+          <button class="subtab-btn" data-subtab="entregasacel" type="button">🚚 Entregas</button>
           <button class="subtab-btn" data-subtab="informegerman" type="button">📈 Informe Germán</button>
         </div>
       </div>
@@ -2088,6 +2127,115 @@
           </div>
         </div>
       </div><!-- /sub Créditos -->
+
+      <div class="subtab-content" id="subEntregasAcel">
+        <div class="panel">
+          <div class="panel-head">
+            <h3>🚚 Entregas fuera de plazo</h3>
+            <div class="hint">Plazo = Fecha venta + SLA de patentamiento (Cba 2-3 dh · Otras 10-11 dh · Sur 15-16 dh) + 4 dh hasta la entrega · solo autos con chasis válido, entregados con fecha de turno o de entrega</div>
+          </div>
+          <div class="filter-row ent-filters">
+            <div class="pill-group">
+              <span class="pill-group-label">Marca</span>
+              <div class="pill-list" id="entBrandList"></div>
+              <button type="button" class="pill-action" id="entBrandAll">Todas</button>
+              <button type="button" class="pill-action" id="entBrandNone">Ninguna</button>
+            </div>
+            <div class="pill-group">
+              <span class="pill-group-label">Canal</span>
+              <div class="pill-list" id="entCanalList"></div>
+              <button type="button" class="pill-action" id="entCanalAll">Todos</button>
+              <button type="button" class="pill-action" id="entCanalNone">Ninguno</button>
+            </div>
+            <div class="msdrop" id="entMesDrop">
+              <button type="button" class="msdrop-btn" id="entMesDropBtn"><span class="msdrop-label">Mes de entrega: Todos</span><span class="msdrop-arrow">▾</span></button>
+              <div class="msdrop-panel">
+                <div class="msdrop-actions">
+                  <button type="button" class="pill-action" id="entMesAll">Todos</button>
+                  <button type="button" class="pill-action" id="entMesNone">Ninguno</button>
+                </div>
+                <div class="msdrop-list" id="entMesList"></div>
+              </div>
+            </div>
+            <div class="segmented" id="entUsadoSeg">
+              <button class="active" data-v="todos" type="button">Usado: todos</button>
+              <button data-v="si" type="button">Sí</button>
+              <button data-v="no" type="button">No</button>
+            </div>
+            <div class="segmented" id="entInvitadoSeg">
+              <button data-v="todos" type="button">Invitado: todos</button>
+              <button data-v="si" type="button">Sí</button>
+              <button class="active" data-v="no" type="button">No</button>
+            </div>
+            <button class="page-btn" id="entClearBtn" type="button">🧹 Limpiar filtros</button>
+            <div class="table-search ent-search">
+              <input type="text" id="entSearchInput" placeholder="Buscar interno, cliente, modelo o dominio…" autocomplete="off">
+            </div>
+          </div>
+          <div class="ent-kpis" id="entKpis"></div>
+        </div>
+
+        <div class="ent-grid2">
+          <div class="panel">
+            <div class="panel-head">
+              <h3>🏆 Ranking de áreas que demoran la entrega</h3>
+              <div class="hint">Causa principal = el último requisito que se completó después del plazo · clic en un área para filtrar el detalle</div>
+            </div>
+            <div id="entRanking"></div>
+          </div>
+          <div class="panel">
+            <div class="panel-head">
+              <h3>🧩 Área × marca</h3>
+              <div class="hint">% de las entregas fuera de plazo de cada marca, según su causa principal</div>
+            </div>
+            <div class="table-scroll"><table class="data-table ent-matrix" id="entMatrix"></table></div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-head">
+            <h3>📆 Evolución mensual — % entregado fuera de plazo</h3>
+            <div class="hint">Por mes de entrega · entre paréntesis: fuera de plazo / entregados</div>
+          </div>
+          <div class="table-scroll"><table class="data-table ent-matrix" id="entMensual"></table></div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-head">
+            <h3>📋 Detalle por unidad</h3>
+            <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+              <div class="segmented" id="entEstadoSeg">
+                <button class="active" data-v="tarde" type="button">Fuera de plazo</button>
+                <button data-v="todos" type="button">Todas</button>
+              </div>
+              <span class="ent-chip" id="entAreaChip" style="display:none;"></span>
+              <button class="page-btn" id="entCsvBtn" type="button">⬇️ CSV</button>
+              <button class="page-btn" id="entXlsBtn" type="button">⬇️ Excel</button>
+            </div>
+          </div>
+          <div style="margin-bottom:8px; font-size:11px; color:var(--text-faint);">Clic en una fila para ver la línea de tiempo de la unidad (en rojo, lo que llegó tarde)</div>
+          <div class="table-scroll" style="max-height:560px; overflow:auto;">
+            <table class="data-table" id="entTable">
+              <thead><tr>
+                <th class="col-marca sortable" data-sort="marca">Marca<span class="sort-arrow">▲▼</span></th>
+                <th class="sortable" data-sort="interno">Interno<span class="sort-arrow">▲▼</span></th>
+                <th>Modelo</th>
+                <th>Cliente</th>
+                <th>Canal</th>
+                <th>Zona</th>
+                <th class="sortable" data-sort="fv">Fecha venta<span class="sort-arrow">▲▼</span></th>
+                <th class="sortable" data-sort="plazo">Plazo<span class="sort-arrow">▲▼</span></th>
+                <th class="sortable" data-sort="entrega">Entrega<span class="sort-arrow">▲▼</span></th>
+                <th class="sortable sort-active" data-sort="atraso">Atraso (dh)<span class="sort-arrow">▼</span></th>
+                <th class="sortable" data-sort="causa">Causa principal<span class="sort-arrow">▲▼</span></th>
+                <th>Otros factores</th>
+              </tr></thead>
+              <tbody id="entTableBody"></tbody>
+            </table>
+          </div>
+          <div id="entTableHint" style="margin-top:8px; font-size:11px; color:var(--text-faint);"></div>
+        </div>
+      </div><!-- /sub Entregas (Aceleración) -->
 
       <div class="subtab-content" id="subInformeGerman">
         <div class="panel">
@@ -7778,8 +7926,441 @@
     });
   });
 
+  // =====================================================================
+  // ---------- Aceleración > Entregas fuera de plazo (v25) ----------
+  // Para cada auto entregado calcula el plazo comprometido (Fecha venta + SLA
+  // de patentamiento según zona/crédito + 4 dh) y, si se entregó después, busca
+  // la CAUSA: el último requisito de entrega que se completó después del plazo
+  // (arribo, patentamiento, GEAC, avería, accesorios, alistaje, crédito). Si el
+  // que frenó fue el patentamiento, se baja un nivel: certificado de fábrica o
+  // pago a fábrica llegados tarde, o si no, demora de gestoría/registro. Si todo
+  // estaba listo a tiempo y aun así se entregó tarde → coordinación de entrega.
+  // =====================================================================
+  const ENT_AREAS = {
+    turno:      {label:'Coordinación de entrega (turno / cliente)', icon:'📅', color:'#8b5cf6'},
+    geac:       {label:'GEAC (trámite)',                            icon:'📋', color:'#4c8dff'},
+    averia:     {label:'Averías',                                   icon:'⚠️', color:'#ff5c4d'},
+    accesorios: {label:'Accesorios',                                icon:'🎒', color:'#ff8a3d'},
+    alistaje:   {label:'Alistaje',                                  icon:'🧹', color:'#ffb020'},
+    certificado:{label:'Documentación (certificado de fábrica)',    icon:'📄', color:'#06b6d4'},
+    pagofab:    {label:'Pago a fábrica',                            icon:'🏭', color:'#64748b'},
+    gestoria:   {label:'Gestoría / Registro (patentamiento)',       icon:'🏛️', color:'#14b8a6'},
+    credito:    {label:'Créditos (liquidación)',                    icon:'💳', color:'#e11d48'},
+    arribo:     {label:'Arribo de la unidad',                       icon:'🚛', color:'#a3a3a3'}
+  };
+  const ENT_STATE = {
+    allBrands: [], brands: new Set(), allCanal: [], canal: new Set(),
+    allMes: [], mes: new Set(), usado:'todos', invitado:'no', search:'',
+    estado:'tarde', area:null, sortBy:'atraso', sortAsc:false, open:new Set(),
+    dataRef:null, lastRows:[]
+  };
+
+  function entFmt(d){
+    if (!d) return '—';
+    return String(d.getDate()).padStart(2,'0') + '/' + String(d.getMonth()+1).padStart(2,'0') + '/' + d.getFullYear();
+  }
+  function entMonthKey(d){ return d ? d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') : ''; }
+  function entMid(d){ return d ? new Date(d.getFullYear(), d.getMonth(), d.getDate()) : null; }
+
+  function entFechaEntrega(r){
+    const hoy = entMid(new Date());
+    const ft = entMid(parseDateFlexible(r['Fecha Turno Entrega']));
+    if (ft && ft <= hoy) return ft; // regla: si hay turno ya pasado, esa es la fecha real
+    return entMid(parseDateFlexible(r['Fecha Entrega Unidad']));
+  }
+
+  function entAnalizar(r){
+    if (!esAutoValidoSLA(r)) return null;
+    const fv = entMid(parseDateFlexible(r['Fecha Venta']));
+    const E = entFechaEntrega(r);
+    if (!fv || !E || E < fv) return null;
+
+    const slaPat = getSLAFacPat(r);
+    const dPat = addBusinessDaysSLA(fv, slaPat);
+    const D = addBusinessDaysSLA(dPat, 4);
+    const atraso = diasHabilesSLA(D, E) || 0;
+    const tarde = E > D && atraso >= 1;
+    const zona = esCbaSLA(r) ? 'Córdoba' : (esSurPatagonicoSLA(r) ? 'Sur' : 'Otras');
+
+    const up = c => (r[c] || '').toString().trim().toUpperCase();
+    const dt = c => entMid(parseDateFlexible(r[c]));
+    const tope = new Date(E); tope.setDate(tope.getDate() + 3); // eventos posteriores a la entrega no cuentan
+
+    // Requisitos para poder entregar (los mismos que pide "OK para turno")
+    const req = [];
+    const addReq = (key, label, d, aplica) => { if (aplica && d && d <= tope) req.push({key, label, d}); };
+    addReq('arribo', 'Arribo unidad', dt('Fecha Arribo Unidad'), true);
+    addReq('patente', 'Patentamiento', dt('Fecha Patentamiento'), true);
+    addReq('geac', 'Trámite a GEAC', dt('Fecha Entrega Tramite a GEAC'), up('Patenta?') === 'MAIPU');
+    addReq('averia', 'Cierre avería', dt('Fecha Cierre Averia'), tuvoAveria(r));
+    addReq('accesorios', 'Regreso accesorios', dt('Fecha Regreso de Accesorios'), up('Enviado a Accesorios') === 'SI');
+    addReq('alistaje', 'Alistaje', dt('Fecha Alistaje'), true);
+    addReq('credito', 'Liquidación crédito', dt('Fecha Liquidacion Credito'), up('Credito?') === 'SI');
+
+    const certificado = dt('Fecha Arribo Certificado');
+    const pagoFab = dt('Fecha Pago Fab');
+    // Si frenó el patentamiento: ¿fue por algo que llegó tarde antes del trámite?
+    const raizPatente = () => {
+      const pre = [];
+      if (certificado && certificado >= dPat) pre.push({key:'certificado', d:certificado});
+      if (pagoFab && pagoFab >= dPat) pre.push({key:'pagofab', d:pagoFab});
+      if (!pre.length) return 'gestoria';
+      return pre.reduce((a,b) => b.d > a.d ? b : a).key;
+    };
+    const areaDe = k => k === 'patente' ? raizPatente() : k;
+
+    let causa = null, R = null, aporte = {};
+    const factores = new Set();
+    if (tarde){
+      R = req.length ? req.reduce((m,x) => x.d > m ? x.d : m, req[0].d) : null;
+      if (!R || R <= D){
+        causa = 'turno';
+        aporte.turno = atraso;
+      } else {
+        const bind = req.filter(x => x.d.getTime() === R.getTime());
+        // empate: priorizamos lo que más lejos está del control del concesionario
+        const prio = ['arribo','patente','credito','geac','averia','accesorios','alistaje'];
+        bind.sort((a,b) => prio.indexOf(a.key) - prio.indexOf(b.key));
+        causa = areaDe(bind[0].key);
+        aporte[causa] = diasHabilesSLA(D, R) || 0;
+        const post = diasHabilesSLA(R, E) || 0;
+        if (post > 0) aporte.turno = post;
+      }
+      req.forEach(x => {
+        const late = x.key === 'patente' ? x.d > dPat : x.d > D;
+        if (late) factores.add(areaDe(x.key));
+      });
+      if (aporte.turno && causa !== 'turno') factores.add('turno');
+      factores.delete(causa);
+    }
+
+    // Línea de tiempo para el detalle
+    const tl = [{k:'Venta', d:fv, cls:'ref'}];
+    if (certificado) tl.push({k:'Certificado', d:certificado, cls: certificado > dPat ? 'late' : 'ok'});
+    if (pagoFab) tl.push({k:'Pago fábrica', d:pagoFab, cls: pagoFab > dPat ? 'late' : 'ok'});
+    req.forEach(x => tl.push({k:x.label, d:x.d, cls: (x.key === 'patente' ? x.d > dPat : x.d > D) ? 'late' : 'ok'}));
+    if (tuvoAveria(r)) {
+      const fa = dt('Fecha Averia');
+      if (fa) tl.push({k:'Avería', d:fa, cls:'ref', n:(r['Descripcion Averia'] || '').toString().slice(0,40)});
+    }
+    const fEnvAcc = dt('Fecha Envio a Accesorios');
+    if (fEnvAcc && up('Enviado a Accesorios') === 'SI') tl.push({k:'Envío accesorios', d:fEnvAcc, cls:'ref'});
+    tl.push({k:'Plazo patentam.', d:dPat, cls:'ref', n:slaPat + ' dh desde venta'});
+    tl.push({k:'Plazo entrega', d:D, cls:'ref', n:'+4 dh'});
+    tl.push({k:'Entrega', d:E, cls: tarde ? 'late' : 'ok', n: tarde ? `+${atraso} dh de atraso` : 'en plazo'});
+    tl.sort((a,b) => a.d - b.d);
+
+    return {
+      r, marca:(r['Marca'] || '').toString().trim().toUpperCase(),
+      interno:(r['Interno'] || '').toString().trim(),
+      canal:(r['Canal'] || '').toString().trim() || '(sin canal)',
+      zona, fv, dPat, D, E, atraso: tarde ? atraso : 0, tarde, causa,
+      factores:[...factores], aporte, tl, mes: entMonthKey(E)
+    };
+  }
+
+  function entInitFilters(units){
+    const brandSet = new Set(), canalSet = new Set(), mesSet = new Set();
+    units.forEach(u => { brandSet.add(u.marca); canalSet.add(u.canal); mesSet.add(u.mes); });
+    const brandLabel = b => (typeof PATENTADOS_BRAND_LABELS !== 'undefined' && PATENTADOS_BRAND_LABELS[b]) || b;
+
+    ENT_STATE.allBrands = CAR_BRANDS.filter(b => brandSet.has(b));
+    ENT_STATE.brands = new Set(ENT_STATE.allBrands);
+    $('entBrandList').innerHTML = ENT_STATE.allBrands.map(b => `<button type="button" class="active" data-v="${escapeHtml(b)}">${escapeHtml(brandLabel(b))}</button>`).join('');
+
+    ENT_STATE.allCanal = [...canalSet].sort();
+    ENT_STATE.canal = new Set(ENT_STATE.allCanal);
+    $('entCanalList').innerHTML = ENT_STATE.allCanal.map(c => `<button type="button" class="active" data-v="${escapeHtml(c)}">${escapeHtml(c)}</button>`).join('');
+
+    [['entBrandList','brands'],['entCanalList','canal']].forEach(([id, key]) => {
+      $(id).querySelectorAll('button').forEach(btn => btn.addEventListener('click', () => {
+        const v = btn.dataset.v;
+        if (ENT_STATE[key].has(v)){ ENT_STATE[key].delete(v); btn.classList.remove('active'); }
+        else { ENT_STATE[key].add(v); btn.classList.add('active'); }
+        renderEntregasAcelSection();
+      }));
+    });
+
+    // Por defecto: los últimos 6 meses de entrega (el histórico completo sigue disponible)
+    ENT_STATE.allMes = [...mesSet].filter(Boolean).sort().reverse();
+    ENT_STATE.mes = new Set(ENT_STATE.allMes.slice(0, 6));
+    renderGenMonthDropdown('entMesDrop', 'entMesList', ENT_STATE.allMes, ENT_STATE.mes, 'Mes de entrega', renderEntregasAcelSection);
+  }
+
+  function entFiltrar(units){
+    const q = ENT_STATE.search.trim().toLowerCase();
+    return units.filter(u => {
+      if (!ENT_STATE.brands.has(u.marca)) return false;
+      if (!ENT_STATE.canal.has(u.canal)) return false;
+      if (!ENT_STATE.mes.has(u.mes)) return false;
+      if (ENT_STATE.usado === 'si' && !esUsado(u.r)) return false;
+      if (ENT_STATE.usado === 'no' && esUsado(u.r)) return false;
+      if (ENT_STATE.invitado === 'si' && !isInvitado(u.r)) return false;
+      if (ENT_STATE.invitado === 'no' && isInvitado(u.r)) return false;
+      if (q){
+        const hay = [u.interno, u.r['Cliente'], u.r['Modelo'], u.r['Dominio']].map(x => (x || '').toString().toLowerCase()).join(' ');
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+  }
+
+  function entPctColor(p){
+    if (p >= 50) return 'rgba(255,92,77,.28)';
+    if (p >= 30) return 'rgba(255,138,61,.24)';
+    if (p >= 15) return 'rgba(255,176,32,.22)';
+    return 'rgba(51,211,145,.18)';
+  }
+
+  function renderEntregasAcelSection(){
+    if (!$('subEntregasAcel')) return;
+    const all = [];
+    ALL_ROWS.forEach(r => { const u = entAnalizar(r); if (u) all.push(u); });
+    if (ENT_STATE.dataRef !== ALL_ROWS){
+      ENT_STATE.dataRef = ALL_ROWS;
+      entInitFilters(all);
+    }
+    const base = entFiltrar(all);
+    const tarde = base.filter(u => u.tarde);
+    const brandLabel = b => (typeof PATENTADOS_BRAND_LABELS !== 'undefined' && PATENTADOS_BRAND_LABELS[b]) || b;
+
+    // ---- KPIs ----
+    const pct = base.length ? Math.round(tarde.length / base.length * 100) : 0;
+    const prom = tarde.length ? (tarde.reduce((s,u) => s + u.atraso, 0) / tarde.length) : 0;
+    const porCausa = {};
+    tarde.forEach(u => { porCausa[u.causa] = (porCausa[u.causa] || 0) + 1; });
+    const top = Object.entries(porCausa).sort((a,b) => b[1] - a[1])[0];
+    const topEvitable = Object.entries(porCausa).filter(([k]) => k !== 'turno').sort((a,b) => b[1] - a[1])[0];
+    const kpi = (l, v, s, c) => `<div class="ent-kpi" style="--kc:${c}"><div class="l">${l}</div><div class="v">${v}</div><div class="s">${s}</div></div>`;
+    $('entKpis').innerHTML =
+      kpi('🚚 Entregados', base.length.toLocaleString('es-AR'), 'con los filtros aplicados', 'var(--blue)') +
+      kpi('⏰ Fuera de plazo', `${tarde.length.toLocaleString('es-AR')} · ${pct}%`, `${base.length - tarde.length} en plazo`, pct >= 30 ? 'var(--red)' : 'var(--amber)') +
+      kpi('📏 Atraso promedio', tarde.length ? prom.toFixed(1) + ' dh' : '—', 'días hábiles sobre el plazo', 'var(--orange)') +
+      kpi('🥇 Área #1', top ? `${ENT_AREAS[top[0]].icon} ${Math.round(top[1] / tarde.length * 100)}%` : '—', top ? ENT_AREAS[top[0]].label : 'sin entregas tarde', 'var(--red)') +
+      kpi('🔧 Área #1 (sin turno)', topEvitable ? `${ENT_AREAS[topEvitable[0]].icon} ${Math.round(topEvitable[1] / tarde.length * 100)}%` : '—', topEvitable ? ENT_AREAS[topEvitable[0]].label : '—', 'var(--amber)');
+
+    // ---- Ranking ----
+    const rank = Object.keys(ENT_AREAS).map(k => {
+      const us = tarde.filter(u => u.causa === k);
+      const inv = tarde.filter(u => u.causa === k || u.factores.includes(k)).length;
+      const dias = tarde.reduce((s,u) => s + (u.aporte[k] || 0), 0);
+      const prom = us.length ? us.reduce((s,u) => s + u.atraso, 0) / us.length : 0;
+      return {k, n:us.length, inv, dias, prom};
+    }).filter(x => x.n > 0 || x.inv > 0).sort((a,b) => b.n - a.n || b.inv - a.inv);
+    const maxN = Math.max(1, ...rank.map(x => x.n));
+    const totDias = rank.reduce((s,x) => s + x.dias, 0) || 1;
+    $('entRanking').innerHTML = !rank.length ? '<div class="hint">Sin entregas fuera de plazo con estos filtros 🎉</div>' :
+      `<div class="ent-rank-head"><span>#</span><span>Área</span><span>Unidades (causa principal)</span><span style="text-align:right;">Días aportados · involucrada</span></div>` +
+      rank.map((x,i) => {
+        const a = ENT_AREAS[x.k];
+        const p = tarde.length ? Math.round(x.n / tarde.length * 100) : 0;
+        return `<div class="ent-rank-row ${ENT_STATE.area === x.k ? 'sel' : ''}" data-area="${x.k}" title="Atraso promedio cuando es la causa: ${x.prom.toFixed(1)} dh">
+          <span class="pos">${i+1}</span>
+          <span class="name">${a.icon} ${escapeHtml(a.label)}</span>
+          <div class="track"><div class="fill" style="width:${Math.max(x.n / maxN * 100, 2)}%; background:${a.color};">${x.n} · ${p}%</div></div>
+          <span class="meta">${x.dias.toLocaleString('es-AR')} dh (${Math.round(x.dias / totDias * 100)}%)<br>en ${x.inv} unidades</span>
+        </div>`;
+      }).join('');
+    $('entRanking').querySelectorAll('.ent-rank-row').forEach(el => el.addEventListener('click', () => {
+      ENT_STATE.area = ENT_STATE.area === el.dataset.area ? null : el.dataset.area;
+      ENT_STATE.estado = 'tarde';
+      $('entEstadoSeg').querySelectorAll('button').forEach(b => b.classList.toggle('active', b.dataset.v === 'tarde'));
+      renderEntregasAcelSection();
+      if (ENT_STATE.area) document.getElementById('entTable').scrollIntoView({behavior:'smooth', block:'start'});
+    }));
+
+    // ---- Matriz área × marca ----
+    const marcas = ENT_STATE.allBrands.filter(b => ENT_STATE.brands.has(b));
+    const tardeMarca = {};
+    marcas.forEach(m => { tardeMarca[m] = tarde.filter(u => u.marca === m).length; });
+    const areasMat = rank.map(x => x.k);
+    let mh = `<thead><tr><th>Área</th>${marcas.map(m => `<th>${escapeHtml(brandLabel(m))}<br><span style="font-weight:400; text-transform:none;">${tardeMarca[m]} tarde</span></th>`).join('')}</tr></thead><tbody>`;
+    areasMat.forEach(k => {
+      mh += `<tr><td>${ENT_AREAS[k].icon} ${escapeHtml(ENT_AREAS[k].label)}</td>` + marcas.map(m => {
+        const n = tarde.filter(u => u.marca === m && u.causa === k).length;
+        const p = tardeMarca[m] ? Math.round(n / tardeMarca[m] * 100) : 0;
+        return `<td>${n ? `<span class="ent-cell" style="background:${entPctColor(p)}">${p}% <small>(${n})</small></span>` : '<span style="color:var(--text-faint)">—</span>'}</td>`;
+      }).join('') + '</tr>';
+    });
+    mh += `<tr><td><b>% fuera de plazo de la marca</b></td>` + marcas.map(m => {
+      const tot = base.filter(u => u.marca === m).length;
+      const p = tot ? Math.round(tardeMarca[m] / tot * 100) : 0;
+      return `<td><span class="ent-cell" style="background:${entPctColor(p)}"><b>${p}%</b> <small>(${tardeMarca[m]}/${tot})</small></span></td>`;
+    }).join('') + '</tr></tbody>';
+    $('entMatrix').innerHTML = areasMat.length ? mh : '<tbody><tr><td class="hint">Sin datos</td></tr></tbody>';
+
+    // ---- Evolución mensual ----
+    const meses = [...new Set(base.map(u => u.mes))].sort();
+    let eh = `<thead><tr><th>Mes de entrega</th>${marcas.map(m => `<th>${escapeHtml(brandLabel(m))}</th>`).join('')}<th>Total</th><th>Área #1 del mes</th></tr></thead><tbody>`;
+    meses.forEach(k => {
+      const delMes = base.filter(u => u.mes === k);
+      const cell = arr => {
+        const t = arr.filter(u => u.tarde).length;
+        const p = arr.length ? Math.round(t / arr.length * 100) : 0;
+        return arr.length ? `<span class="ent-cell" style="background:${entPctColor(p)}">${p}% <small>(${t}/${arr.length})</small></span>` : '—';
+      };
+      const cnt = {};
+      delMes.filter(u => u.tarde).forEach(u => { cnt[u.causa] = (cnt[u.causa] || 0) + 1; });
+      const t1 = Object.entries(cnt).sort((a,b) => b[1] - a[1])[0];
+      eh += `<tr><td>${escapeHtml(monthLabel(k))}</td>${marcas.map(m => `<td>${cell(delMes.filter(u => u.marca === m))}</td>`).join('')}<td>${cell(delMes)}</td><td style="text-align:left;">${t1 ? `${ENT_AREAS[t1[0]].icon} ${escapeHtml(ENT_AREAS[t1[0]].label)} (${t1[1]})` : '—'}</td></tr>`;
+    });
+    eh += '</tbody>';
+    $('entMensual').innerHTML = meses.length ? eh : '<tbody><tr><td class="hint">Sin datos</td></tr></tbody>';
+
+    // ---- Detalle ----
+    let rows = ENT_STATE.estado === 'tarde' ? tarde : base;
+    if (ENT_STATE.area) rows = rows.filter(u => u.causa === ENT_STATE.area);
+    const chip = $('entAreaChip');
+    if (ENT_STATE.area){ chip.style.display = ''; chip.textContent = `${ENT_AREAS[ENT_STATE.area].icon} ${ENT_AREAS[ENT_STATE.area].label} ✕`; }
+    else chip.style.display = 'none';
+
+    const sv = {
+      marca: u => u.marca, interno: u => Number(u.interno) || 0, fv: u => u.fv, plazo: u => u.D,
+      entrega: u => u.E, atraso: u => u.atraso, causa: u => u.causa ? ENT_AREAS[u.causa].label : 'zzz'
+    }[ENT_STATE.sortBy] || (u => u.atraso);
+    rows = rows.slice().sort((a,b) => {
+      const x = sv(a), y = sv(b);
+      const c = x < y ? -1 : x > y ? 1 : 0;
+      return ENT_STATE.sortAsc ? c : -c;
+    });
+    ENT_STATE.lastRows = rows;
+
+    const LIM = 500;
+    const body = $('entTableBody');
+    body.innerHTML = rows.slice(0, LIM).map(u => {
+      const r = u.r;
+      const causaHtml = u.causa ? `<span class="ent-tag main">${ENT_AREAS[u.causa].icon} ${escapeHtml(ENT_AREAS[u.causa].label)}</span>` : '<span class="ent-tag" style="color:var(--green);">✓ en plazo</span>';
+      const fact = u.factores.map(f => `<span class="ent-tag">${ENT_AREAS[f].icon} ${escapeHtml(ENT_AREAS[f].label.split(' (')[0])}</span>`).join('');
+      const open = ENT_STATE.open.has(u.interno);
+      let html = `<tr class="ent-row" data-int="${escapeHtml(u.interno)}">
+        <td class="col-marca">${escapeHtml(brandLabel(u.marca))}</td>
+        <td>${escapeHtml(u.interno)}</td>
+        <td>${escapeHtml((r['Modelo'] || '').toString())}</td>
+        <td>${escapeHtml((r['Cliente'] || '').toString().slice(0,28))}</td>
+        <td>${escapeHtml(u.canal)}</td>
+        <td>${u.zona}</td>
+        <td>${entFmt(u.fv)}</td>
+        <td>${entFmt(u.D)}</td>
+        <td>${entFmt(u.E)}</td>
+        <td style="font-family:'JetBrains Mono',monospace; font-weight:700; color:${u.tarde ? 'var(--red)' : 'var(--green)'};">${u.tarde ? '+' + u.atraso : '0'}</td>
+        <td>${causaHtml}</td>
+        <td>${fact || '<span style="color:var(--text-faint)">—</span>'}</td>
+      </tr>`;
+      if (open){
+        html += `<tr class="ent-detail"><td colspan="12"><div class="ent-tl">${u.tl.map(s => `<div class="step ${s.cls}"><div class="k">${escapeHtml(s.k)}</div><div class="d">${entFmt(s.d)}</div>${s.n ? `<div class="n">${escapeHtml(s.n)}</div>` : ''}</div>`).join('')}</div>${
+          u.tarde ? `<div class="hint">Días de atraso aportados: ${Object.entries(u.aporte).map(([k,v]) => `${ENT_AREAS[k].label}: ${v} dh`).join(' · ')}</div>` : ''}</td></tr>`;
+      }
+      return html;
+    }).join('') || '<tr><td colspan="12" class="hint" style="text-align:center; padding:18px;">Sin unidades con estos filtros</td></tr>';
+    body.querySelectorAll('tr.ent-row').forEach(tr => tr.addEventListener('click', () => {
+      const k = tr.dataset.int;
+      if (ENT_STATE.open.has(k)) ENT_STATE.open.delete(k); else ENT_STATE.open.add(k);
+      renderEntregasAcelSection();
+    }));
+    $('entTableHint').textContent = rows.length > LIM
+      ? `Mostrando ${LIM} de ${rows.length.toLocaleString('es-AR')} unidades (exportá a CSV/Excel para verlas todas)`
+      : `Mostrando ${rows.length.toLocaleString('es-AR')} unidades`;
+
+    document.querySelectorAll('#entTable th.sortable').forEach(th => {
+      const act = th.dataset.sort === ENT_STATE.sortBy;
+      th.classList.toggle('sort-active', act);
+      th.querySelector('.sort-arrow').textContent = act ? (ENT_STATE.sortAsc ? '▲' : '▼') : '▲▼';
+    });
+  }
+
+  function entExportData(){
+    const brandLabel = b => (typeof PATENTADOS_BRAND_LABELS !== 'undefined' && PATENTADOS_BRAND_LABELS[b]) || b;
+    return ENT_STATE.lastRows.map(u => {
+      const r = u.r;
+      const fecha = c => { const d = parseDateFlexible(r[c]); return d ? entFmt(d) : ''; };
+      return {
+        'Marca': brandLabel(u.marca), 'Interno': u.interno, 'Modelo': r['Modelo'] || '', 'Cliente': r['Cliente'] || '',
+        'Canal': u.canal, 'Zona': u.zona, 'Usado': esUsado(r) ? 'Sí' : 'No', 'Invitado': isInvitado(r) ? 'Sí' : 'No',
+        'Fecha venta': entFmt(u.fv), 'Plazo patentamiento': entFmt(u.dPat), 'Plazo entrega': entFmt(u.D), 'Fecha entrega': entFmt(u.E),
+        'Fuera de plazo': u.tarde ? 'Sí' : 'No', 'Atraso (dh)': u.atraso,
+        'Causa principal': u.causa ? ENT_AREAS[u.causa].label : '',
+        'Otros factores': u.factores.map(f => ENT_AREAS[f].label).join(' | '),
+        'Fecha arribo unidad': fecha('Fecha Arribo Unidad'), 'Fecha arribo certificado': fecha('Fecha Arribo Certificado'),
+        'Fecha pago fábrica': fecha('Fecha Pago Fab'), 'Fecha patentamiento': fecha('Fecha Patentamiento'),
+        'Fecha trámite a GEAC': fecha('Fecha Entrega Tramite a GEAC'), 'Fecha avería': fecha('Fecha Averia'),
+        'Fecha cierre avería': fecha('Fecha Cierre Averia'), 'Fecha envío accesorios': fecha('Fecha Envio a Accesorios'),
+        'Fecha regreso accesorios': fecha('Fecha Regreso de Accesorios'), 'Fecha alistaje': fecha('Fecha Alistaje'),
+        'Fecha liquidación crédito': fecha('Fecha Liquidacion Credito')
+      };
+    });
+  }
+
+  (function initEntregasAcel(){
+    if (!$('subEntregasAcel')) return;
+    const seg = (id, key) => $(id).querySelectorAll('button').forEach(btn => btn.addEventListener('click', () => {
+      ENT_STATE[key] = btn.dataset.v;
+      $(id).querySelectorAll('button').forEach(b => b.classList.toggle('active', b === btn));
+      renderEntregasAcelSection();
+    }));
+    seg('entUsadoSeg', 'usado');
+    seg('entInvitadoSeg', 'invitado');
+    seg('entEstadoSeg', 'estado');
+
+    const setAll = (listId, key, allKey, on) => {
+      ENT_STATE[key] = new Set(on ? ENT_STATE[allKey] : []);
+      $(listId).querySelectorAll('button').forEach(b => b.classList.toggle('active', on));
+      renderEntregasAcelSection();
+    };
+    $('entBrandAll').addEventListener('click', () => setAll('entBrandList', 'brands', 'allBrands', true));
+    $('entBrandNone').addEventListener('click', () => setAll('entBrandList', 'brands', 'allBrands', false));
+    $('entCanalAll').addEventListener('click', () => setAll('entCanalList', 'canal', 'allCanal', true));
+    $('entCanalNone').addEventListener('click', () => setAll('entCanalList', 'canal', 'allCanal', false));
+    const setMes = on => {
+      ENT_STATE.mes.clear(); // se muta el Set (no se reasigna) para que el desplegable siga sincronizado
+      if (on) ENT_STATE.allMes.forEach(m => ENT_STATE.mes.add(m));
+      renderGenMonthDropdown('entMesDrop', 'entMesList', ENT_STATE.allMes, ENT_STATE.mes, 'Mes de entrega', renderEntregasAcelSection);
+      renderEntregasAcelSection();
+    };
+    $('entMesAll').addEventListener('click', () => setMes(true));
+    $('entMesNone').addEventListener('click', () => setMes(false));
+
+    let t = null;
+    $('entSearchInput').addEventListener('input', e => {
+      clearTimeout(t);
+      t = setTimeout(() => { ENT_STATE.search = e.target.value; renderEntregasAcelSection(); }, 200);
+    });
+    $('entAreaChip').addEventListener('click', () => { ENT_STATE.area = null; renderEntregasAcelSection(); });
+    $('entClearBtn').addEventListener('click', () => {
+      ENT_STATE.dataRef = null; ENT_STATE.area = null; ENT_STATE.search = ''; $('entSearchInput').value = '';
+      ENT_STATE.usado = 'todos'; ENT_STATE.invitado = 'no'; ENT_STATE.estado = 'tarde';
+      [['entUsadoSeg','todos'],['entInvitadoSeg','no'],['entEstadoSeg','tarde']].forEach(([id, v]) =>
+        $(id).querySelectorAll('button').forEach(b => b.classList.toggle('active', b.dataset.v === v)));
+      renderEntregasAcelSection();
+    });
+    document.querySelectorAll('#entTable th.sortable').forEach(th => th.addEventListener('click', () => {
+      const k = th.dataset.sort;
+      if (ENT_STATE.sortBy === k) ENT_STATE.sortAsc = !ENT_STATE.sortAsc;
+      else { ENT_STATE.sortBy = k; ENT_STATE.sortAsc = (k === 'marca' || k === 'causa'); }
+      renderEntregasAcelSection();
+    }));
+    $('entCsvBtn').addEventListener('click', () => {
+      const data = entExportData();
+      if (!data.length){ showToast('No hay filas para exportar', true); return; }
+      const cols = Object.keys(data[0]);
+      const esc = v => `"${String(v === null || v === undefined ? '' : v).replace(/"/g, '""')}"`;
+      const csv = '﻿' + [cols.map(esc).join(';')].concat(data.map(d => cols.map(c => esc(d[c])).join(';'))).join('\r\n');
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(new Blob([csv], {type:'text/csv;charset=utf-8'}));
+      a.download = `entregas_fuera_de_plazo_${new Date().toISOString().slice(0,10)}.csv`;
+      a.click();
+    });
+    $('entXlsBtn').addEventListener('click', () => {
+      const data = entExportData();
+      if (!data.length){ showToast('No hay filas para exportar', true); return; }
+      const ws = XLSX.utils.json_to_sheet(data);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Entregas fuera de plazo');
+      XLSX.writeFile(wb, `entregas_fuera_de_plazo_${new Date().toISOString().slice(0,10)}.xlsx`);
+    });
+  })();
+
   // ---------- Sub-pestañas de Aceleración ----------
-  const ACEL_SUBTAB_TARGETS = {resumen:'tabResumen', alistaje:'subAlistaje', averias:'subAverias', accesorios:'subAccesorios', pagofabrica:'subPagofabrica', geac:'subGeac', credito:'subCredito', informegerman:'subInformeGerman'};
+  const ACEL_SUBTAB_TARGETS = {resumen:'tabResumen', alistaje:'subAlistaje', averias:'subAverias', accesorios:'subAccesorios', pagofabrica:'subPagofabrica', geac:'subGeac', credito:'subCredito', entregasacel:'subEntregasAcel', informegerman:'subInformeGerman'};
   document.querySelectorAll('#aceleracionSubNav .subtab-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       document.querySelectorAll('#aceleracionSubNav .subtab-btn').forEach(b => b.classList.toggle('active', b === btn));
@@ -7787,6 +8368,9 @@
       document.querySelectorAll('#tabAceleracion .subtab-content').forEach(c => c.classList.toggle('active', c.id === target));
       
       // Trigger render cuando se abre una pestaña
+      if (btn.dataset.subtab === 'entregasacel'){
+        try { renderEntregasAcelSection(); } catch (err) { console.error('❌ Error al renderizar Entregas (Aceleración):', err); }
+      }
       if (btn.dataset.subtab === 'informegerman'){
         // Fuerza que el contenedor principal sea altura auto
         const tabContainer = document.getElementById('tabAceleracion');
@@ -9296,6 +9880,7 @@
             safeStep(() => populateGesBrandFilter(ALL_ROWS), 'populateGesBrandFilter (post-extra)');
             safeStep(() => renderGestoriaSection(), 'renderGestoriaSection (post-extra)');
             safeStep(() => renderInformeGermanSection(), 'renderInformeGermanSection (post-extra)');
+            safeStep(() => { const el = document.getElementById('subEntregasAcel'); if (el && el.classList.contains('active')) renderEntregasAcelSection(); }, 'renderEntregasAcelSection (post-extra)');
             setBaseSyncStatus('Base compartida sincronizada ✓', 'var(--green)');
           } else {
             setBaseSyncStatus('Base compartida sincronizada ✓ (faltó completar Localidad/Provincia — probá "Actualizar" de nuevo)', 'var(--amber)');
