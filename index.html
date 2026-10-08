@@ -7964,6 +7964,7 @@
     certificado:{label:'Certificado de fábrica',    icon:'📄', color:'#06b6d4', track:'documental'},
     pagofab:    {label:'Pago a fábrica',                            icon:'🏭', color:'#64748b', track:'documental'},
     gestoria:   {label:'Gestoría / Registro (patentamiento)',       icon:'🏛️', color:'#14b8a6', track:'documental'},
+    cliente:    {label:'Patentamiento por cliente',                 icon:'🙋', color:'#94a3b8', track:'documental'},
     credito:    {label:'Créditos (liquidación)',                    icon:'💳', color:'#e11d48', track:'documental'},
     arribo:     {label:'Arribo de la unidad',                       icon:'🚛', color:'#a3a3a3', track:'fisico'}
   };
@@ -8001,13 +8002,18 @@
   // pantalla; se guardan en este navegador. Alistaje/Accesorios/Certificado = los de Aceleración.
   const ENT_OBJ_DEFAULT = {arribo:0, alistaje:2, averia:5, accesorios:2, pagofab:0, certificado:3, geac:2, credito:5, turno:2};
   const ENT_OBJ_LABELS = {arribo:'Arribo (desde venta)', alistaje:'Alistaje', averia:'Avería', accesorios:'Accesorios', pagofab:'Pago fábrica (desde venta)', certificado:'Certificado (corridos)', geac:'Carpeta GEAC', credito:'Crédito', turno:'Turno (desde auto listo)'};
-  let ENT_OBJ = null;
+  // v28: los objetivos se guardan en el servidor (hoja Objetivos, marca "OBJ_ENTREGAS"),
+  // así son los mismos para todos y no se pierden. Solo un admin los puede cambiar.
+  const ENT_OBJ_MARCA = 'OBJ_ENTREGAS';
   function entObjetivos(){
-    if (ENT_OBJ) return ENT_OBJ;
-    ENT_OBJ = Object.assign({}, ENT_OBJ_DEFAULT);
-    try { const g = JSON.parse(localStorage.getItem('ent_objetivos_v1') || 'null'); if (g) Object.keys(ENT_OBJ).forEach(k => { if (typeof g[k] === 'number') ENT_OBJ[k] = g[k]; }); } catch(e){}
-    return ENT_OBJ;
+    const o = {};
+    Object.keys(ENT_OBJ_DEFAULT).forEach(k => {
+      const v = OBJETIVOS.get(objKey(ENT_OBJ_MARCA, k));
+      o[k] = (typeof v === 'number' && !isNaN(v)) ? v : ENT_OBJ_DEFAULT[k];
+    });
+    return o;
   }
+
 
   function entAnalizar(r){
     if (!esAutoValidoSLA(r)) return null;
@@ -8069,7 +8075,9 @@
     // Documental
     etapa('pagofab', 'Pago fábrica', 'documental', pagoFab, fv, OBJ.pagofab);
     etapa('certificado', 'Certificado', 'documental', certificado, pagoFab, OBJ.certificado, true);
-    etapa('gestoria', 'Patentamiento', 'documental', P, maxD([fv, certificado, pagoFab]), slaPat);
+    // Si patenta el cliente, la gestión (y la demora) es suya: área aparte
+    const patCliente = up('Patenta?') === 'CLIENTE';
+    etapa(patCliente ? 'cliente' : 'gestoria', patCliente ? 'Patentamiento (cliente)' : 'Patentamiento', 'documental', P, maxD([fv, certificado, pagoFab]), slaPat);
     etapa('geac', 'Carpeta GEAC', 'documental', G, P, OBJ.geac);
     etapa('credito', 'Liquidación crédito', 'documental', K, fv, OBJ.credito);
 
@@ -8199,24 +8207,30 @@
   function renderEntregasAcelSection(){
     if (!$('subEntregasAcel')) return;
     const box = $('entObjBox');
-    if (box && !box.dataset.ready){
-      box.dataset.ready = '1';
+    if (box){
       const o = entObjetivos();
-      box.innerHTML = '<b style="margin-right:4px;">🎯 Objetivos por etapa (dh):</b>' +
-        Object.keys(ENT_OBJ_LABELS).map(k => `<label>${ENT_OBJ_LABELS[k]} <input type="number" min="0" step="1" data-k="${k}" value="${o[k]}"></label>`).join('') +
-        '<label style="opacity:.8;">Patentamiento: según zona (2–16)</label><button type="button" class="pill-action" id="entObjReset">Restablecer</button>';
-      box.querySelectorAll('input').forEach(inp => inp.addEventListener('change', () => {
-        const v = Math.max(0, parseInt(inp.value, 10) || 0);
-        inp.value = v; ENT_OBJ[inp.dataset.k] = v;
-        try { localStorage.setItem('ent_objetivos_v1', JSON.stringify(ENT_OBJ)); } catch(e){}
-        renderEntregasAcelSection();
-      }));
-      $('entObjReset').addEventListener('click', () => {
-        ENT_OBJ = Object.assign({}, ENT_OBJ_DEFAULT);
-        try { localStorage.removeItem('ent_objetivos_v1'); } catch(e){}
-        box.querySelectorAll('input').forEach(inp => { inp.value = ENT_OBJ[inp.dataset.k]; });
-        renderEntregasAcelSection();
+      const esAdmin = !!(CURRENT_SESSION && CURRENT_SESSION.role === 'admin');
+      if (!box.dataset.ready){
+        box.dataset.ready = '1';
+        box.innerHTML = '<b style="margin-right:4px;">🎯 Objetivos por etapa (dh):</b>' +
+          Object.keys(ENT_OBJ_LABELS).map(k => `<label>${ENT_OBJ_LABELS[k]} <input type="number" min="0" step="1" data-k="${k}"></label>`).join('') +
+          '<label style="opacity:.8;">Patentamiento: según zona (2–16)</label>' +
+          '<span id="entObjNote" style="font-size:11px; color:var(--text-faint);"></span>';
+        box.querySelectorAll('input').forEach(inp => inp.addEventListener('change', () => {
+          const k = inp.dataset.k;
+          const v = Math.max(0, parseInt(inp.value, 10) || 0);
+          inp.value = v;
+          OBJETIVOS.set(objKey(ENT_OBJ_MARCA, k), v);
+          saveObjetivoValue(ENT_OBJ_MARCA, k, v, inp);
+          renderEntregasAcelSection();
+        }));
+      }
+      box.querySelectorAll('input').forEach(inp => {
+        if (document.activeElement !== inp) inp.value = o[inp.dataset.k];
+        inp.disabled = !esAdmin;
       });
+      const note = $('entObjNote');
+      if (note) note.textContent = esAdmin ? 'Se guardan para todos al salir del campo' : 'Solo un administrador puede cambiarlos';
     }
     const all = [];
     ALL_ROWS.forEach(r => { const u = entAnalizar(r); if (u) all.push(u); });
