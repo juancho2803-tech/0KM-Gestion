@@ -8102,7 +8102,7 @@
     // Tramo plazo → auto listo: se reparte en la cadena del circuito que terminó último.
     // Cada etapa se queda con lo que tardó más allá de su objetivo; si su objetivo cayó
     // después del plazo porque arrancó tarde, esos días son de la etapa previa que la demoró.
-    // Tramo auto listo → turno: es de Entregas (coordinación del turno).
+    // Tramo auto listo → turno: los días dentro del objetivo del turno van al área que demoró; lo que excede ese objetivo es de Entregas.
     const atribuir = (e, hasta, prof) => {
       if (!e || prof > 10 || hasta <= D) return;
       const lim = e.limite;
@@ -8126,9 +8126,13 @@
         const prio = ['arribo','patente','geac','credito','averia','accesorios','alistaje','certificado','pagofab'];
         const B = etapas.filter(e => e.end.getTime() === OKd.getTime() && (frena === 'ambos' || e.track === frena))
           .sort((a,b) => (b.exceso - a.exceso) || (prio.indexOf(a.key) - prio.indexOf(b.key)))[0];
-        atribuir(B, OKd, 0);
+        // El turno tiene su objetivo desde que el auto quedó listo: esos días también se
+        // los lleva el área que demoró (el turno no podía darse antes). Entregas solo
+        // aporta lo que tardó MÁS ALLÁ de su objetivo.
+        const limT = addBusinessDaysSLA(OKd, OBJ.turno || 0);
+        atribuir(B, E < limT ? E : limT, 0);
         etapas.forEach(e => { if (e.aporte > 0) aporte[e.area] = (aporte[e.area] || 0) + e.aporte; });
-        const post = diasHabilesSLA(OKd, E) || 0;
+        const post = E > limT ? (diasHabilesSLA(limT, E) || 0) : 0;
         if (post > 0) aporte.turno = post;
       } else {
         frena = 'turno';
