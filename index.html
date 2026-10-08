@@ -689,6 +689,11 @@
   .ent-tl .step.ref{border-style:dashed;}
   .ent-tl .step.ok .d{color:var(--green);}
   .ent-tl .step.warn{border-color:var(--amber);}
+  .ent-det-wrap{position:sticky; left:0; max-width:min(1200px, calc(100vw - 90px)); white-space:normal;}
+  .ent-desg{margin:4px 0 10px;}
+  .ent-desg-head{font-size:12.5px; margin-bottom:6px;}
+  table.ent-desg-t{width:auto; min-width:640px;}
+  table.ent-desg-t td, table.ent-desg-t th{padding:5px 10px; font-size:12px; white-space:nowrap;}
   .ent-tl .step.warn .d{color:var(--amber);}
   .ent-rank-group{font-family:'Barlow Condensed',sans-serif; text-transform:uppercase; letter-spacing:.7px; font-size:12px; color:var(--text-dim); margin:12px 6px 4px; font-weight:600;}
   .ent-obj{display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-top:12px; font-size:11.5px; color:var(--text-dim);}
@@ -8073,7 +8078,7 @@
     const finDoc = maxD(etapas.filter(e => e.track === 'documental' && e.area !== 'pagofab' && e.area !== 'certificado').map(e => e.end));
     const OKd = maxD([finFisico, finDoc]);
 
-    let causa = null, frena = null;
+    let causa = null, frena = null, limTurnoOut = null;
     const aporte = {};
     const factores = new Set();
     etapas.forEach(e => { e.impacto = false; });
@@ -8089,6 +8094,7 @@
         });
         // Coordinación: se le cuenta solo lo que tardó el turno más allá de su objetivo
         const limTurno = addBusinessDaysSLA(OKd, OBJ.turno || 0);
+        limTurnoOut = limTurno;
         const turnoPost = E > limTurno ? (diasHabilesSLA(limTurno, E) || 0) : 0;
         if (turnoPost > 0) aporte.turno = turnoPost;
         const orden = Object.entries(aporte).filter(([k]) => k !== 'turno').sort((a,b) => b[1] - a[1]);
@@ -8123,7 +8129,8 @@
     if (fEnvAcc && up('Enviado a Accesorios') === 'SI') tl.push({k:'Envío accesorios', d:fEnvAcc, cls:'ref'});
     tl.push({k:'Plazo patentam.', d:dPat, cls:'ref', n:slaPat + ' dh desde venta'});
     tl.push({k:'Plazo entrega', d:D, cls:'ref', n:'+4 dh'});
-    tl.push({k:'Entrega (turno)', d:E, cls: tarde ? 'late' : 'ok', n: tarde ? `+${atraso} dh de atraso` : 'en plazo'});
+    const dListo = OKd ? (diasHabilesSLA(OKd, E) || 0) : null;
+    tl.push({k:'Entrega (turno)', d:E, cls: tarde ? 'late' : 'ok', n: (tarde ? `+${atraso} dh vs plazo` : 'en plazo') + (dListo !== null ? ` · ${dListo} dh desde auto listo` : '')});
     const fAviso = dt('Fecha Entrega Unidad');
     if (fAviso && fAviso.getTime() !== E.getTime()) tl.push({k:'Aviso de entrega', d:fAviso, cls:'ref', n:'no se usa para el plazo'});
     tl.sort((a,b) => a.d - b.d);
@@ -8133,7 +8140,7 @@
       interno:(r['Interno'] || '').toString().trim(),
       canal:(r['Canal'] || '').toString().trim() || '(sin canal)',
       zona, fv, dPat, D, E, atraso: tarde ? atraso : 0, tarde, causa,
-      factores:[...factores], aporte, tl, mes: entMonthKey(E), frena, etapas
+      factores:[...factores], aporte, tl, mes: entMonthKey(E), frena, etapas, OKd, limTurno: limTurnoOut, finFisico, finDoc
     };
   }
 
@@ -8366,8 +8373,8 @@
         <td>${fact || '<span style="color:var(--text-faint)">—</span>'}</td>
       </tr>`;
       if (open){
-        html += `<tr class="ent-detail"><td colspan="13"><div class="ent-tl">${u.tl.map(s => `<div class="step ${s.cls}"><div class="k">${escapeHtml(s.k)}</div><div class="d">${entFmt(s.d)}</div>${s.n ? `<div class="n">${escapeHtml(s.n)}</div>` : ''}</div>`).join('')}</div>${
-          `<div style="font-size:11px; color:var(--text-faint);">🔧 físico · 📄 documental · rojo = se pasó de su objetivo y frenó la entrega · ámbar = se pasó pero no frenó (el otro circuito terminó después)</div>`}</td></tr>`;
+        html += `<tr class="ent-detail"><td colspan="13"><div class="ent-det-wrap">${entDesglose(u)}<div class="ent-tl">${u.tl.map(s => `<div class="step ${s.cls}"><div class="k">${escapeHtml(s.k)}</div><div class="d">${entFmt(s.d)}</div>${s.n ? `<div class="n">${escapeHtml(s.n)}</div>` : ''}</div>`).join('')}</div>${
+          `<div style="font-size:11px; color:var(--text-faint);">🔧 físico · 📄 documental · rojo = se pasó de su objetivo y frenó la entrega · ámbar = se pasó pero no frenó (el otro circuito terminó después)</div>`}</div></td></tr>`;
       }
       return html;
     }).join('') || '<tr><td colspan="13" class="hint" style="text-align:center; padding:18px;">Sin unidades con estos filtros</td></tr>';
@@ -8385,6 +8392,37 @@
       th.classList.toggle('sort-active', act);
       th.querySelector('.sort-arrow').textContent = act ? (ENT_STATE.sortAsc ? '▲' : '▼') : '▲▼';
     });
+  }
+
+
+  // Desglose por instancia: cuánto tardó cada etapa, cuánto se pasó de su objetivo y si
+  // impactó en la entrega. Los dos circuitos corren en paralelo, por eso los días de
+  // distintas etapas pueden superponerse y no se suman entre sí.
+  function entDesglose(u){
+    if (!u.tarde) return '';
+    const dh = (a,b) => (a && b && b > a) ? (diasHabilesSLA(a,b) || 0) : 0;
+    const filas = u.etapas.slice().sort((a,b) => a.end - b.end).map(e => {
+      const icon = e.track === 'fisico' ? '🔧' : '📄';
+      const tardo = e.start && e.end >= e.start ? dh(e.start, e.end) : null;
+      const obj = e.obj === null || e.obj === undefined ? '—' : `${e.obj} ${e.corridos ? 'días' : 'dh'}`;
+      const est = e.impacto ? '<span class="ent-tag main">frenó la entrega</span>'
+        : (e.exceso > 0 ? '<span class="ent-tag" style="color:var(--amber);">se pasó, no frenó</span>' : '<span class="ent-tag" style="color:var(--green);">cumplió</span>');
+      const disp = !e.start ? '—' : (e.end < e.start ? `<span style="color:var(--text-faint);">ya estaba (${entFmt(e.end)})</span>` : entFmt(e.start));
+      return `<tr><td>${icon} ${escapeHtml(e.label)}</td><td>${disp}</td><td>${obj}</td><td>${entFmt(e.end)}</td>
+        <td>${tardo === null ? '—' : tardo + ' dh'}</td><td style="font-weight:700; color:${e.exceso > 0 ? (e.impacto ? 'var(--red)' : 'var(--amber)') : 'var(--green)'};">${e.exceso > 0 ? '+' + e.exceso : '0'}</td><td>${est}</td></tr>`;
+    });
+    const tT = u.OKd ? dh(u.OKd, u.E) : null;
+    const exT = u.aporte.turno || 0;
+    filas.push(`<tr><td>📅 Turno de entrega</td><td>${entFmt(u.OKd)}</td><td>${u.limTurno ? (entObjetivos().turno || 0) + ' dh' : 'dentro del plazo'}</td><td>${entFmt(u.E)}</td>
+      <td>${tT === null ? '—' : tT + ' dh'}</td><td style="font-weight:700; color:${exT > 0 ? 'var(--red)' : 'var(--green)'};">${exT > 0 ? '+' + exT : '0'}</td>
+      <td>${exT > 0 ? '<span class="ent-tag main">demoró la entrega</span>' : '<span class="ent-tag" style="color:var(--green);">cumplió</span>'}</td></tr>`);
+    const fis = u.finFisico ? entFmt(u.finFisico) : '—', doc = u.finDoc ? entFmt(u.finDoc) : '—';
+    return `<div class="ent-desg">
+      <div class="ent-desg-head">⏱️ <b>+${u.atraso} dh</b> de atraso total contra el plazo (plazo ${entFmt(u.D)} → turno ${entFmt(u.E)}) — no es lo que tardó el turno: eso está en la última fila · 🔧 físico listo ${fis} · 📄 documental listo ${doc} · auto listo ${entFmt(u.OKd)}</div>
+      <table class="data-table ent-desg-t"><thead><tr><th>Instancia</th><th>Disponible desde</th><th>Objetivo</th><th>Terminó</th><th>Tardó</th><th>Se pasó (dh)</th><th>Impacto</th></tr></thead>
+      <tbody>${filas.join('')}</tbody></table>
+      <div style="font-size:11px; color:var(--text-faint); margin-top:4px;">Los circuitos físico y documental corren en paralelo: los días de exceso de etapas de distinto circuito se superponen y no se suman entre sí. "Tardó" = días hábiles desde que tuvo disponible la unidad/papeles hasta que terminó.</div>
+    </div>`;
   }
 
   function entExportData(){
