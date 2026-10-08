@@ -7961,7 +7961,8 @@
     turno:      {label:'Entregas (turno / cliente)', icon:'📅', color:'#8b5cf6', track:'turno'},
     geac:       {label:'Carpeta GEAC',                            icon:'📋', color:'#4c8dff', track:'documental'},
     averia:     {label:'Averías',                                   icon:'⚠️', color:'#ff5c4d', track:'fisico'},
-    accesorios: {label:'Accesorios',                                icon:'🎒', color:'#ff8a3d', track:'fisico'},
+    accesorios: {label:'Accesorios (instalación)',                  icon:'🎒', color:'#ff8a3d', track:'fisico'},
+    pedidoacc:  {label:'Envío a accesorios (pedido)',               icon:'📦', color:'#f59e0b', track:'fisico'},
     alistaje:   {label:'Alistaje',                                  icon:'🧹', color:'#ffb020', track:'fisico'},
     certificado:{label:'Certificado de fábrica',    icon:'📄', color:'#06b6d4', track:'documental'},
     pagofab:    {label:'Pago a fábrica',                            icon:'🏭', color:'#64748b', track:'documental'},
@@ -8002,8 +8003,8 @@
 
   // Objetivos por etapa (días hábiles salvo certificado: días corridos). Editables en la
   // pantalla; se guardan en este navegador. Alistaje/Accesorios/Certificado = los de Aceleración.
-  const ENT_OBJ_DEFAULT = {patCba:2, patOtras:10, patSur:15, patPlan:1, plazoEntrega:2, arribo:0, alistaje:2, averia:0, accesorios:2, pagofab:0, certificado:3, geac:2, credito:5, turno:2};
-  const ENT_OBJ_LABELS = {patCba:'Patentam. Córdoba', patOtras:'Patentam. otras prov.', patSur:'Patentam. Sur', patPlan:'+ si es Plan de Ahorro', plazoEntrega:'Entrega (desde patentam.)', arribo:'Arribo (desde venta)', alistaje:'Alistaje (desde arribo/venta)', averia:'Avería (0 = todo cuenta)', accesorios:'Accesorios', pagofab:'Pago fábrica (desde venta)', certificado:'Certificado (corridos)', geac:'Carpeta GEAC', credito:'Crédito', turno:'Turno (desde auto listo)'};
+  const ENT_OBJ_DEFAULT = {patCba:2, patOtras:10, patSur:15, patPlan:1, plazoEntrega:2, arribo:0, alistaje:2, averia:0, pedidoacc:1, accesorios:2, pagofab:0, certificado:3, geac:2, credito:5, turno:2};
+  const ENT_OBJ_LABELS = {patCba:'Patentam. Córdoba', patOtras:'Patentam. otras prov.', patSur:'Patentam. Sur', patPlan:'+ si es Plan de Ahorro', plazoEntrega:'Entrega (desde patentam.)', arribo:'Arribo (desde venta)', alistaje:'Alistaje (desde arribo/venta)', averia:'Avería (0 = todo cuenta)', pedidoacc:'Envío a accesorios (desde alistado)', accesorios:'Accesorios (desde envío)', pagofab:'Pago fábrica (desde venta)', certificado:'Certificado (corridos)', geac:'Carpeta GEAC', credito:'Crédito', turno:'Turno (desde auto listo)'};
   // v28: los objetivos se guardan en el servidor (hoja Objetivos, marca "OBJ_ENTREGAS"),
   // así son los mismos para todos y no se pierden. Solo un admin los puede cambiar.
   const ENT_OBJ_MARCA = 'OBJ_ENTREGAS';
@@ -8069,8 +8070,11 @@
       let limite = null, exceso = 0;
       if (start && obj !== null && obj !== undefined){
         limite = corridos ? addDays(start, obj) : addBusinessDaysSLA(start, obj);
-        // "se pasó": solo lo posterior a la venta (antes no puede demorar la entrega)
-        const desde = limite > fv ? limite : fv;
+        // "se pasó": solo lo posterior a la venta (antes no puede demorar la entrega).
+        // En el circuito FÍSICO, además, solo desde el patentamiento: antes de tener
+        // dominio el auto igual no se podía entregar.
+        let desde = limite > fv ? limite : fv;
+        if (track === 'fisico' && P && P > desde) desde = P;
         if (end > desde) exceso = diasHabilesSLA(desde, end) || 0;
       }
       const e = {key, area, label, track, end, start, pred: st && st.k ? st.k : null, obj, corridos, limite, exceso, aporte:0};
@@ -8084,7 +8088,15 @@
     etapa('averia', 'averia', 'Cierre avería', 'fisico', Vc, [{d: fAv || A}], OBJ.averia);
     const iniAcc = [{d:fv}, {d:L, k:'alistaje'}];
     if ((r['Marca'] || '').toString().trim().toUpperCase() === 'FORD') iniAcc.push({d:Vc, k:'averia'});
-    etapa('accesorios', 'accesorios', 'Regreso accesorios', 'fisico', Cacc, iniAcc, OBJ.accesorios);
+    // Accesorios en dos pasos: el PEDIDO (envío del auto a accesorios, desde que está
+    // alistado) y la INSTALACIÓN (desde el envío hasta el regreso).
+    const Eacc = up('Enviado a Accesorios') === 'SI' ? ok(dt('Fecha Envio a Accesorios')) : null;
+    if (Eacc && Cacc){
+      etapa('pedidoacc', 'pedidoacc', 'Envío a accesorios', 'fisico', Eacc, iniAcc, OBJ.pedidoacc);
+      etapa('accesorios', 'accesorios', 'Regreso accesorios', 'fisico', Cacc, [{d:Eacc, k:'pedidoacc'}], OBJ.accesorios);
+    } else {
+      etapa('accesorios', 'accesorios', 'Regreso accesorios', 'fisico', Cacc, iniAcc, OBJ.accesorios);
+    }
     // Documental
     etapa('pagofab', 'pagofab', 'Pago fábrica', 'documental', pagoFab, [{d:fv}], OBJ.pagofab);
     etapa('certificado', 'certificado', 'Certificado', 'documental', certificado, [{d:pagoFab, k:'pagofab'}], OBJ.certificado, true);
@@ -8126,7 +8138,7 @@
       if (OKd && OKd > D){
         const tF = finFisico ? finFisico.getTime() : 0, tDc = finDoc ? finDoc.getTime() : 0;
         frena = tF === tDc ? 'ambos' : (tF > tDc ? 'fisico' : 'documental');
-        const prio = ['arribo','patente','geac','credito','averia','accesorios','alistaje','certificado','pagofab'];
+        const prio = ['arribo','patente','geac','credito','averia','accesorios','pedidoacc','alistaje','certificado','pagofab'];
         const B = etapas.filter(e => e.end.getTime() === OKd.getTime() && (frena === 'ambos' || e.track === frena))
           .sort((a,b) => (b.exceso - a.exceso) || (prio.indexOf(a.key) - prio.indexOf(b.key)))[0];
         // El turno tiene su objetivo desde que el auto quedó listo: esos días también se
