@@ -2132,7 +2132,7 @@
         <div class="panel">
           <div class="panel-head">
             <h3>🚚 Entregas fuera de plazo</h3>
-            <div class="hint">Plazo = Fecha venta + SLA de patentamiento (Cba 2-3 dh · Otras 10-11 dh · Sur 15-16 dh) + 4 dh hasta la entrega · solo autos con chasis válido, entregados con fecha de turno o de entrega</div>
+            <div class="hint">Plazo = Fecha venta + SLA de patentamiento (Cba 2-3 dh · Otras 10-11 dh · Sur 15-16 dh) + 4 dh hasta la entrega · fecha de entrega = fecha del turno (col. BR), no la del aviso · solo autos con chasis válido y turno ya cumplido</div>
           </div>
           <div class="filter-row ent-filters">
             <div class="pill-group">
@@ -2162,10 +2162,12 @@
               <button data-v="si" type="button">Sí</button>
               <button data-v="no" type="button">No</button>
             </div>
-            <div class="segmented" id="entInvitadoSeg">
-              <button data-v="todos" type="button">Invitado: todos</button>
-              <button data-v="si" type="button">Sí</button>
-              <button class="active" data-v="no" type="button">No</button>
+            <div class="pill-group">
+              <span class="pill-group-label">Invitado</span>
+              <div class="pill-list" id="entInvitadoList">
+                <button type="button" class="active" data-v="si">Sí</button>
+                <button type="button" class="active" data-v="no">No</button>
+              </div>
             </div>
             <button class="page-btn" id="entClearBtn" type="button">🧹 Limpiar filtros</button>
             <div class="table-search ent-search">
@@ -2225,7 +2227,7 @@
                 <th>Zona</th>
                 <th class="sortable" data-sort="fv">Fecha venta<span class="sort-arrow">▲▼</span></th>
                 <th class="sortable" data-sort="plazo">Plazo<span class="sort-arrow">▲▼</span></th>
-                <th class="sortable" data-sort="entrega">Entrega<span class="sort-arrow">▲▼</span></th>
+                <th class="sortable" data-sort="entrega">Entrega (turno)<span class="sort-arrow">▲▼</span></th>
                 <th class="sortable sort-active" data-sort="atraso">Atraso (dh)<span class="sort-arrow">▼</span></th>
                 <th class="sortable" data-sort="causa">Causa principal<span class="sort-arrow">▲▼</span></th>
                 <th>Otros factores</th>
@@ -7950,7 +7952,7 @@
   };
   const ENT_STATE = {
     allBrands: [], brands: new Set(), allCanal: [], canal: new Set(),
-    allMes: [], mes: new Set(), usado:'todos', invitado:'no', search:'',
+    allMes: [], mes: new Set(), usado:'todos', invitado:new Set(['si','no']), search:'',
     estado:'tarde', area:null, sortBy:'atraso', sortAsc:false, open:new Set(),
     dataRef:null, lastRows:[]
   };
@@ -7962,11 +7964,19 @@
   function entMonthKey(d){ return d ? d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') : ''; }
   function entMid(d){ return d ? new Date(d.getFullYear(), d.getMonth(), d.getDate()) : null; }
 
+  // La fecha real de entrega es SIEMPRE la del turno (col. BR "Fecha Turno Entrega").
+  // "Fecha Entrega Unidad" se carga cuando se emite el aviso, que a veces sale meses
+  // después y distorsiona el plazo — por eso no se usa. Sin turno = no se analiza.
   function entFechaEntrega(r){
     const hoy = entMid(new Date());
     const ft = entMid(parseDateFlexible(r['Fecha Turno Entrega']));
-    if (ft && ft <= hoy) return ft; // regla: si hay turno ya pasado, esa es la fecha real
-    return entMid(parseDateFlexible(r['Fecha Entrega Unidad']));
+    return (ft && ft <= hoy) ? ft : null;
+  }
+  // Entregados (según la app) que no tienen turno cargado: quedan fuera del análisis.
+  function entSinTurno(r){
+    if (!esAutoValidoSLA(r) || !isEntregado(r)) return false;
+    if (!parseDateFlexible(r['Fecha Venta'])) return false;
+    return !entFechaEntrega(r) && !!parseDateFlexible(r['Fecha Entrega Unidad']);
   }
 
   function entAnalizar(r){
@@ -8047,7 +8057,9 @@
     if (fEnvAcc && up('Enviado a Accesorios') === 'SI') tl.push({k:'Envío accesorios', d:fEnvAcc, cls:'ref'});
     tl.push({k:'Plazo patentam.', d:dPat, cls:'ref', n:slaPat + ' dh desde venta'});
     tl.push({k:'Plazo entrega', d:D, cls:'ref', n:'+4 dh'});
-    tl.push({k:'Entrega', d:E, cls: tarde ? 'late' : 'ok', n: tarde ? `+${atraso} dh de atraso` : 'en plazo'});
+    tl.push({k:'Entrega (turno)', d:E, cls: tarde ? 'late' : 'ok', n: tarde ? `+${atraso} dh de atraso` : 'en plazo'});
+    const fAviso = dt('Fecha Entrega Unidad');
+    if (fAviso && fAviso.getTime() !== E.getTime()) tl.push({k:'Aviso de entrega', d:fAviso, cls:'ref', n:'no se usa para el plazo'});
     tl.sort((a,b) => a.d - b.d);
 
     return {
@@ -8095,8 +8107,7 @@
       if (!ENT_STATE.mes.has(u.mes)) return false;
       if (ENT_STATE.usado === 'si' && !esUsado(u.r)) return false;
       if (ENT_STATE.usado === 'no' && esUsado(u.r)) return false;
-      if (ENT_STATE.invitado === 'si' && !isInvitado(u.r)) return false;
-      if (ENT_STATE.invitado === 'no' && isInvitado(u.r)) return false;
+      if (!ENT_STATE.invitado.has(isInvitado(u.r) ? 'si' : 'no')) return false;
       if (q){
         const hay = [u.interno, u.r['Cliente'], u.r['Modelo'], u.r['Dominio']].map(x => (x || '').toString().toLowerCase()).join(' ');
         if (!hay.includes(q)) return false;
@@ -8122,6 +8133,12 @@
     }
     const base = entFiltrar(all);
     const tarde = base.filter(u => u.tarde);
+    const sinTurno = ALL_ROWS.filter(r => {
+      if (!entSinTurno(r)) return false;
+      const m = (r['Marca'] || '').toString().trim().toUpperCase();
+      const mes = entMonthKey(entMid(parseDateFlexible(r['Fecha Entrega Unidad'])));
+      return ENT_STATE.brands.has(m) && ENT_STATE.mes.has(mes);
+    }).length;
     const brandLabel = b => (typeof PATENTADOS_BRAND_LABELS !== 'undefined' && PATENTADOS_BRAND_LABELS[b]) || b;
 
     // ---- KPIs ----
@@ -8133,7 +8150,7 @@
     const topEvitable = Object.entries(porCausa).filter(([k]) => k !== 'turno').sort((a,b) => b[1] - a[1])[0];
     const kpi = (l, v, s, c) => `<div class="ent-kpi" style="--kc:${c}"><div class="l">${l}</div><div class="v">${v}</div><div class="s">${s}</div></div>`;
     $('entKpis').innerHTML =
-      kpi('🚚 Entregados', base.length.toLocaleString('es-AR'), 'con los filtros aplicados', 'var(--blue)') +
+      kpi('🚚 Entregados', base.length.toLocaleString('es-AR'), `según fecha de turno · ${sinTurno.toLocaleString('es-AR')} sin turno cargado (no se analizan)`, 'var(--blue)') +
       kpi('⏰ Fuera de plazo', `${tarde.length.toLocaleString('es-AR')} · ${pct}%`, `${base.length - tarde.length} en plazo`, pct >= 30 ? 'var(--red)' : 'var(--amber)') +
       kpi('📏 Atraso promedio', tarde.length ? prom.toFixed(1) + ' dh' : '—', 'días hábiles sobre el plazo', 'var(--orange)') +
       kpi('🥇 Área #1', top ? `${ENT_AREAS[top[0]].icon} ${Math.round(top[1] / tarde.length * 100)}%` : '—', top ? ENT_AREAS[top[0]].label : 'sin entregas tarde', 'var(--red)') +
@@ -8276,7 +8293,7 @@
       return {
         'Marca': brandLabel(u.marca), 'Interno': u.interno, 'Modelo': r['Modelo'] || '', 'Cliente': r['Cliente'] || '',
         'Canal': u.canal, 'Zona': u.zona, 'Usado': esUsado(r) ? 'Sí' : 'No', 'Invitado': isInvitado(r) ? 'Sí' : 'No',
-        'Fecha venta': entFmt(u.fv), 'Plazo patentamiento': entFmt(u.dPat), 'Plazo entrega': entFmt(u.D), 'Fecha entrega': entFmt(u.E),
+        'Fecha venta': entFmt(u.fv), 'Plazo patentamiento': entFmt(u.dPat), 'Plazo entrega': entFmt(u.D), 'Fecha entrega (turno)': entFmt(u.E), 'Fecha aviso de entrega': (() => { const d = parseDateFlexible(r['Fecha Entrega Unidad']); return d ? entFmt(d) : ''; })(),
         'Fuera de plazo': u.tarde ? 'Sí' : 'No', 'Atraso (dh)': u.atraso,
         'Causa principal': u.causa ? ENT_AREAS[u.causa].label : '',
         'Otros factores': u.factores.map(f => ENT_AREAS[f].label).join(' | '),
@@ -8298,7 +8315,13 @@
       renderEntregasAcelSection();
     }));
     seg('entUsadoSeg', 'usado');
-    seg('entInvitadoSeg', 'invitado');
+    // Invitado: Sí y No se pueden prender juntos (ambos = ver todo)
+    $('entInvitadoList').querySelectorAll('button').forEach(btn => btn.addEventListener('click', () => {
+      const v = btn.dataset.v;
+      if (ENT_STATE.invitado.has(v)){ ENT_STATE.invitado.delete(v); btn.classList.remove('active'); }
+      else { ENT_STATE.invitado.add(v); btn.classList.add('active'); }
+      renderEntregasAcelSection();
+    }));
     seg('entEstadoSeg', 'estado');
 
     const setAll = (listId, key, allKey, on) => {
@@ -8327,8 +8350,10 @@
     $('entAreaChip').addEventListener('click', () => { ENT_STATE.area = null; renderEntregasAcelSection(); });
     $('entClearBtn').addEventListener('click', () => {
       ENT_STATE.dataRef = null; ENT_STATE.area = null; ENT_STATE.search = ''; $('entSearchInput').value = '';
-      ENT_STATE.usado = 'todos'; ENT_STATE.invitado = 'no'; ENT_STATE.estado = 'tarde';
-      [['entUsadoSeg','todos'],['entInvitadoSeg','no'],['entEstadoSeg','tarde']].forEach(([id, v]) =>
+      ENT_STATE.usado = 'todos'; ENT_STATE.estado = 'tarde';
+      ENT_STATE.invitado.add('si'); ENT_STATE.invitado.add('no');
+      $('entInvitadoList').querySelectorAll('button').forEach(b => b.classList.add('active'));
+      [['entUsadoSeg','todos'],['entEstadoSeg','tarde']].forEach(([id, v]) =>
         $(id).querySelectorAll('button').forEach(b => b.classList.toggle('active', b.dataset.v === v)));
       renderEntregasAcelSection();
     });
