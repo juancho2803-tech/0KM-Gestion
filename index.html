@@ -2197,7 +2197,7 @@
                 <button class="active" data-v="separado" type="button">🔧📄 Por circuito</button>
                 <button data-v="junto" type="button">Todo junto</button>
               </div>
-              <div class="hint">Unidades fuera de plazo donde el área se pasó de SU objetivo (contado desde que tuvo la unidad o los papeles) dentro del circuito que frenó la entrega · un interno puede sumar en varias áreas · clic para filtrar</div>
+              <div class="hint">Unidades fuera de plazo donde el área aportó días a la demora de la entrega (solo cuenta el circuito que terminó último y el turno) · un interno puede sumar en varias áreas · clic para filtrar</div>
             </div>
             <div id="entRanking"></div>
           </div>
@@ -7956,7 +7956,7 @@
   // estaba listo a tiempo y aun así se entregó tarde → coordinación de entrega.
   // =====================================================================
   const ENT_AREAS = {
-    turno:      {label:'Coordinación de entrega (turno / cliente)', icon:'📅', color:'#8b5cf6', track:'turno'},
+    turno:      {label:'Entregas (turno / cliente)', icon:'📅', color:'#8b5cf6', track:'turno'},
     geac:       {label:'Carpeta GEAC',                            icon:'📋', color:'#4c8dff', track:'documental'},
     averia:     {label:'Averías',                                   icon:'⚠️', color:'#ff5c4d', track:'fisico'},
     accesorios: {label:'Accesorios',                                icon:'🎒', color:'#ff8a3d', track:'fisico'},
@@ -8000,8 +8000,8 @@
 
   // Objetivos por etapa (días hábiles salvo certificado: días corridos). Editables en la
   // pantalla; se guardan en este navegador. Alistaje/Accesorios/Certificado = los de Aceleración.
-  const ENT_OBJ_DEFAULT = {arribo:0, alistaje:2, averia:5, accesorios:2, pagofab:0, certificado:3, geac:2, credito:5, turno:2};
-  const ENT_OBJ_LABELS = {arribo:'Arribo (desde venta)', alistaje:'Alistaje', averia:'Avería', accesorios:'Accesorios', pagofab:'Pago fábrica (desde venta)', certificado:'Certificado (corridos)', geac:'Carpeta GEAC', credito:'Crédito', turno:'Turno (desde auto listo)'};
+  const ENT_OBJ_DEFAULT = {arribo:0, alistaje:2, averia:0, accesorios:2, pagofab:0, certificado:3, geac:2, credito:5, turno:2};
+  const ENT_OBJ_LABELS = {arribo:'Arribo (desde venta)', alistaje:'Alistaje (desde arribo)', averia:'Avería (0 = todo cuenta)', accesorios:'Accesorios', pagofab:'Pago fábrica (desde venta)', certificado:'Certificado (corridos)', geac:'Carpeta GEAC', credito:'Crédito', turno:'Turno (desde auto listo)'};
   // v28: los objetivos se guardan en el servidor (hoja Objetivos, marca "OBJ_ENTREGAS"),
   // así son los mismos para todos y no se pierden. Solo un admin los puede cambiar.
   const ENT_OBJ_MARCA = 'OBJ_ENTREGAS';
@@ -8054,72 +8054,91 @@
     const maxD = arr => { const v = arr.filter(Boolean); return v.length ? v.reduce((m,d) => d > m ? d : m) : null; };
 
     const etapas = [];
-    const etapa = (area, label, track, end, start, obj, corridos) => {
+    const S = {};
+    // cands: [{d, k}] — la etapa arranca en la más tardía; k = etapa previa que la habilitó
+    const etapa = (key, area, label, track, end, cands, obj, corridos) => {
       if (!end) return;
+      const v = cands.filter(c => c.d);
+      const st = v.length ? v.reduce((m,c) => c.d > m.d ? c : m) : null;
+      const start = st ? st.d : null;
       let limite = null, exceso = 0;
       if (start && obj !== null && obj !== undefined){
         limite = corridos ? addDays(start, obj) : addBusinessDaysSLA(start, obj);
-        // solo cuenta lo que pasó después de la venta (antes no puede demorar la entrega)
+        // "se pasó": solo lo posterior a la venta (antes no puede demorar la entrega)
         const desde = limite > fv ? limite : fv;
         if (end > desde) exceso = diasHabilesSLA(desde, end) || 0;
       }
-      etapas.push({area, label, track, end, start, obj, corridos, limite, exceso});
+      const e = {key, area, label, track, end, start, pred: st && st.k ? st.k : null, obj, corridos, limite, exceso, aporte:0};
+      etapas.push(e); S[key] = e;
     };
     // Físico
-    etapa('arribo', 'Arribo unidad', 'fisico', A, fv, OBJ.arribo);
-    etapa('alistaje', 'Alistaje', 'fisico', L, maxD([fv, A]), OBJ.alistaje);
-    etapa('averia', 'Cierre avería', 'fisico', Vc, maxD([fAv, A]), OBJ.averia);
-    const iniAcc = [fv, L];
-    if ((r['Marca'] || '').toString().trim().toUpperCase() === 'FORD') iniAcc.push(Vc);
-    etapa('accesorios', 'Regreso accesorios', 'fisico', Cacc, maxD(iniAcc), OBJ.accesorios);
+    etapa('arribo', 'arribo', 'Arribo unidad', 'fisico', A, [{d:fv}], OBJ.arribo);
+    // Alistaje: el objetivo corre desde el ARRIBO; si al vender ya debía estar alistado, todo lo posterior es demora
+    etapa('alistaje', 'alistaje', 'Alistaje', 'fisico', L, [{d: A || fv, k: A ? 'arribo' : null}], OBJ.alistaje);
+    // Avería: no es esperable → sin margen (objetivo 0)
+    etapa('averia', 'averia', 'Cierre avería', 'fisico', Vc, [{d: fAv || A}], OBJ.averia);
+    const iniAcc = [{d:fv}, {d:L, k:'alistaje'}];
+    if ((r['Marca'] || '').toString().trim().toUpperCase() === 'FORD') iniAcc.push({d:Vc, k:'averia'});
+    etapa('accesorios', 'accesorios', 'Regreso accesorios', 'fisico', Cacc, iniAcc, OBJ.accesorios);
     // Documental
-    etapa('pagofab', 'Pago fábrica', 'documental', pagoFab, fv, OBJ.pagofab);
-    etapa('certificado', 'Certificado', 'documental', certificado, pagoFab, OBJ.certificado, true);
+    etapa('pagofab', 'pagofab', 'Pago fábrica', 'documental', pagoFab, [{d:fv}], OBJ.pagofab);
+    etapa('certificado', 'certificado', 'Certificado', 'documental', certificado, [{d:pagoFab, k:'pagofab'}], OBJ.certificado, true);
     // Si patenta el cliente, la gestión (y la demora) es suya: área aparte
     const patCliente = up('Patenta?') === 'CLIENTE';
-    etapa(patCliente ? 'cliente' : 'gestoria', patCliente ? 'Patentamiento (cliente)' : 'Patentamiento', 'documental', P, maxD([fv, certificado, pagoFab]), slaPat);
-    etapa('geac', 'Carpeta GEAC', 'documental', G, P, OBJ.geac);
-    etapa('credito', 'Liquidación crédito', 'documental', K, fv, OBJ.credito);
+    etapa('patente', patCliente ? 'cliente' : 'gestoria', patCliente ? 'Patentamiento (cliente)' : 'Patentamiento', 'documental', P,
+      [{d:fv}, {d:certificado, k:'certificado'}, {d:pagoFab, k:'pagofab'}], slaPat);
+    etapa('geac', 'geac', 'Carpeta GEAC', 'documental', G, [{d:P, k:'patente'}], OBJ.geac);
+    etapa('credito', 'credito', 'Liquidación crédito', 'documental', K, [{d:fv}], OBJ.credito);
+    etapas.forEach(e => { if (e.pred && !S[e.pred]) e.pred = null; });
 
     // Cuándo quedó listo cada circuito (certificado y pago fábrica llegan vía patentamiento)
     const finFisico = maxD(etapas.filter(e => e.track === 'fisico').map(e => e.end));
     const finDoc = maxD(etapas.filter(e => e.track === 'documental' && e.area !== 'pagofab' && e.area !== 'certificado').map(e => e.end));
     const OKd = maxD([finFisico, finDoc]);
 
+    // ---- Días que cada área APORTÓ a la demora (suman exactamente el atraso) ----
+    // Tramo plazo → auto listo: se reparte en la cadena del circuito que terminó último.
+    // Cada etapa se queda con lo que tardó más allá de su objetivo; si su objetivo cayó
+    // después del plazo porque arrancó tarde, esos días son de la etapa previa que la demoró.
+    // Tramo auto listo → turno: es de Entregas (coordinación del turno).
+    const atribuir = (e, hasta, prof) => {
+      if (!e || prof > 10 || hasta <= D) return;
+      const lim = e.limite;
+      const desdePropio = lim && lim > D ? lim : D;
+      if (hasta > desdePropio) e.aporte += diasHabilesSLA(desdePropio, hasta) || 0;
+      if (!lim) return;
+      const resto = hasta < lim ? hasta : lim;
+      if (resto <= D) return;
+      const p = e.pred ? S[e.pred] : null;
+      if (p && p.end > D) atribuir(p, resto, prof + 1);
+      else e.aporte += diasHabilesSLA(D, resto) || 0;
+    };
+
     let causa = null, frena = null, limTurnoOut = null;
     const aporte = {};
     const factores = new Set();
-    etapas.forEach(e => { e.impacto = false; });
     if (tarde){
       if (OKd && OKd > D){
-        const fisFrena = finFisico && finFisico > D, docFrena = finDoc && finDoc > D;
-        frena = fisFrena && docFrena ? 'ambos' : (fisFrena ? 'fisico' : 'documental');
-        etapas.forEach(e => {
-          if (e.exceso > 0 && (frena === 'ambos' || e.track === frena)){
-            e.impacto = true;
-            aporte[e.area] = (aporte[e.area] || 0) + e.exceso;
-          }
-        });
-        // Coordinación: se le cuenta solo lo que tardó el turno más allá de su objetivo
-        const limTurno = addBusinessDaysSLA(OKd, OBJ.turno || 0);
-        limTurnoOut = limTurno;
-        const turnoPost = E > limTurno ? (diasHabilesSLA(limTurno, E) || 0) : 0;
-        if (turnoPost > 0) aporte.turno = turnoPost;
-        const orden = Object.entries(aporte).filter(([k]) => k !== 'turno').sort((a,b) => b[1] - a[1]);
-        if (orden.length) causa = orden[0][0];
-        else {
-          // todas cumplieron su objetivo pero la cadena igual pasó el plazo: la que terminó última
-          const ult = etapas.filter(e => frena === 'ambos' || e.track === frena).sort((a,b) => b.end - a.end)[0];
-          causa = ult ? ult.area : 'turno';
-          aporte[causa] = aporte[causa] || (diasHabilesSLA(D, OKd) || 0);
-        }
+        const tF = finFisico ? finFisico.getTime() : 0, tDc = finDoc ? finDoc.getTime() : 0;
+        frena = tF === tDc ? 'ambos' : (tF > tDc ? 'fisico' : 'documental');
+        const prio = ['arribo','patente','geac','credito','averia','accesorios','alistaje','certificado','pagofab'];
+        const B = etapas.filter(e => e.end.getTime() === OKd.getTime() && (frena === 'ambos' || e.track === frena))
+          .sort((a,b) => (b.exceso - a.exceso) || (prio.indexOf(a.key) - prio.indexOf(b.key)))[0];
+        atribuir(B, OKd, 0);
+        etapas.forEach(e => { if (e.aporte > 0) aporte[e.area] = (aporte[e.area] || 0) + e.aporte; });
+        const post = diasHabilesSLA(OKd, E) || 0;
+        if (post > 0) aporte.turno = post;
       } else {
         frena = 'turno';
-        causa = 'turno';
         aporte.turno = atraso;
       }
+      limTurnoOut = OKd ? addBusinessDaysSLA(OKd, OBJ.turno || 0) : null;
+      // Causa principal = el área que más días aportó (empate: la que no es Entregas)
+      const orden = Object.entries(aporte).sort((a,b) => (b[1] - a[1]) || ((a[0] === 'turno') - (b[0] === 'turno')));
+      causa = orden.length ? orden[0][0] : 'turno';
       Object.keys(aporte).forEach(k => { if (k !== causa) factores.add(k); });
     }
+    etapas.forEach(e => { e.impacto = e.aporte > 0; });
 
     // Línea de tiempo para el detalle
     const tl = [{k:'Venta', d:fv, cls:'ref'}];
@@ -8280,7 +8299,7 @@
     const maxN = Math.max(1, ...rank.map(x => x.n));
     const totDias = rank.reduce((s,x) => s + x.dias, 0) || 1;
     $('entRanking').innerHTML = !rank.length ? '<div class="hint">Sin entregas fuera de plazo con estos filtros 🎉</div>' :
-      `<div class="ent-rank-head"><span>#</span><span>Área</span><span>Unidades donde generó demora</span><span style="text-align:right;">Días sobre su objetivo · causa principal</span></div>` +
+      `<div class="ent-rank-head"><span>#</span><span>Área</span><span>Unidades donde generó demora</span><span style="text-align:right;">Días aportados · causa principal</span></div>` +
       (ENT_STATE.vista === 'junto'
         ? [[null, '']]
         : [['fisico','🔧 Circuito físico'],['documental','📄 Circuito documental'],['turno','📅 Con el auto listo']]
@@ -8388,7 +8407,7 @@
       </tr>`;
       if (open){
         html += `<tr class="ent-detail"><td colspan="13"><div class="ent-det-wrap">${entDesglose(u)}<div class="ent-tl">${u.tl.map(s => `<div class="step ${s.cls}"><div class="k">${escapeHtml(s.k)}</div><div class="d">${entFmt(s.d)}</div>${s.n ? `<div class="n">${escapeHtml(s.n)}</div>` : ''}</div>`).join('')}</div>${
-          `<div style="font-size:11px; color:var(--text-faint);">🔧 físico · 📄 documental · rojo = se pasó de su objetivo y frenó la entrega · ámbar = se pasó pero no frenó (el otro circuito terminó después)</div>`}</div></td></tr>`;
+          `<div style="font-size:11px; color:var(--text-faint);">🔧 físico · 📄 documental · rojo = se pasó de su objetivo y frenó la entrega · ámbar = se pasó de su objetivo pero no aportó demora</div>`}</div></td></tr>`;
       }
       return html;
     }).join('') || '<tr><td colspan="13" class="hint" style="text-align:center; padding:18px;">Sin unidades con estos filtros</td></tr>';
@@ -8419,23 +8438,29 @@
       const icon = e.track === 'fisico' ? '🔧' : '📄';
       const tardo = e.start && e.end >= e.start ? dh(e.start, e.end) : null;
       const obj = e.obj === null || e.obj === undefined ? '—' : `${e.obj} ${e.corridos ? 'días' : 'dh'}`;
-      const est = e.impacto ? '<span class="ent-tag main">frenó la entrega</span>'
-        : (e.exceso > 0 ? '<span class="ent-tag" style="color:var(--amber);">se pasó, no frenó</span>' : '<span class="ent-tag" style="color:var(--green);">cumplió</span>');
+      const est = e.impacto ? '<span class="ent-tag main">aportó demora</span>'
+        : (e.exceso > 0 ? '<span class="ent-tag" style="color:var(--amber);">se pasó, pero no aportó</span>' : '<span class="ent-tag" style="color:var(--green);">cumplió</span>');
       const disp = !e.start ? '—' : (e.end < e.start ? `<span style="color:var(--text-faint);">ya estaba (${entFmt(e.end)})</span>` : entFmt(e.start));
       return `<tr><td>${icon} ${escapeHtml(e.label)}</td><td>${disp}</td><td>${obj}</td><td>${entFmt(e.end)}</td>
-        <td>${tardo === null ? '—' : tardo + ' dh'}</td><td style="font-weight:700; color:${e.exceso > 0 ? (e.impacto ? 'var(--red)' : 'var(--amber)') : 'var(--green)'};">${e.exceso > 0 ? '+' + e.exceso : '0'}</td><td>${est}</td></tr>`;
+        <td>${tardo === null ? '—' : tardo + ' dh'}</td><td style="color:${e.exceso > 0 ? 'var(--amber)' : 'var(--green)'};">${e.exceso > 0 ? '+' + e.exceso : '0'}</td>
+        <td style="font-weight:700; color:${e.aporte > 0 ? 'var(--red)' : 'var(--text-faint)'};">${e.aporte > 0 ? '+' + e.aporte : '—'}</td><td>${est}</td></tr>`;
     });
     const tT = u.OKd ? dh(u.OKd, u.E) : null;
-    const exT = u.aporte.turno || 0;
-    filas.push(`<tr><td>📅 Turno de entrega</td><td>${entFmt(u.OKd)}</td><td>${u.limTurno ? (entObjetivos().turno || 0) + ' dh' : 'dentro del plazo'}</td><td>${entFmt(u.E)}</td>
-      <td>${tT === null ? '—' : tT + ' dh'}</td><td style="font-weight:700; color:${exT > 0 ? 'var(--red)' : 'var(--green)'};">${exT > 0 ? '+' + exT : '0'}</td>
-      <td>${exT > 0 ? '<span class="ent-tag main">demoró la entrega</span>' : '<span class="ent-tag" style="color:var(--green);">cumplió</span>'}</td></tr>`);
+    const apT = u.aporte.turno || 0;
+    const objT = entObjetivos().turno || 0;
+    const exT = tT !== null && tT > objT ? tT - objT : 0;
+    filas.push(`<tr><td>📅 Entregas (turno)</td><td>${entFmt(u.OKd)}</td><td>${objT} dh</td><td>${entFmt(u.E)}</td>
+      <td>${tT === null ? '—' : tT + ' dh'}</td><td style="color:${exT > 0 ? 'var(--amber)' : 'var(--green)'};">${exT > 0 ? '+' + exT : '0'}</td>
+      <td style="font-weight:700; color:${apT > 0 ? 'var(--red)' : 'var(--text-faint)'};">${apT > 0 ? '+' + apT : '—'}</td>
+      <td>${apT > 0 ? '<span class="ent-tag main">aportó demora</span>' : '<span class="ent-tag" style="color:var(--green);">cumplió</span>'}</td></tr>`);
+    const resumen = Object.entries(u.aporte).sort((a,b) => b[1] - a[1]).map(([k,v]) => `${ENT_AREAS[k].icon} ${ENT_AREAS[k].label.split(' (')[0]} <b>+${v}</b>`).join(' + ');
     const fis = u.finFisico ? entFmt(u.finFisico) : '—', doc = u.finDoc ? entFmt(u.finDoc) : '—';
     return `<div class="ent-desg">
-      <div class="ent-desg-head">⏱️ <b>+${u.atraso} dh</b> de atraso total contra el plazo (plazo ${entFmt(u.D)} → turno ${entFmt(u.E)}) — no es lo que tardó el turno: eso está en la última fila · 🔧 físico listo ${fis} · 📄 documental listo ${doc} · auto listo ${entFmt(u.OKd)}</div>
-      <table class="data-table ent-desg-t"><thead><tr><th>Instancia</th><th>Disponible desde</th><th>Objetivo</th><th>Terminó</th><th>Tardó</th><th>Se pasó (dh)</th><th>Impacto</th></tr></thead>
+      <div class="ent-desg-head">⏱️ <b>+${u.atraso} dh</b> fuera de plazo (plazo ${entFmt(u.D)} → turno ${entFmt(u.E)}) = ${resumen || '—'}</div>
+      <div style="font-size:11.5px; color:var(--text-dim); margin-bottom:6px;"> · 🔧 físico listo ${fis} · 📄 documental listo ${doc} · auto listo ${entFmt(u.OKd)}</div>
+      <table class="data-table ent-desg-t"><thead><tr><th>Instancia</th><th>Disponible desde</th><th>Objetivo</th><th>Terminó</th><th>Tardó</th><th>Se pasó de su objetivo</th><th>Aportó a la demora</th><th>Impacto</th></tr></thead>
       <tbody>${filas.join('')}</tbody></table>
-      <div style="font-size:11px; color:var(--text-faint); margin-top:4px;">Los circuitos físico y documental corren en paralelo: los días de exceso de etapas de distinto circuito se superponen y no se suman entre sí. "Tardó" = días hábiles desde que tuvo disponible la unidad/papeles hasta que terminó.</div>
+      <div style="font-size:11px; color:var(--text-faint); margin-top:4px;"><b>Aportó a la demora</b> = días que esa área corrió la entrega más allá del plazo (suman el total). <b>Se pasó de su objetivo</b> = cuánto tardó de más, aunque no haya movido la entrega (por ejemplo, si el auto igual esperaba la carpeta GEAC).</div>
     </div>`;
   }
 
