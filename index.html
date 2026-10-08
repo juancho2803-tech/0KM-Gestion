@@ -688,6 +688,12 @@
   .ent-tl .step.late .d{color:var(--red);}
   .ent-tl .step.ref{border-style:dashed;}
   .ent-tl .step.ok .d{color:var(--green);}
+  .ent-tl .step.warn{border-color:var(--amber);}
+  .ent-tl .step.warn .d{color:var(--amber);}
+  .ent-rank-group{font-family:'Barlow Condensed',sans-serif; text-transform:uppercase; letter-spacing:.7px; font-size:12px; color:var(--text-dim); margin:12px 6px 4px; font-weight:600;}
+  .ent-obj{display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-top:12px; font-size:11.5px; color:var(--text-dim);}
+  .ent-obj label{display:flex; align-items:center; gap:4px; background:var(--surface-2); border:1px solid var(--border); border-radius:8px; padding:4px 8px;}
+  .ent-obj input{width:44px; background:var(--surface); color:var(--text); border:1px solid var(--border); border-radius:5px; padding:2px 4px; font-family:'JetBrains Mono',monospace;}
 </style>
 </head>
 <body data-theme="dark">
@@ -2175,13 +2181,18 @@
             </div>
           </div>
           <div class="ent-kpis" id="entKpis"></div>
+          <div class="ent-obj" id="entObjBox"></div>
         </div>
 
         <div class="ent-grid2">
           <div class="panel">
             <div class="panel-head">
               <h3>🏆 Ranking de áreas que demoran la entrega</h3>
-              <div class="hint">Causa principal = el último requisito que se completó después del plazo · clic en un área para filtrar el detalle</div>
+              <div class="segmented" id="entVistaSeg">
+                <button class="active" data-v="separado" type="button">🔧📄 Por circuito</button>
+                <button data-v="junto" type="button">Todo junto</button>
+              </div>
+              <div class="hint">Unidades fuera de plazo donde el área se pasó de SU objetivo (contado desde que tuvo la unidad o los papeles) dentro del circuito que frenó la entrega · un interno puede sumar en varias áreas · clic para filtrar</div>
             </div>
             <div id="entRanking"></div>
           </div>
@@ -2230,7 +2241,8 @@
                 <th class="sortable" data-sort="entrega">Entrega (turno)<span class="sort-arrow">▲▼</span></th>
                 <th class="sortable sort-active" data-sort="atraso">Atraso (dh)<span class="sort-arrow">▼</span></th>
                 <th class="sortable" data-sort="causa">Causa principal<span class="sort-arrow">▲▼</span></th>
-                <th>Otros factores</th>
+                <th>Frenó</th>
+                <th>Áreas que generaron demora (dh sobre su objetivo)</th>
               </tr></thead>
               <tbody id="entTableBody"></tbody>
             </table>
@@ -4264,7 +4276,7 @@
     const tbody = $('gestoriaTableBody');
 
     if (!shown.length){
-      tbody.innerHTML = `<tr><td colspan="12" class="table-empty">No hay trámites para este filtro</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="13" class="table-empty">No hay trámites para este filtro</td></tr>`;
     } else {
       tbody.innerHTML = shown.map(r => {
         const etapa = gesEtapaActual(r);
@@ -7939,21 +7951,21 @@
   // estaba listo a tiempo y aun así se entregó tarde → coordinación de entrega.
   // =====================================================================
   const ENT_AREAS = {
-    turno:      {label:'Coordinación de entrega (turno / cliente)', icon:'📅', color:'#8b5cf6'},
-    geac:       {label:'GEAC (trámite)',                            icon:'📋', color:'#4c8dff'},
-    averia:     {label:'Averías',                                   icon:'⚠️', color:'#ff5c4d'},
-    accesorios: {label:'Accesorios',                                icon:'🎒', color:'#ff8a3d'},
-    alistaje:   {label:'Alistaje',                                  icon:'🧹', color:'#ffb020'},
-    certificado:{label:'Documentación (certificado de fábrica)',    icon:'📄', color:'#06b6d4'},
-    pagofab:    {label:'Pago a fábrica',                            icon:'🏭', color:'#64748b'},
-    gestoria:   {label:'Gestoría / Registro (patentamiento)',       icon:'🏛️', color:'#14b8a6'},
-    credito:    {label:'Créditos (liquidación)',                    icon:'💳', color:'#e11d48'},
-    arribo:     {label:'Arribo de la unidad',                       icon:'🚛', color:'#a3a3a3'}
+    turno:      {label:'Coordinación de entrega (turno / cliente)', icon:'📅', color:'#8b5cf6', track:'turno'},
+    geac:       {label:'Carpeta GEAC',                            icon:'📋', color:'#4c8dff', track:'documental'},
+    averia:     {label:'Averías',                                   icon:'⚠️', color:'#ff5c4d', track:'fisico'},
+    accesorios: {label:'Accesorios',                                icon:'🎒', color:'#ff8a3d', track:'fisico'},
+    alistaje:   {label:'Alistaje',                                  icon:'🧹', color:'#ffb020', track:'fisico'},
+    certificado:{label:'Certificado de fábrica',    icon:'📄', color:'#06b6d4', track:'documental'},
+    pagofab:    {label:'Pago a fábrica',                            icon:'🏭', color:'#64748b', track:'documental'},
+    gestoria:   {label:'Gestoría / Registro (patentamiento)',       icon:'🏛️', color:'#14b8a6', track:'documental'},
+    credito:    {label:'Créditos (liquidación)',                    icon:'💳', color:'#e11d48', track:'documental'},
+    arribo:     {label:'Arribo de la unidad',                       icon:'🚛', color:'#a3a3a3', track:'fisico'}
   };
   const ENT_STATE = {
     allBrands: [], brands: new Set(), allCanal: [], canal: new Set(),
     allMes: [], mes: new Set(), usado:'todos', invitado:new Set(['si','no']), search:'',
-    estado:'tarde', area:null, sortBy:'atraso', sortAsc:false, open:new Set(),
+    estado:'tarde', vista:'separado', area:null, sortBy:'atraso', sortAsc:false, open:new Set(),
     dataRef:null, lastRows:[]
   };
 
@@ -7979,6 +7991,19 @@
     return !entFechaEntrega(r) && !!parseDateFlexible(r['Fecha Entrega Unidad']);
   }
 
+
+  // Objetivos por etapa (días hábiles salvo certificado: días corridos). Editables en la
+  // pantalla; se guardan en este navegador. Alistaje/Accesorios/Certificado = los de Aceleración.
+  const ENT_OBJ_DEFAULT = {arribo:0, alistaje:2, averia:5, accesorios:2, pagofab:0, certificado:3, geac:2, credito:5, turno:2};
+  const ENT_OBJ_LABELS = {arribo:'Arribo (desde venta)', alistaje:'Alistaje', averia:'Avería', accesorios:'Accesorios', pagofab:'Pago fábrica (desde venta)', certificado:'Certificado (corridos)', geac:'Carpeta GEAC', credito:'Crédito', turno:'Turno (desde auto listo)'};
+  let ENT_OBJ = null;
+  function entObjetivos(){
+    if (ENT_OBJ) return ENT_OBJ;
+    ENT_OBJ = Object.assign({}, ENT_OBJ_DEFAULT);
+    try { const g = JSON.parse(localStorage.getItem('ent_objetivos_v1') || 'null'); if (g) Object.keys(ENT_OBJ).forEach(k => { if (typeof g[k] === 'number') ENT_OBJ[k] = g[k]; }); } catch(e){}
+    return ENT_OBJ;
+  }
+
   function entAnalizar(r){
     if (!esAutoValidoSLA(r)) return null;
     const fv = entMid(parseDateFlexible(r['Fecha Venta']));
@@ -7996,59 +8021,100 @@
     const dt = c => entMid(parseDateFlexible(r[c]));
     const tope = new Date(E); tope.setDate(tope.getDate() + 3); // eventos posteriores a la entrega no cuentan
 
-    // Requisitos para poder entregar (los mismos que pide "OK para turno")
-    const req = [];
-    const addReq = (key, label, d, aplica) => { if (aplica && d && d <= tope) req.push({key, label, d}); };
-    addReq('arribo', 'Arribo unidad', dt('Fecha Arribo Unidad'), true);
-    addReq('patente', 'Patentamiento', dt('Fecha Patentamiento'), true);
-    addReq('geac', 'Trámite a GEAC', dt('Fecha Entrega Tramite a GEAC'), up('Patenta?') === 'MAIPU');
-    addReq('averia', 'Cierre avería', dt('Fecha Cierre Averia'), tuvoAveria(r));
-    addReq('accesorios', 'Regreso accesorios', dt('Fecha Regreso de Accesorios'), up('Enviado a Accesorios') === 'SI');
-    addReq('alistaje', 'Alistaje', dt('Fecha Alistaje'), true);
-    addReq('credito', 'Liquidación crédito', dt('Fecha Liquidacion Credito'), up('Credito?') === 'SI');
+    // ---- Dos circuitos en paralelo (v27) ----
+    // FÍSICO: arribo → alistaje → avería → accesorios.  DOCUMENTAL: pago fábrica →
+    // certificado → patentamiento → carpeta GEAC (+ liquidación del crédito).
+    // Cada etapa se mide contra SU objetivo, contando desde que tuvo la unidad o la
+    // documentación disponible (lo último que ocurrió antes). Las que se pasaron de su
+    // objetivo dentro del circuito que terminó último (el que frenó la entrega) son las
+    // que generaron la demora — puede ser una sola o varias en el mismo interno.
+    const OBJ = entObjetivos();
+    const ok = d => d && d <= tope ? d : null;
+    const A = ok(dt('Fecha Arribo Unidad'));
+    const P = ok(dt('Fecha Patentamiento'));
+    const L = ok(dt('Fecha Alistaje'));
+    const fAv = tuvoAveria(r) ? dt('Fecha Averia') : null;
+    const Vc = tuvoAveria(r) ? ok(dt('Fecha Cierre Averia')) : null;
+    const Cacc = up('Enviado a Accesorios') === 'SI' ? ok(dt('Fecha Regreso de Accesorios')) : null;
+    const G = up('Patenta?') === 'MAIPU' ? ok(dt('Fecha Entrega Tramite a GEAC')) : null;
+    const K = up('Credito?') === 'SI' ? ok(dt('Fecha Liquidacion Credito')) : null;
+    const certificado = ok(dt('Fecha Arribo Certificado'));
+    const pagoFab = ok(dt('Fecha Pago Fab'));
+    const maxD = arr => { const v = arr.filter(Boolean); return v.length ? v.reduce((m,d) => d > m ? d : m) : null; };
 
-    const certificado = dt('Fecha Arribo Certificado');
-    const pagoFab = dt('Fecha Pago Fab');
-    // Si frenó el patentamiento: ¿fue por algo que llegó tarde antes del trámite?
-    const raizPatente = () => {
-      const pre = [];
-      if (certificado && certificado >= dPat) pre.push({key:'certificado', d:certificado});
-      if (pagoFab && pagoFab >= dPat) pre.push({key:'pagofab', d:pagoFab});
-      if (!pre.length) return 'gestoria';
-      return pre.reduce((a,b) => b.d > a.d ? b : a).key;
+    const etapas = [];
+    const etapa = (area, label, track, end, start, obj, corridos) => {
+      if (!end) return;
+      let limite = null, exceso = 0;
+      if (start && obj !== null && obj !== undefined){
+        limite = corridos ? addDays(start, obj) : addBusinessDaysSLA(start, obj);
+        // solo cuenta lo que pasó después de la venta (antes no puede demorar la entrega)
+        const desde = limite > fv ? limite : fv;
+        if (end > desde) exceso = diasHabilesSLA(desde, end) || 0;
+      }
+      etapas.push({area, label, track, end, start, obj, corridos, limite, exceso});
     };
-    const areaDe = k => k === 'patente' ? raizPatente() : k;
+    // Físico
+    etapa('arribo', 'Arribo unidad', 'fisico', A, fv, OBJ.arribo);
+    etapa('alistaje', 'Alistaje', 'fisico', L, maxD([fv, A]), OBJ.alistaje);
+    etapa('averia', 'Cierre avería', 'fisico', Vc, maxD([fAv, A]), OBJ.averia);
+    const iniAcc = [fv, L];
+    if ((r['Marca'] || '').toString().trim().toUpperCase() === 'FORD') iniAcc.push(Vc);
+    etapa('accesorios', 'Regreso accesorios', 'fisico', Cacc, maxD(iniAcc), OBJ.accesorios);
+    // Documental
+    etapa('pagofab', 'Pago fábrica', 'documental', pagoFab, fv, OBJ.pagofab);
+    etapa('certificado', 'Certificado', 'documental', certificado, pagoFab, OBJ.certificado, true);
+    etapa('gestoria', 'Patentamiento', 'documental', P, maxD([fv, certificado, pagoFab]), slaPat);
+    etapa('geac', 'Carpeta GEAC', 'documental', G, P, OBJ.geac);
+    etapa('credito', 'Liquidación crédito', 'documental', K, fv, OBJ.credito);
 
-    let causa = null, R = null, aporte = {};
+    // Cuándo quedó listo cada circuito (certificado y pago fábrica llegan vía patentamiento)
+    const finFisico = maxD(etapas.filter(e => e.track === 'fisico').map(e => e.end));
+    const finDoc = maxD(etapas.filter(e => e.track === 'documental' && e.area !== 'pagofab' && e.area !== 'certificado').map(e => e.end));
+    const OKd = maxD([finFisico, finDoc]);
+
+    let causa = null, frena = null;
+    const aporte = {};
     const factores = new Set();
+    etapas.forEach(e => { e.impacto = false; });
     if (tarde){
-      R = req.length ? req.reduce((m,x) => x.d > m ? x.d : m, req[0].d) : null;
-      if (!R || R <= D){
+      if (OKd && OKd > D){
+        const fisFrena = finFisico && finFisico > D, docFrena = finDoc && finDoc > D;
+        frena = fisFrena && docFrena ? 'ambos' : (fisFrena ? 'fisico' : 'documental');
+        etapas.forEach(e => {
+          if (e.exceso > 0 && (frena === 'ambos' || e.track === frena)){
+            e.impacto = true;
+            aporte[e.area] = (aporte[e.area] || 0) + e.exceso;
+          }
+        });
+        // Coordinación: se le cuenta solo lo que tardó el turno más allá de su objetivo
+        const limTurno = addBusinessDaysSLA(OKd, OBJ.turno || 0);
+        const turnoPost = E > limTurno ? (diasHabilesSLA(limTurno, E) || 0) : 0;
+        if (turnoPost > 0) aporte.turno = turnoPost;
+        const orden = Object.entries(aporte).filter(([k]) => k !== 'turno').sort((a,b) => b[1] - a[1]);
+        if (orden.length) causa = orden[0][0];
+        else {
+          // todas cumplieron su objetivo pero la cadena igual pasó el plazo: la que terminó última
+          const ult = etapas.filter(e => frena === 'ambos' || e.track === frena).sort((a,b) => b.end - a.end)[0];
+          causa = ult ? ult.area : 'turno';
+          aporte[causa] = aporte[causa] || (diasHabilesSLA(D, OKd) || 0);
+        }
+      } else {
+        frena = 'turno';
         causa = 'turno';
         aporte.turno = atraso;
-      } else {
-        const bind = req.filter(x => x.d.getTime() === R.getTime());
-        // empate: priorizamos lo que más lejos está del control del concesionario
-        const prio = ['arribo','patente','credito','geac','averia','accesorios','alistaje'];
-        bind.sort((a,b) => prio.indexOf(a.key) - prio.indexOf(b.key));
-        causa = areaDe(bind[0].key);
-        aporte[causa] = diasHabilesSLA(D, R) || 0;
-        const post = diasHabilesSLA(R, E) || 0;
-        if (post > 0) aporte.turno = post;
       }
-      req.forEach(x => {
-        const late = x.key === 'patente' ? x.d > dPat : x.d > D;
-        if (late) factores.add(areaDe(x.key));
-      });
-      if (aporte.turno && causa !== 'turno') factores.add('turno');
-      factores.delete(causa);
+      Object.keys(aporte).forEach(k => { if (k !== causa) factores.add(k); });
     }
 
     // Línea de tiempo para el detalle
     const tl = [{k:'Venta', d:fv, cls:'ref'}];
-    if (certificado) tl.push({k:'Certificado', d:certificado, cls: certificado > dPat ? 'late' : 'ok'});
-    if (pagoFab) tl.push({k:'Pago fábrica', d:pagoFab, cls: pagoFab > dPat ? 'late' : 'ok'});
-    req.forEach(x => tl.push({k:x.label, d:x.d, cls: (x.key === 'patente' ? x.d > dPat : x.d > D) ? 'late' : 'ok'}));
+    etapas.forEach(e => {
+      const icon = e.track === 'fisico' ? '🔧 ' : '📄 ';
+      const obj = e.obj === null || e.obj === undefined ? 'sin objetivo' : `obj. ${e.obj} ${e.corridos ? 'días' : 'dh'}`;
+      const n = (e.start && e.start <= e.end ? `disp. ${entFmt(e.start)} · ` : '') + obj + (e.exceso > 0 ? ` · +${e.exceso} dh` : '');
+      tl.push({k: icon + e.label, d:e.end, cls: e.impacto ? 'late' : (e.exceso > 0 ? 'warn' : 'ok'), n});
+    });
     if (tuvoAveria(r)) {
       const fa = dt('Fecha Averia');
       if (fa) tl.push({k:'Avería', d:fa, cls:'ref', n:(r['Descripcion Averia'] || '').toString().slice(0,40)});
@@ -8067,7 +8133,7 @@
       interno:(r['Interno'] || '').toString().trim(),
       canal:(r['Canal'] || '').toString().trim() || '(sin canal)',
       zona, fv, dPat, D, E, atraso: tarde ? atraso : 0, tarde, causa,
-      factores:[...factores], aporte, tl, mes: entMonthKey(E)
+      factores:[...factores], aporte, tl, mes: entMonthKey(E), frena, etapas
     };
   }
 
@@ -8125,6 +8191,26 @@
 
   function renderEntregasAcelSection(){
     if (!$('subEntregasAcel')) return;
+    const box = $('entObjBox');
+    if (box && !box.dataset.ready){
+      box.dataset.ready = '1';
+      const o = entObjetivos();
+      box.innerHTML = '<b style="margin-right:4px;">🎯 Objetivos por etapa (dh):</b>' +
+        Object.keys(ENT_OBJ_LABELS).map(k => `<label>${ENT_OBJ_LABELS[k]} <input type="number" min="0" step="1" data-k="${k}" value="${o[k]}"></label>`).join('') +
+        '<label style="opacity:.8;">Patentamiento: según zona (2–16)</label><button type="button" class="pill-action" id="entObjReset">Restablecer</button>';
+      box.querySelectorAll('input').forEach(inp => inp.addEventListener('change', () => {
+        const v = Math.max(0, parseInt(inp.value, 10) || 0);
+        inp.value = v; ENT_OBJ[inp.dataset.k] = v;
+        try { localStorage.setItem('ent_objetivos_v1', JSON.stringify(ENT_OBJ)); } catch(e){}
+        renderEntregasAcelSection();
+      }));
+      $('entObjReset').addEventListener('click', () => {
+        ENT_OBJ = Object.assign({}, ENT_OBJ_DEFAULT);
+        try { localStorage.removeItem('ent_objetivos_v1'); } catch(e){}
+        box.querySelectorAll('input').forEach(inp => { inp.value = ENT_OBJ[inp.dataset.k]; });
+        renderEntregasAcelSection();
+      });
+    }
     const all = [];
     ALL_ROWS.forEach(r => { const u = entAnalizar(r); if (u) all.push(u); });
     if (ENT_STATE.dataRef !== ALL_ROWS){
@@ -8154,29 +8240,43 @@
       kpi('⏰ Fuera de plazo', `${tarde.length.toLocaleString('es-AR')} · ${pct}%`, `${base.length - tarde.length} en plazo`, pct >= 30 ? 'var(--red)' : 'var(--amber)') +
       kpi('📏 Atraso promedio', tarde.length ? prom.toFixed(1) + ' dh' : '—', 'días hábiles sobre el plazo', 'var(--orange)') +
       kpi('🥇 Área #1', top ? `${ENT_AREAS[top[0]].icon} ${Math.round(top[1] / tarde.length * 100)}%` : '—', top ? ENT_AREAS[top[0]].label : 'sin entregas tarde', 'var(--red)') +
-      kpi('🔧 Área #1 (sin turno)', topEvitable ? `${ENT_AREAS[topEvitable[0]].icon} ${Math.round(topEvitable[1] / tarde.length * 100)}%` : '—', topEvitable ? ENT_AREAS[topEvitable[0]].label : '—', 'var(--amber)');
+      kpi('🔧 Área #1 (sin turno)', topEvitable ? `${ENT_AREAS[topEvitable[0]].icon} ${Math.round(topEvitable[1] / tarde.length * 100)}%` : '—', topEvitable ? ENT_AREAS[topEvitable[0]].label : '—', 'var(--amber)') +
+      (() => {
+        const c = k => tarde.filter(u => u.frena === k).length;
+        const p = k => tarde.length ? Math.round(c(k) / tarde.length * 100) : 0;
+        return kpi('🚦 Qué circuito frenó', tarde.length ? `<span style="font-size:18px; white-space:nowrap;">🔧${p('fisico')}% 📄${p('documental')}% 🔧📄${p('ambos')}%</span>` : '—',
+          tarde.length ? `físico ${c('fisico')} · documental ${c('documental')} · ambos ${c('ambos')} · el resto (${c('turno')}) estuvo listo a tiempo` : '', 'var(--blue)');
+      })();
 
     // ---- Ranking ----
     const rank = Object.keys(ENT_AREAS).map(k => {
-      const us = tarde.filter(u => u.causa === k);
-      const inv = tarde.filter(u => u.causa === k || u.factores.includes(k)).length;
-      const dias = tarde.reduce((s,u) => s + (u.aporte[k] || 0), 0);
-      const prom = us.length ? us.reduce((s,u) => s + u.atraso, 0) / us.length : 0;
-      return {k, n:us.length, inv, dias, prom};
-    }).filter(x => x.n > 0 || x.inv > 0).sort((a,b) => b.n - a.n || b.inv - a.inv);
+      const us = tarde.filter(u => (u.aporte[k] || 0) > 0);
+      const princ = tarde.filter(u => u.causa === k).length;
+      const dias = us.reduce((s,u) => s + (u.aporte[k] || 0), 0);
+      const prom = us.length ? dias / us.length : 0;
+      return {k, n:us.length, inv:princ, dias, prom};
+    }).filter(x => x.n > 0).sort((a,b) => b.n - a.n || b.dias - a.dias);
     const maxN = Math.max(1, ...rank.map(x => x.n));
     const totDias = rank.reduce((s,x) => s + x.dias, 0) || 1;
     $('entRanking').innerHTML = !rank.length ? '<div class="hint">Sin entregas fuera de plazo con estos filtros 🎉</div>' :
-      `<div class="ent-rank-head"><span>#</span><span>Área</span><span>Unidades (causa principal)</span><span style="text-align:right;">Días aportados · involucrada</span></div>` +
-      rank.map((x,i) => {
+      `<div class="ent-rank-head"><span>#</span><span>Área</span><span>Unidades donde generó demora</span><span style="text-align:right;">Días sobre su objetivo · causa principal</span></div>` +
+      (ENT_STATE.vista === 'junto'
+        ? [[null, '']]
+        : [['fisico','🔧 Circuito físico'],['documental','📄 Circuito documental'],['turno','📅 Con el auto listo']]
+      ).map(([tr, titulo]) => {
+        const grupo = tr ? rank.filter(x => ENT_AREAS[x.k].track === tr) : rank;
+        if (!grupo.length) return '';
+        const trIcon = k => ({fisico:'🔧', documental:'📄', turno:'📅'})[ENT_AREAS[k].track];
+        return (titulo ? `<div class="ent-rank-group">${titulo}</div>` : '') + grupo.map((x,i) => {
         const a = ENT_AREAS[x.k];
         const p = tarde.length ? Math.round(x.n / tarde.length * 100) : 0;
-        return `<div class="ent-rank-row ${ENT_STATE.area === x.k ? 'sel' : ''}" data-area="${x.k}" title="Atraso promedio cuando es la causa: ${x.prom.toFixed(1)} dh">
+        return `<div class="ent-rank-row ${ENT_STATE.area === x.k ? 'sel' : ''}" data-area="${x.k}">
           <span class="pos">${i+1}</span>
-          <span class="name">${a.icon} ${escapeHtml(a.label)}</span>
+          <span class="name">${a.icon} ${escapeHtml(a.label)}${tr ? '' : ` <small style="opacity:.7;">${trIcon(x.k)}</small>`}</span>
           <div class="track"><div class="fill" style="width:${Math.max(x.n / maxN * 100, 2)}%; background:${a.color};">${x.n} · ${p}%</div></div>
-          <span class="meta">${x.dias.toLocaleString('es-AR')} dh (${Math.round(x.dias / totDias * 100)}%)<br>en ${x.inv} unidades</span>
+          <span class="meta">${x.dias.toLocaleString('es-AR')} dh (prom. ${x.prom.toFixed(1)})<br>principal en ${x.inv}</span>
         </div>`;
+      }).join('');
       }).join('');
     $('entRanking').querySelectorAll('.ent-rank-row').forEach(el => el.addEventListener('click', () => {
       ENT_STATE.area = ENT_STATE.area === el.dataset.area ? null : el.dataset.area;
@@ -8226,7 +8326,7 @@
 
     // ---- Detalle ----
     let rows = ENT_STATE.estado === 'tarde' ? tarde : base;
-    if (ENT_STATE.area) rows = rows.filter(u => u.causa === ENT_STATE.area);
+    if (ENT_STATE.area) rows = rows.filter(u => (u.aporte[ENT_STATE.area] || 0) > 0);
     const chip = $('entAreaChip');
     if (ENT_STATE.area){ chip.style.display = ''; chip.textContent = `${ENT_AREAS[ENT_STATE.area].icon} ${ENT_AREAS[ENT_STATE.area].label} ✕`; }
     else chip.style.display = 'none';
@@ -8247,7 +8347,8 @@
     body.innerHTML = rows.slice(0, LIM).map(u => {
       const r = u.r;
       const causaHtml = u.causa ? `<span class="ent-tag main">${ENT_AREAS[u.causa].icon} ${escapeHtml(ENT_AREAS[u.causa].label)}</span>` : '<span class="ent-tag" style="color:var(--green);">✓ en plazo</span>';
-      const fact = u.factores.map(f => `<span class="ent-tag">${ENT_AREAS[f].icon} ${escapeHtml(ENT_AREAS[f].label.split(' (')[0])}</span>`).join('');
+      const fact = Object.entries(u.aporte).sort((a,b) => b[1] - a[1]).map(([f, d]) => `<span class="ent-tag ${f === u.causa ? 'main' : ''}">${ENT_AREAS[f].icon} ${escapeHtml(ENT_AREAS[f].label.split(' (')[0])} +${d}</span>`).join('');
+      const frenaTxt = {fisico:'🔧 Físico', documental:'📄 Documental', ambos:'🔧📄 Ambos', turno:'📅 Auto listo'}[u.frena] || '—';
       const open = ENT_STATE.open.has(u.interno);
       let html = `<tr class="ent-row" data-int="${escapeHtml(u.interno)}">
         <td class="col-marca">${escapeHtml(brandLabel(u.marca))}</td>
@@ -8261,14 +8362,15 @@
         <td>${entFmt(u.E)}</td>
         <td style="font-family:'JetBrains Mono',monospace; font-weight:700; color:${u.tarde ? 'var(--red)' : 'var(--green)'};">${u.tarde ? '+' + u.atraso : '0'}</td>
         <td>${causaHtml}</td>
+        <td style="white-space:nowrap;">${u.tarde ? frenaTxt : '—'}</td>
         <td>${fact || '<span style="color:var(--text-faint)">—</span>'}</td>
       </tr>`;
       if (open){
-        html += `<tr class="ent-detail"><td colspan="12"><div class="ent-tl">${u.tl.map(s => `<div class="step ${s.cls}"><div class="k">${escapeHtml(s.k)}</div><div class="d">${entFmt(s.d)}</div>${s.n ? `<div class="n">${escapeHtml(s.n)}</div>` : ''}</div>`).join('')}</div>${
-          u.tarde ? `<div class="hint">Días de atraso aportados: ${Object.entries(u.aporte).map(([k,v]) => `${ENT_AREAS[k].label}: ${v} dh`).join(' · ')}</div>` : ''}</td></tr>`;
+        html += `<tr class="ent-detail"><td colspan="13"><div class="ent-tl">${u.tl.map(s => `<div class="step ${s.cls}"><div class="k">${escapeHtml(s.k)}</div><div class="d">${entFmt(s.d)}</div>${s.n ? `<div class="n">${escapeHtml(s.n)}</div>` : ''}</div>`).join('')}</div>${
+          `<div style="font-size:11px; color:var(--text-faint);">🔧 físico · 📄 documental · rojo = se pasó de su objetivo y frenó la entrega · ámbar = se pasó pero no frenó (el otro circuito terminó después)</div>`}</td></tr>`;
       }
       return html;
-    }).join('') || '<tr><td colspan="12" class="hint" style="text-align:center; padding:18px;">Sin unidades con estos filtros</td></tr>';
+    }).join('') || '<tr><td colspan="13" class="hint" style="text-align:center; padding:18px;">Sin unidades con estos filtros</td></tr>';
     body.querySelectorAll('tr.ent-row').forEach(tr => tr.addEventListener('click', () => {
       const k = tr.dataset.int;
       if (ENT_STATE.open.has(k)) ENT_STATE.open.delete(k); else ENT_STATE.open.add(k);
@@ -8296,7 +8398,9 @@
         'Fecha venta': entFmt(u.fv), 'Plazo patentamiento': entFmt(u.dPat), 'Plazo entrega': entFmt(u.D), 'Fecha entrega (turno)': entFmt(u.E), 'Fecha aviso de entrega': (() => { const d = parseDateFlexible(r['Fecha Entrega Unidad']); return d ? entFmt(d) : ''; })(),
         'Fuera de plazo': u.tarde ? 'Sí' : 'No', 'Atraso (dh)': u.atraso,
         'Causa principal': u.causa ? ENT_AREAS[u.causa].label : '',
-        'Otros factores': u.factores.map(f => ENT_AREAS[f].label).join(' | '),
+        'Circuito que frenó': ({fisico:'Físico', documental:'Documental', ambos:'Ambos', turno:'Auto listo a tiempo'})[u.frena] || '',
+        'Áreas que generaron demora': Object.entries(u.aporte).map(([f, d]) => `${ENT_AREAS[f].label} (+${d} dh)`).join(' | '),
+        ...Object.fromEntries(u.etapas.map(e => [`Exceso ${e.label} (dh)`, e.exceso])),
         'Fecha arribo unidad': fecha('Fecha Arribo Unidad'), 'Fecha arribo certificado': fecha('Fecha Arribo Certificado'),
         'Fecha pago fábrica': fecha('Fecha Pago Fab'), 'Fecha patentamiento': fecha('Fecha Patentamiento'),
         'Fecha trámite a GEAC': fecha('Fecha Entrega Tramite a GEAC'), 'Fecha avería': fecha('Fecha Averia'),
@@ -8323,6 +8427,7 @@
       renderEntregasAcelSection();
     }));
     seg('entEstadoSeg', 'estado');
+    seg('entVistaSeg', 'vista');
 
     const setAll = (listId, key, allKey, on) => {
       ENT_STATE[key] = new Set(on ? ENT_STATE[allKey] : []);
@@ -8697,7 +8802,7 @@
 
     const tbody = $('contactacionTableBody');
     if (!filtered.length){
-      tbody.innerHTML = `<tr><td colspan="12" class="table-empty">${contactViewMode === 'historico' ? 'Sin casos históricos (con turno ya asignado)' : 'No hay casos en Contactación'}</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="13" class="table-empty">${contactViewMode === 'historico' ? 'Sin casos históricos (con turno ya asignado)' : 'No hay casos en Contactación'}</td></tr>`;
     } else {
       tbody.innerHTML = filtered.map(r => {
         const interno = (r['Interno'] || '').toString().trim();
