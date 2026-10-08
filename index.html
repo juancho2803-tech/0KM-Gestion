@@ -2145,7 +2145,7 @@
         <div class="panel">
           <div class="panel-head">
             <h3>🚚 Entregas fuera de plazo</h3>
-            <div class="hint">Plazo = Fecha venta + SLA de patentamiento (Cba 2-3 dh · Otras 10-11 dh · Sur 15-16 dh) + 4 dh hasta la entrega · fecha de entrega = fecha del turno (col. BR), no la del aviso · solo autos con chasis válido y turno ya cumplido</div>
+            <div class="hint">Plazo = Fecha venta + SLA de patentamiento (Cba 2-3 dh · Otras 10-11 dh · Sur 15-16 dh) + 48 hs (2 dh) hasta la entrega · fecha de entrega = fecha del turno (col. BR), no la del aviso · solo autos con chasis válido y turno ya cumplido</div>
           </div>
           <div class="filter-row ent-filters">
             <div class="pill-group">
@@ -7950,7 +7950,7 @@
   // =====================================================================
   // ---------- Aceleración > Entregas fuera de plazo (v25) ----------
   // Para cada auto entregado calcula el plazo comprometido (Fecha venta + SLA
-  // de patentamiento según zona/crédito + 4 dh) y, si se entregó después, busca
+  // de patentamiento según zona/crédito + 48 hs) y, si se entregó después, busca
   // la CAUSA: el último requisito de entrega que se completó después del plazo
   // (arribo, patentamiento, GEAC, avería, accesorios, alistaje, crédito). Si el
   // que frenó fue el patentamiento, se baja un nivel: certificado de fábrica o
@@ -8002,8 +8002,8 @@
 
   // Objetivos por etapa (días hábiles salvo certificado: días corridos). Editables en la
   // pantalla; se guardan en este navegador. Alistaje/Accesorios/Certificado = los de Aceleración.
-  const ENT_OBJ_DEFAULT = {arribo:0, alistaje:2, averia:0, accesorios:2, pagofab:0, certificado:3, geac:2, credito:5, turno:2};
-  const ENT_OBJ_LABELS = {arribo:'Arribo (desde venta)', alistaje:'Alistaje (desde arribo)', averia:'Avería (0 = todo cuenta)', accesorios:'Accesorios', pagofab:'Pago fábrica (desde venta)', certificado:'Certificado (corridos)', geac:'Carpeta GEAC', credito:'Crédito', turno:'Turno (desde auto listo)'};
+  const ENT_OBJ_DEFAULT = {plazoEntrega:2, arribo:0, alistaje:2, averia:0, accesorios:2, pagofab:0, certificado:3, geac:2, credito:5, turno:2};
+  const ENT_OBJ_LABELS = {plazoEntrega:'Plazo entrega (desde patentam.)', arribo:'Arribo (desde venta)', alistaje:'Alistaje (desde arribo)', averia:'Avería (0 = todo cuenta)', accesorios:'Accesorios', pagofab:'Pago fábrica (desde venta)', certificado:'Certificado (corridos)', geac:'Carpeta GEAC', credito:'Crédito', turno:'Turno (desde auto listo)'};
   // v28: los objetivos se guardan en el servidor (hoja Objetivos, marca "OBJ_ENTREGAS"),
   // así son los mismos para todos y no se pierden. Solo un admin los puede cambiar.
   const ENT_OBJ_MARCA = 'OBJ_ENTREGAS';
@@ -8025,7 +8025,8 @@
 
     const slaPat = getSLAFacPat(r);
     const dPat = addBusinessDaysSLA(fv, slaPat);
-    const D = addBusinessDaysSLA(dPat, 4);
+    // Plazo real de entrega: 48 hs (2 dh) desde el patentamiento — editable en objetivos
+    const D = addBusinessDaysSLA(dPat, entObjetivos().plazoEntrega);
     const atraso = diasHabilesSLA(D, E) || 0;
     const tarde = E > D && atraso >= 1;
     const zona = esCbaSLA(r) ? 'Córdoba' : (esSurPatagonicoSLA(r) ? 'Sur' : 'Otras');
@@ -8161,7 +8162,7 @@
     const fEnvAcc = dt('Fecha Envio a Accesorios');
     if (fEnvAcc && up('Enviado a Accesorios') === 'SI') tl.push({k:'Envío accesorios', d:fEnvAcc, cls:'ref'});
     tl.push({k:'Plazo patentam.', d:dPat, cls:'ref', n:slaPat + ' dh desde venta'});
-    tl.push({k:'Plazo entrega', d:D, cls:'ref', n:'+4 dh'});
+    tl.push({k:'Plazo entrega', d:D, cls:'ref', n:`+${OBJ.plazoEntrega} dh desde patentam.`});
     const dListo = OKd ? (diasHabilesSLA(OKd, E) || 0) : null;
     tl.push({k:'Entrega (turno)', d:E, cls: tarde ? 'late' : 'ok', n: (tarde ? `+${atraso} dh vs plazo` : 'en plazo') + (dListo !== null ? ` · ${dListo} dh desde auto listo` : '')});
     const fAviso = dt('Fecha Entrega Unidad');
