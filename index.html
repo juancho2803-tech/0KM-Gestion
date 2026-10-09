@@ -8135,20 +8135,23 @@
     const aporte = {};
     const factores = new Set();
     if (tarde){
-      if (OKd && OKd > D){
+      // Entregas tiene su objetivo (2 dh) desde que el auto quedó OK: si entregó dentro de
+      // ese margen no aportó demora, aunque se haya pasado el plazo estimado. Los días que
+      // el auto quedó fuera de plazo por llegar tarde (o justo) a estar OK son del área que
+      // lo liberó último; Entregas solo aporta lo que tardó MÁS ALLÁ de su objetivo.
+      if (OKd){
         const tF = finFisico ? finFisico.getTime() : 0, tDc = finDoc ? finDoc.getTime() : 0;
-        frena = tF === tDc ? 'ambos' : (tF > tDc ? 'fisico' : 'documental');
+        const circ = tF === tDc ? 'ambos' : (tF > tDc ? 'fisico' : 'documental');
         const prio = ['arribo','patente','geac','credito','averia','accesorios','pedidoacc','alistaje','certificado','pagofab'];
-        const B = etapas.filter(e => e.end.getTime() === OKd.getTime() && (frena === 'ambos' || e.track === frena))
+        const B = etapas.filter(e => e.end.getTime() === OKd.getTime() && (circ === 'ambos' || e.track === circ))
           .sort((a,b) => (b.exceso - a.exceso) || (prio.indexOf(a.key) - prio.indexOf(b.key)))[0];
-        // El turno tiene su objetivo desde que el auto quedó listo: esos días también se
-        // los lleva el área que demoró (el turno no podía darse antes). Entregas solo
-        // aporta lo que tardó MÁS ALLÁ de su objetivo.
         const limT = addBusinessDaysSLA(OKd, OBJ.turno || 0);
         atribuir(B, E < limT ? E : limT, 0);
         etapas.forEach(e => { if (e.aporte > 0) aporte[e.area] = (aporte[e.area] || 0) + e.aporte; });
-        const post = E > limT ? (diasHabilesSLA(limT, E) || 0) : 0;
+        const desdeT = limT > D ? limT : D;
+        const post = E > desdeT ? (diasHabilesSLA(desdeT, E) || 0) : 0;
         if (post > 0) aporte.turno = post;
+        frena = Object.keys(aporte).some(k => k !== 'turno') ? circ : 'turno';
       } else {
         frena = 'turno';
         aporte.turno = atraso;
