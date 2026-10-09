@@ -5756,7 +5756,7 @@
   let acelAvSelectedVenta = new Set();
   let ACEL_AV_ALL_PAT = [];
   let acelAvSelectedPat = new Set();
-  let acelAvEstadoFilter = new Set(['arribo','entrega','estadia','retornoEgresos']);
+  let acelAvEstadoFilter = new Set(['arribo','entrega','estadia','retornoEgresos','sinDato']);
   let acelAvResolutionFilter = new Set(['antesFactura','hasta2dias','entreFacturaPat','despuesPatentamiento']); // todas activas por defecto
   let acelAvResueltaFilter = new Set(['resuelta','sinResolver']);
   let acelAvSearchTerm = '';
@@ -5766,13 +5766,15 @@
     arribo: '🚚 Arribo',
     estadia: '🅿️ Estadía',
     retornoEgresos: '↩️ Retorno y egresos',
-    entrega: '📤 Entrega'
+    entrega: '📤 Entrega',
+    sinDato: '❔ Sin instancia cargada'
   };
   const ACEL_AV_BUCKET_COLORS = {
     arribo: 'var(--blue)',
     estadia: 'var(--amber)',
     retornoEgresos: 'var(--green)',
-    entrega: 'var(--orange)'
+    entrega: 'var(--orange)',
+    sinDato: 'var(--gray)'
   };
 
   const ACEL_AV_RESOLUTION_BUCKET_LABELS = {
@@ -5976,7 +5978,7 @@
     $('acelAveriasVentaAll').click();
     $('acelAveriasPatAll').click();
     $('acelAveriasCanalAll').click();
-    acelAvEstadoFilter = new Set(['arribo','entrega','estadia','retornoEgresos']);
+    acelAvEstadoFilter = new Set(['arribo','entrega','estadia','retornoEgresos','sinDato']);
     acelAvResolutionFilter = new Set(['antesFactura','hasta2dias','entreFacturaPat','despuesPatentamiento']);
     acelAvResueltaFilter = new Set(['resuelta','sinResolver']);
     document.querySelectorAll('#acelAveriasResueltaSegmented button').forEach(b => b.classList.add('active'));
