@@ -2229,6 +2229,10 @@
                 <button data-v="todos" type="button">Todas</button>
               </div>
               <span class="ent-chip" id="entAreaChip" style="display:none;"></span>
+              <div class="segmented" id="entAreaModo" style="display:none;">
+                <button class="active" data-v="principal" type="button">Causa principal</button>
+                <button data-v="aporto" type="button">También aportó</button>
+              </div>
               <button class="page-btn" id="entCsvBtn" type="button">⬇️ CSV</button>
               <button class="page-btn" id="entXlsBtn" type="button">⬇️ Excel</button>
             </div>
@@ -7974,7 +7978,7 @@
   const ENT_STATE = {
     allBrands: [], brands: new Set(), allCanal: [], canal: new Set(),
     allMes: [], mes: new Set(), usado:'todos', invitado:new Set(['si','no']), search:'',
-    estado:'tarde', vista:'separado', area:null, sortBy:'atraso', sortAsc:false, open:new Set(),
+    estado:'tarde', vista:'separado', area:null, areaModo:'principal', sortBy:'atraso', sortAsc:false, open:new Set(),
     dataRef:null, lastRows:[]
   };
 
@@ -8390,7 +8394,18 @@
 
     // ---- Detalle ----
     let rows = ENT_STATE.estado === 'tarde' ? tarde : base;
-    if (ENT_STATE.area) rows = rows.filter(u => (u.aporte[ENT_STATE.area] || 0) > 0);
+    const modoSeg = $('entAreaModo');
+    if (ENT_STATE.area){
+      const ar = ENT_STATE.area;
+      const nP = rows.filter(u => u.causa === ar).length;
+      const nA = rows.filter(u => (u.aporte[ar] || 0) > 0).length;
+      rows = ENT_STATE.areaModo === 'principal' ? rows.filter(u => u.causa === ar) : rows.filter(u => (u.aporte[ar] || 0) > 0);
+      modoSeg.style.display = '';
+      modoSeg.querySelectorAll('button').forEach(b => {
+        b.classList.toggle('active', b.dataset.v === ENT_STATE.areaModo);
+        b.textContent = b.dataset.v === 'principal' ? `Causa principal (${nP})` : `Aportó demora (${nA})`;
+      });
+    } else modoSeg.style.display = 'none';
     const chip = $('entAreaChip');
     if (ENT_STATE.area){ chip.style.display = ''; chip.textContent = `${ENT_AREAS[ENT_STATE.area].icon} ${ENT_AREAS[ENT_STATE.area].label} ✕`; }
     else chip.style.display = 'none';
@@ -8529,6 +8544,7 @@
     }));
     seg('entEstadoSeg', 'estado');
     seg('entVistaSeg', 'vista');
+    seg('entAreaModo', 'areaModo');
 
     const setAll = (listId, key, allKey, on) => {
       ENT_STATE[key] = new Set(on ? ENT_STATE[allKey] : []);
