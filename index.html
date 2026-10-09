@@ -2199,7 +2199,7 @@
                 <button class="active" data-v="separado" type="button">🔧📄 Por circuito</button>
                 <button data-v="junto" type="button">Todo junto</button>
               </div>
-              <div class="hint">% de los autos entregados fuera de plazo en los que cada área aportó demora (solo cuenta el circuito que terminó último y el turno) · un auto puede sumar en varias áreas, por eso los % no suman 100 · clic para filtrar</div>
+              <div class="hint">Causa principal = el área que más días aportó a la demora de cada auto · los % suman 100 · a la derecha, en cuántos autos además aportó algo · clic para filtrar</div>
             </div>
             <div id="entRanking"></div>
           </div>
@@ -8322,11 +8322,11 @@
       const dias = us.reduce((s,u) => s + (u.aporte[k] || 0), 0);
       const prom = us.length ? dias / us.length : 0;
       return {k, n:us.length, inv:princ, dias, prom};
-    }).filter(x => x.n > 0).sort((a,b) => b.n - a.n || b.dias - a.dias);
+    }).filter(x => x.inv > 0).sort((a,b) => b.inv - a.inv || b.n - a.n);
     const maxN = Math.max(1, ...rank.map(x => x.n));
     const totDias = rank.reduce((s,x) => s + x.dias, 0) || 1;
     $('entRanking').innerHTML = !rank.length ? '<div class="hint">Sin entregas fuera de plazo con estos filtros 🎉</div>' :
-      `<div class="ent-rank-head"><span>#</span><span>Área</span><span>% de los autos fuera de plazo en los que aportó demora</span><span style="text-align:right;">Autos · causa principal</span></div>` +
+      `<div class="ent-rank-head"><span>#</span><span>Área</span><span>% de los autos fuera de plazo en los que fue la causa principal</span><span style="text-align:right;">Autos · también aportó en</span></div>` +
       (ENT_STATE.vista === 'junto'
         ? [[null, '']]
         : [['fisico','🔧 Circuito físico'],['documental','📄 Circuito documental'],['turno','📅 Con el auto listo']]
@@ -8336,13 +8336,13 @@
         const trIcon = k => ({fisico:'🔧', documental:'📄', turno:'📅'})[ENT_AREAS[k].track];
         return (titulo ? `<div class="ent-rank-group">${titulo}</div>` : '') + grupo.map((x,i) => {
         const a = ENT_AREAS[x.k];
-        const p = tarde.length ? Math.round(x.n / tarde.length * 100) : 0;
-        const pp = tarde.length ? Math.round(x.inv / tarde.length * 100) : 0;
-        return `<div class="ent-rank-row ${ENT_STATE.area === x.k ? 'sel' : ''}" data-area="${x.k}" title="Aportó demora en ${x.n} de ${tarde.length} autos fuera de plazo · fue la causa principal en ${x.inv}">
+        const p = tarde.length ? Math.round(x.inv / tarde.length * 100) : 0;   // causa principal
+        const pp = tarde.length ? Math.round(x.n / tarde.length * 100) : 0;    // aportó
+        return `<div class="ent-rank-row ${ENT_STATE.area === x.k ? 'sel' : ''}" data-area="${x.k}" title="Causa principal en ${x.inv} de ${tarde.length} autos fuera de plazo · aportó demora en ${x.n}">
           <span class="pos">${i+1}</span>
           <span class="name">${tr || x.k === 'turno' ? '' : `<span class="ent-trk">${trIcon(x.k)}</span>`}${a.icon} ${escapeHtml(a.label)}</span>
           <div class="track"><div class="fill" style="width:${Math.max(p, 1)}%; background:${a.color};"></div><span class="pct">${p}%</span></div>
-          <span class="meta"><b>${x.n.toLocaleString('es-AR')}</b> de ${tarde.length.toLocaleString('es-AR')} autos<br>principal: ${x.inv.toLocaleString('es-AR')} (${pp}%)</span>
+          <span class="meta"><b>${x.inv.toLocaleString('es-AR')}</b> de ${tarde.length.toLocaleString('es-AR')} autos<br>aportó en ${x.n.toLocaleString('es-AR')} (${pp}%)</span>
         </div>`;
       }).join('');
       }).join('');
