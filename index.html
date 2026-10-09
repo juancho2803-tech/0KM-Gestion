@@ -6781,6 +6781,11 @@
       sub:'Anomalía: patentaron sin fecha de arribo cargada en el sistema',
       rows: patSinArriboRows,
       cols:[...colMarcaInterno,
+        {label:'Tipo compra stock', get:r => {
+          const t = (r['Tipo Compra Stock'] || '').toString().trim();
+          if (!t) return '<span style="color:var(--text-faint)">—</span>';
+          return /propio/i.test(t) ? `<b>${escapeHtml(t)}</b>` : escapeHtml(t);
+        }},
         {label:'Patentamiento', get:r => formatDateDisplay(r['Fecha Patentamiento'])},
         {label:'Días', get:r => diasTexto(diasDesdeFecha(r['Fecha Patentamiento']))}
       ]
