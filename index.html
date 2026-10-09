@@ -1809,6 +1809,7 @@
             <button class="page-btn" id="acelAveriasClearBtn" type="button">🧹 Limpiar filtros</button>
           </div>
           <div class="patentados-kpis" id="acelAveriasKpis" style="margin-top:16px;"></div>
+          <div id="acelAvSinInstancia" style="margin-top:14px;"></div>
 
           <div class="panel-head" style="margin-top:20px;">
             <h3 style="font-size:13px;">🔧 Resolución de averías — cuándo se cerraron</h3>
@@ -6037,6 +6038,44 @@
       </div>
     `;
     }).join('');
+
+    // Alerta de proceso: averías recientes cargadas SIN instancia (Arribo/Estadía/etc.).
+    // Desde junio 2026 la instancia se carga siempre — lo que falte desde ahí es un
+    // incumplimiento del proceso de registro.
+    (() => {
+      const box = $('acelAvSinInstancia');
+      if (!box) return;
+      const DESDE = new Date(2026, 5, 1);
+      const sinInst = universo.filter(r => acelAvBucket(r) === 'sinDato')
+        .filter(r => { const f = parseDateFlexible(r['Fecha Averia']); return f && f >= DESDE; })
+        .sort((a,b) => parseDateFlexible(b['Fecha Averia']) - parseDateFlexible(a['Fecha Averia']));
+      if (!sinInst.length){
+        box.innerHTML = `<div class="hint" style="color:var(--green);">✅ Todas las averías cargadas desde el 01/06/2026 tienen la instancia informada.</div>`;
+        return;
+      }
+      const filas = sinInst.map(r => {
+        const abierta = !acelAvResuelta(r);
+        return `<tr>
+          <td class="col-marca">${escapeHtml(PATENTADOS_BRAND_LABELS[(r['Marca'] || '').toString().trim().toUpperCase()] || r['Marca'] || '')}</td>
+          <td>${escapeHtml((r['Interno'] || '').toString())}</td>
+          <td>${escapeHtml((r['Modelo'] || '').toString())}</td>
+          <td>${formatDateDisplay(r['Fecha Averia'])}</td>
+          <td>${escapeHtml((r['Descripcion Averia'] || '').toString()) || '<span style="color:var(--text-faint)">sin descripción</span>'}</td>
+          <td>${abierta ? '<span class="badge" style="color:var(--red);">🔴 Abierta</span>' : `✅ ${formatDateDisplay(r['Fecha Cierre Averia'])}`}</td>
+        </tr>`;
+      }).join('');
+      box.innerHTML = `
+        <div style="border:1px solid var(--red); border-left:4px solid var(--red); border-radius:10px; padding:10px 12px; background:rgba(255,92,77,0.06);">
+          <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px; margin-bottom:8px;">
+            <b>⚠️ Averías sin instancia informada — incumplimiento del proceso de carga (${sinInst.length})</b>
+            <span style="font-size:11px; color:var(--text-faint);">Desde 01/06/2026 · deberían indicar si se detectaron en Arribo, Estadía, Retorno y egresos o Entrega</span>
+          </div>
+          <div class="table-scroll" style="max-height:260px; overflow:auto;">
+            <table class="data-table"><thead><tr><th class="col-marca">Marca</th><th>Interno</th><th>Modelo</th><th>Fecha avería</th><th>Descripción</th><th>Estado</th></tr></thead>
+            <tbody>${filas}</tbody></table>
+          </div>
+        </div>`;
+    })();
 
     // Tarjetas de resolución (cuándo se CERRARON las averías)
     const resueltosTotales = universoFiltradoEstado.filter(r => acelAvResuelta(r));
