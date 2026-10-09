@@ -2214,6 +2214,14 @@
 
         <div class="panel">
           <div class="panel-head">
+            <h3>⏳ Días hábiles de demora aportados por área (acumulado)</h3>
+            <div class="hint">Suma de los días que cada área corrió la entrega más allá del plazo, en todos los autos fuera de plazo · el total es la suma de todos los atrasos</div>
+          </div>
+          <div id="entDiasArea"></div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-head">
             <h3>📆 Evolución mensual — % entregado fuera de plazo</h3>
             <div class="hint">Por mes de entrega · entre paréntesis: fuera de plazo / entregados</div>
           </div>
@@ -8353,6 +8361,32 @@
       renderEntregasAcelSection();
       if (ENT_STATE.area) document.getElementById('entTable').scrollIntoView({behavior:'smooth', block:'start'});
     }));
+
+    // ---- Días hábiles acumulados aportados por área ----
+    (() => {
+      const box = $('entDiasArea');
+      if (!box) return;
+      const filas = Object.keys(ENT_AREAS).map(k => {
+        const dias = tarde.reduce((s,u) => s + (u.aporte[k] || 0), 0);
+        const autos = tarde.filter(u => (u.aporte[k] || 0) > 0).length;
+        return {k, dias, autos};
+      }).filter(x => x.dias > 0).sort((a,b) => b.dias - a.dias);
+      const tot = filas.reduce((s,x) => s + x.dias, 0);
+      if (!tot){ box.innerHTML = '<div class="hint">Sin demoras con estos filtros</div>'; return; }
+      const trIcon = k => ({fisico:'🔧', documental:'📄', turno:''})[ENT_AREAS[k].track] || '';
+      box.innerHTML = `<div class="ent-rank-head"><span>#</span><span>Área</span><span>% del total de días de demora</span><span style="text-align:right;">Días hábiles · prom. por auto</span></div>` +
+        filas.map((x,i) => {
+          const a = ENT_AREAS[x.k];
+          const p = Math.round(x.dias / tot * 100);
+          return `<div class="ent-rank-row" style="cursor:default;">
+            <span class="pos">${i+1}</span>
+            <span class="name">${trIcon(x.k) ? `<span class="ent-trk">${trIcon(x.k)}</span>` : ''}${a.icon} ${escapeHtml(a.label)}</span>
+            <div class="track"><div class="fill" style="width:${Math.max(p, 1)}%; background:${a.color};"></div><span class="pct">${p}%</span></div>
+            <span class="meta"><b>${x.dias.toLocaleString('es-AR')} dh</b><br>${(x.dias / x.autos).toFixed(1)} dh en ${x.autos} autos</span>
+          </div>`;
+        }).join('') +
+        `<div style="text-align:right; font-size:12px; color:var(--text-dim); margin-top:6px;">Total: <b>${tot.toLocaleString('es-AR')} días hábiles</b> de demora en ${tarde.length.toLocaleString('es-AR')} autos (prom. ${(tot / tarde.length).toFixed(1)} dh por auto)</div>`;
+    })();
 
     // ---- Matriz área × marca ----
     const marcas = ENT_STATE.allBrands.filter(b => ENT_STATE.brands.has(b));
