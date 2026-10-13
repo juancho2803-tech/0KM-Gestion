@@ -7211,7 +7211,12 @@
 
   const ENTREGA_MOTIVOS = ['ENTREGA CON UNIDAD FACTURADA','VENDIDO A REVENTA','ENTREGA USADOS STORE','ENTREGA USADOS','TRASLADO','VENDIDO SIN FACTURAR','USADO VENDIDO A REVENTA','UNIDADA DEVUELTA A FABRICA'];
 
+  function entregadoManual(row){
+    try { return typeof OBSERVATIONS !== 'undefined' && OBSERVATIONS.has(obsKey(row['Interno'], 'entregadoManual')); } catch(e){ return false; }
+  }
   function isEntregado(row){
+    // Marcado a mano como entregado (ej.: unidad de otro concesionario que nunca arribó)
+    if (entregadoManual(row)) return true;
     const fEntrega = (row['Fecha Entrega Unidad'] || '').toString().trim();
     if (fEntrega !== '') return true;
     const motivo = (row['Motivo Cambio Ubicacion'] || '').toString().trim().toUpperCase();
@@ -10817,10 +10822,11 @@
       password: password
     }).then(payload => {
       if (payload.ok){
-        showToast(`Auto ${currentMarkDeliveredInterno} marcado como entregado`, 'success');
+        showToast(`Auto ${currentMarkDeliveredInterno} marcado como entregado`);
         $('markDeliveredModal').style.display = 'none';
+        OBSERVATIONS.set(obsKey(currentMarkDeliveredInterno, 'entregadoManual'), {interno: currentMarkDeliveredInterno, seccion:'entregadoManual', observacion:'Marcado como entregado', fechaSolucion: new Date().toISOString().slice(0,10)});
         currentMarkDeliveredInterno = null;
-        renderAccesoriosSection();
+        try { renderAccesoriosSection(); renderPatentadosSection(); renderLeBombSection(); renderResumenSection(); renderFueraDQSection(); } catch(e){ console.error(e); }
       } else {
         errEl.textContent = payload.error || 'Error desconocido';
       }
