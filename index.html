@@ -359,6 +359,15 @@
 
   /* ---- Patentados brand cards ---- */
   .patentados-kpis{display:flex; flex-wrap:wrap; gap:10px;}
+  .pat-card-noOk{flex:2 1 380px !important; min-width:340px;}
+  .pat-motivos{margin-top:10px; border-top:1px dashed var(--border); padding-top:8px; text-align:left;}
+  .pat-motivos .pm-title{font-size:10.5px; text-transform:uppercase; letter-spacing:.5px; color:var(--text-faint); margin-bottom:5px;}
+  .pat-motivo{display:grid; grid-template-columns:minmax(150px,1.2fr) 1fr 34px; gap:8px; align-items:center; padding:3px 6px; border-radius:6px; font-size:12px; cursor:pointer;}
+  .pat-motivo:hover{background:var(--surface-3);}
+  .pat-motivo.active{background:rgba(255,92,77,.15); font-weight:700;}
+  .pat-motivo .pm-bar{height:8px; background:var(--surface-3); border-radius:4px; overflow:hidden;}
+  .pat-motivo .pm-bar span{display:block; height:100%; background:var(--red); border-radius:4px;}
+  .pat-motivo .pm-n{font-family:'JetBrains Mono',monospace; font-weight:700; text-align:right;}
   .pat-brand-card{
     background:var(--surface-2); border:1px solid var(--border); border-radius:10px;
     padding:10px 20px; text-align:center; cursor:pointer;
@@ -7278,6 +7287,33 @@
     return true;
   }
 
+  // Motivos por los que un patentado NO está OK para entregar (mismos chequeos que
+  // isOkParaTurno). Un auto puede tener varios a la vez.
+  const PAT_MOTIVOS_NOOK = [
+    {k:'geac', label:'📋 Falta carpeta GEAC'},
+    {k:'averia', label:'⚠️ Con avería abierta'},
+    {k:'alistaje', label:'🧹 Sin alistar'},
+    {k:'accesorios', label:'🎒 Accesorios pendientes'},
+    {k:'credito', label:'💳 Crédito sin liquidar'},
+    {k:'ubicacion', label:'📍 Fuera de Pre-entrega DQ'},
+    {k:'dominio', label:'🏛️ Sin dominio cargado'},
+    {k:'turno', label:'📅 Ya tiene turno asignado'}
+  ];
+  function patMotivosNoOk(row){
+    const m = [];
+    const up = c => (row[c] || '').toString().trim().toUpperCase();
+    if (up('Patenta?') === 'MAIPU' && up('Fecha Entrega Tramite a GEAC') === '') m.push('geac');
+    if (hasAveria(row)) m.push('averia');
+    if (!isAlistado(row)) m.push('alistaje');
+    if (tieneAccesorios(row) && !accesoriosListos(row)) m.push('accesorios');
+    if (tieneCreditoSinLiquidar(row)) m.push('credito');
+    if (up('Ubicacion') !== 'PRE-ENTREGA D.QUIROS') m.push('ubicacion');
+    if (up('Dominio') === '') m.push('dominio');
+    if (up('Fecha Turno Entrega') !== '') m.push('turno');
+    return m;
+  }
+  let patMotivoFilter = null;
+
   function tieneCreditoSinLiquidar(row){
     const credito = (row['Credito?'] || '').toString().trim().toUpperCase();
     if (credito !== 'SI') return false;
@@ -9131,7 +9167,8 @@
     // activo — por eso se calculan un paso más adelante, después de aplicar
     // patEstadoEntregaFilter pero antes de aplicar el propio filtro de localidad
     // (así ninguna de las dos cards de localidad se autoexcluye a cero).
-    const rowsEstadoFiltrado = baseRowsConFiltros.filter(r => patEstadoEntregaFilter.has(patEstadoEntregaDeRow(r)));
+    const rowsEstadoFiltrado = baseRowsConFiltros.filter(r => patEstadoEntregaFilter.has(patEstadoEntregaDeRow(r)))
+      .filter(r => !patMotivoFilter || (patEstadoEntregaDeRow(r) === 'noOk' && patMotivosNoOk(r).includes(patMotivoFilter)));
     const rows = rowsEstadoFiltrado.filter(r => patLocalidadFilter.has(esCbaSLA(r) ? 'cordoba' : 'otras'));
 
     $('patTotalValue').textContent = rows.length.toLocaleString('es-AR');
@@ -9145,11 +9182,27 @@
       {estado:'okFuera', label:'🟠 OK para entregar, fuera de plazo', sub:'Cumple todos los requisitos pero ya se pasó de los 4 días hábiles', color:'var(--orange)'},
       {estado:'noOk', label:'🔴 No OK para entregar', sub:'Falta alistaje, accesorios, crédito, GEAC, avería, etc.', color:'var(--red)'}
     ];
+    const noOkRows = baseRowsConFiltros.filter(r => patEstadoEntregaDeRow(r) === 'noOk');
+    const motivoCounts = {};
+    noOkRows.forEach(r => patMotivosNoOk(r).forEach(k => { motivoCounts[k] = (motivoCounts[k] || 0) + 1; }));
+    const motivosHtml = PAT_MOTIVOS_NOOK.filter(m => motivoCounts[m.k])
+      .sort((a,b) => motivoCounts[b.k] - motivoCounts[a.k])
+      .map(m => {
+        const n = motivoCounts[m.k];
+        const pct = noOkRows.length ? Math.round(n / noOkRows.length * 100) : 0;
+        const act = patMotivoFilter === m.k;
+        return `<div class="pat-motivo ${act ? 'active' : ''}" data-motivo="${m.k}" title="Clic para ver solo estos autos">
+          <span class="pm-label">${m.label}</span>
+          <span class="pm-bar"><span style="width:${Math.max(pct, 3)}%;"></span></span>
+          <span class="pm-n">${n}</span>
+        </div>`;
+      }).join('');
     $('patentadosKpis').innerHTML = cardDefs.map(c => `
-      <div class="pat-brand-card ${patEstadoEntregaFilter.has(c.estado) ? 'active' : ''} ${!patEstadoEntregaFilter.has(c.estado) ? 'dimmed' : ''}" data-estado="${c.estado}">
+      <div class="pat-brand-card ${patEstadoEntregaFilter.has(c.estado) ? 'active' : ''} ${!patEstadoEntregaFilter.has(c.estado) ? 'dimmed' : ''} ${c.estado === 'noOk' ? 'pat-card-noOk' : ''}" data-estado="${c.estado}">
         <div class="brand-name">${c.label}</div>
         <div class="brand-count" style="color:${c.color}">${counts[c.estado].toLocaleString('es-AR')}</div>
         <div class="brand-breakdown">de ${totalConFiltroMarca.toLocaleString('es-AR')} pendientes de entregar</div>
+        ${c.estado === 'noOk' && motivosHtml ? `<div class="pat-motivos"><div class="pm-title">Qué los frena (un auto puede tener varios)${patMotivoFilter ? ' · <u>clic de nuevo para quitar el filtro</u>' : ''}</div>${motivosHtml}</div>` : ''}
       </div>
     `).join('') + (() => {
       const cordobaCount = rowsEstadoFiltrado.filter(esCbaSLA).length;
@@ -9307,6 +9360,14 @@
   });
 
   $('patentadosKpis').addEventListener('click', e => {
+    const mot = e.target.closest('[data-motivo]');
+    if (mot){
+      patMotivoFilter = patMotivoFilter === mot.dataset.motivo ? null : mot.dataset.motivo;
+      if (patMotivoFilter) patEstadoEntregaFilter.add('noOk');
+      patCurrentPage = 1;
+      renderPatentadosSection();
+      return;
+    }
     const card = e.target.closest('.pat-brand-card');
     if (!card) return;
     if (card.dataset.estado){
@@ -10555,6 +10616,7 @@
     setSelectValue('patArriboSelect', 'todos');
     patEstadoEntregaFilter = new Set(['okDentro','okFuera','noOk']);
     patLocalidadFilter = new Set(['cordoba','otras']);
+    patMotivoFilter = null;
     if (patSearchTerm){ patSearchTerm = ''; $('patSearchInput').value = ''; }
     patCurrentPage = 1;
     renderPatentadosSection();
