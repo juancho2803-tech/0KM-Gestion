@@ -1110,7 +1110,8 @@
                 <th class="sortable" data-sort="geac">GEAC<span class="sort-arrow">↕</span></th>
                 <th class="sortable" data-sort="accesorios">Accesorios<span class="sort-arrow">↕</span></th>
                 <th class="sortable" data-sort="credito">Crédito<span class="sort-arrow">↕</span></th>
-                <th class="sortable" data-sort="turno">Turno de entrega / Bloqueo / Ok para entregar<span class="sort-arrow">↕</span></th>
+                <th class="sortable" data-sort="bloqueo">Bloqueo saldo / pago<span class="sort-arrow">↕</span></th>
+                <th class="sortable" data-sort="turno">Turno de entrega / Ok para entregar<span class="sort-arrow">↕</span></th>
                 <th>Observación</th>
                 <th>Entrega</th>
               </tr>
@@ -7111,6 +7112,7 @@
         if ((r['Credito?'] || '').toString().trim().toUpperCase() !== 'SI') return -1;
         return tieneCreditoSinLiquidar(r) ? 0 : 1;
       },
+      bloqueo: r => bloqueoActivo(r) ? 1 : 0,
       turno: r => tieneTurnoEntregaDado(r) ? 1 : 0
     };
   }
@@ -9303,7 +9305,7 @@
     const tbody = $('patentadosTableBody');
 
     if (!shown.length){
-      tbody.innerHTML = `<tr><td colspan="21" class="table-empty">No hay unidades para este filtro</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="22" class="table-empty">No hay unidades para este filtro</td></tr>`;
     } else {
       const badge = (ok, title) => ok
         ? `<span class="badge-entrega ok"${title ? ` title="${escapeHtml(title)}"` : ''}>✅</span>`
@@ -9329,12 +9331,12 @@
         const bRec = bloqueoRec(r);
         const bActivo = bloqueoActivo(r);
         const bTitle = bRec ? `Bloqueo marcado el ${formatDateDisplay(bRec.fechaSolucion)}${bloqueoLiberacion(bRec) ? ' · liberado el ' + entFmt(bloqueoLiberacion(bRec)) : ''}` : 'Tildar si el auto tiene bloqueo de saldo o pago (no se puede dar turno hasta que se libere)';
-        const bloqueoCheck = `<label class="contact-checkbox-label" title="${escapeHtml(bTitle)}" style="${bActivo ? 'color:var(--red); font-weight:600;' : ''}"><input type="checkbox" class="pat-bloqueo-check" data-interno="${escapeHtml(interno)}" ${bActivo ? 'checked' : ''}> 🔒 Con bloqueo de saldo / pago${bActivo ? ` <span style="font-weight:400; font-size:11px;">(desde ${formatDateDisplay(bRec.fechaSolucion)})</span>` : ''}</label>`;
+        const bloqueoCheck = `<label class="contact-checkbox-label" title="${escapeHtml(bTitle)}" style="${bActivo ? 'color:var(--red); font-weight:600;' : ''}"><input type="checkbox" class="pat-bloqueo-check" data-interno="${escapeHtml(interno)}" ${bActivo ? 'checked' : ''}> 🔒 Con bloqueo${bActivo ? ` <span style="font-weight:400; font-size:11px;">${formatDateDisplay(bRec.fechaSolucion).slice(0,5)}</span>` : ''}</label>`;
         const sinTurnoNiEntrega = !tieneTurnoEntregaDado(r) && !isEntregado(r);
         const turnoEntregaCell = isOkParaTurno(r)
-          ? `<div style="display:flex; flex-direction:column; gap:10px; padding:4px 0;">${bloqueoCheck}<div style="border-top:1px dashed var(--border); padding-top:10px;"><label class="contact-checkbox-label"><input type="checkbox" class="contact-bloqueo-check" data-interno="${escapeHtml(interno)}" ${sinBloqueoChecked ? 'checked' : ''}> ✅ Ok para entregar</label></div></div>`
+          ? `<label class="contact-checkbox-label"><input type="checkbox" class="contact-bloqueo-check" data-interno="${escapeHtml(interno)}" ${sinBloqueoChecked ? 'checked' : ''}> ✅ Ok para entregar</label>`
           : sinTurnoNiEntrega
-            ? `<div style="display:flex; flex-direction:column; gap:10px; padding:4px 0;">${bloqueoCheck}<div style="border-top:1px dashed var(--border); padding-top:10px;"><span class="badge-entrega bad">Sin turno</span></div></div>`
+            ? `<span class="badge-entrega bad">Sin turno</span>`
             : (tieneTurnoEntregaDado(r)
               ? (isEntregado(r)
                   ? `<span class="badge-entrega ok">✅ Con turno (${formatDateDisplay(r['Fecha Turno Entrega'])})</span>`
@@ -9375,6 +9377,7 @@
           <td>${badgeNA(esMaipuGeac, geacOk, geacTitle)}</td>
           <td>${badgeNA(tieneAcc, accOk, accTitle)}</td>
           <td>${badgeNA(creditoAplica, creditoOk)}</td>
+          <td style="white-space:nowrap;">${sinTurnoNiEntrega ? bloqueoCheck : '<span class="badge-entrega" title="No aplica">—</span>'}</td>
           <td>${turnoEntregaCell}</td>
           <td>${obsCell}</td>
           <td>${isEntregado(r) ? '' : `<button type="button" class="btn-mark-delivered" data-interno="${escapeHtml(interno)}" style="padding:4px 8px; background:#10b981; color:white; border:none; border-radius:4px; cursor:pointer; font-size:12px;">✕ Entregado</button>`}</td>
