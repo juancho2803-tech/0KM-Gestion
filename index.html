@@ -6831,6 +6831,10 @@
       sub:'Anomalía: patentaron sin fecha de arribo cargada en el sistema',
       rows: patSinArriboRows,
       cols:[...colMarcaInterno,
+        {label:'VIN (últ. 8)', get:r => {
+          const c = (r['Chasis'] || '').toString().trim();
+          return c ? `<span style="font-family:'JetBrains Mono',monospace;">${escapeHtml(c.slice(-8))}</span>` : '<span style="color:var(--text-faint)">—</span>';
+        }},
         {label:'Tipo compra stock', get:r => {
           const t = (r['Tipo Compra Stock'] || '').toString().trim();
           if (!t) return '<span style="color:var(--text-faint)">—</span>';
