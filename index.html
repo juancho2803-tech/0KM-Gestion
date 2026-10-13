@@ -6853,6 +6853,7 @@
       sub:'Avería = Sí y todavía sin fecha de cierre',
       rows: patAveriaRows,
       cols:[...colMarcaInterno,
+        {label:'Patentamiento', get:r => formatDateDisplay(r['Fecha Patentamiento'])},
         {label:'Avería', get:r => formatDateDisplay(r['Fecha Averia'])},
         {label:'Días', get:r => diasTexto(diasDesdeFecha(r['Fecha Averia']))}
       ]
