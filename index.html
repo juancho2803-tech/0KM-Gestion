@@ -1110,7 +1110,7 @@
                 <th class="sortable" data-sort="geac">GEAC<span class="sort-arrow">↕</span></th>
                 <th class="sortable" data-sort="accesorios">Accesorios<span class="sort-arrow">↕</span></th>
                 <th class="sortable" data-sort="credito">Crédito<span class="sort-arrow">↕</span></th>
-                <th class="sortable" data-sort="turno">Turno de entrega / Sin bloqueo de saldos<span class="sort-arrow">↕</span></th>
+                <th class="sortable" data-sort="turno">Turno de entrega / Bloqueo / Ok para entregar<span class="sort-arrow">↕</span></th>
                 <th>Observación</th>
                 <th>Entrega</th>
               </tr>
@@ -1374,7 +1374,7 @@
       <div class="panel">
         <div class="panel-head">
           <h3>📞 Contactación</h3>
-          <div class="hint">Patentados listos para entrega (OK dentro/fuera de plazo) marcados manualmente como "sin bloqueo de saldos" — control que no está en la base. Se sacan solos de esta lista apenas se les carga un turno de entrega.</div>
+          <div class="hint">Patentados listos para entrega (OK dentro/fuera de plazo) marcados manualmente como "Ok para entregar" (sin bloqueo de saldo / pago) — control que no está en la base. Se sacan solos de esta lista apenas se les carga un turno de entrega.</div>
         </div>
         <div id="contactAlertBanner" class="contact-alert-banner" style="display:none;"></div>
         <div class="filter-row" style="margin-top:12px; align-items:center;">
@@ -2812,7 +2812,7 @@
     // El rol "entregas" solo puede editar la sección Contactación — el backend ya lo
     // rechaza igual, pero lo cortamos acá antes para no generar un guardado optimista
     // que después haya que revertir, y para avisar al toque por qué no se guardó.
-    if (CURRENT_SESSION && CURRENT_SESSION.role === 'entregas' && seccion !== 'contactacion' && seccion !== 'contactacionfinalizado'){
+    if (CURRENT_SESSION && CURRENT_SESSION.role === 'entregas' && seccion !== 'contactacion' && seccion !== 'contactacionfinalizado' && seccion !== 'bloqueosaldo'){
       showToast('⚠️ Tu rol (entregas) solo puede editar Contactación.', true);
       return Promise.reject(new Error('Rol sin permiso de edición para esta sección'));
     }
@@ -7283,7 +7283,26 @@
     return (row['Fecha Averia'] || '').toString().trim() !== '';
   }
 
+  // ---- Bloqueo de saldo / pago (marca manual, la base no lo trae) ----
+  // Observación seccion 'bloqueosaldo': estadoAveria 'SI' = se marcó bloqueo;
+  // fechaSolucion = día en que se marcó; observacion "Liberado dd/mm/aaaa" = día en
+  // que se destildó (se liberó). Mientras está activo el auto NO está OK para entregar.
+  function bloqueoRec(row){
+    const interno = (row && row['Interno'] !== undefined ? row['Interno'] : row || '').toString().trim();
+    const rec = OBSERVATIONS.get(obsKey(interno, 'bloqueosaldo'));
+    return rec && (rec.estadoAveria || '').toString().trim().toUpperCase() === 'SI' ? rec : null;
+  }
+  function bloqueoLiberacion(rec){
+    const m = rec ? (rec.observacion || '').toString().match(/(\d{1,2}\/\d{1,2}\/\d{4})/) : null;
+    return m ? parseDateFlexible(m[1]) : null;
+  }
+  function bloqueoActivo(row){
+    const rec = bloqueoRec(row);
+    return !!rec && !bloqueoLiberacion(rec);
+  }
+
   function isOkParaTurno(row){
+    if (bloqueoActivo(row)) return false;
     const ubicacion = (row['Ubicacion'] || '').toString().trim().toUpperCase();
     if (ubicacion !== 'PRE-ENTREGA D.QUIROS') return false;
     if (hasAveria(row)) return false;
@@ -7307,6 +7326,7 @@
   // Motivos por los que un patentado NO está OK para entregar (mismos chequeos que
   // isOkParaTurno). Un auto puede tener varios a la vez.
   const PAT_MOTIVOS_NOOK = [
+    {k:'bloqueo', label:'🔒 Bloqueo de saldo / pago'},
     {k:'geac', label:'📋 Falta carpeta GEAC'},
     {k:'averia', label:'⚠️ Con avería abierta'},
     {k:'alistaje', label:'🧹 Sin alistar'},
@@ -7319,6 +7339,7 @@
   function patMotivosNoOk(row){
     const m = [];
     const up = c => (row[c] || '').toString().trim().toUpperCase();
+    if (bloqueoActivo(row)) m.push('bloqueo');
     if (up('Patenta?') === 'MAIPU' && up('Fecha Entrega Tramite a GEAC') === '') m.push('geac');
     if (hasAveria(row)) m.push('averia');
     if (!isAlistado(row)) m.push('alistaje');
@@ -8072,6 +8093,7 @@
     gestoria:   {label:'Gestoría / Registro (patentamiento)',       icon:'🏛️', color:'#14b8a6', track:'documental'},
     cliente:    {label:'Patentamiento por cliente',                 icon:'🙋', color:'#94a3b8', track:'documental'},
     credito:    {label:'Créditos (liquidación)',                    icon:'💳', color:'#e11d48', track:'documental'},
+    bloqueo:    {label:'Bloqueo de saldo / pago',                   icon:'🔒', color:'#be185d', track:'documental'},
     arribo:     {label:'Arribo de la unidad',                       icon:'🚛', color:'#a3a3a3', track:'fisico'}
   };
   const ENT_STATE = {
@@ -8209,6 +8231,22 @@
       [{d:fv}, {d:certificado, k:'certificado'}, {d:pagoFab, k:'pagofab'}], slaPat);
     etapa('geac', 'geac', 'Carpeta GEAC', 'documental', G, [{d:P, k:'patente'}], OBJ.geac);
     etapa('credito', 'credito', 'Liquidación crédito', 'documental', K, [{d:fv}], OBJ.credito);
+    // Bloqueo de saldo / pago (marca manual): desde que se marcó hasta que se liberó.
+    // Sin margen: mientras está bloqueado no se puede dar turno, la demora no es de Entregas.
+    // Si nunca se destildó pero ya tiene turno, se toma la fecha del turno como liberación.
+    const bRec = bloqueoRec(r);
+    const bIni = bRec ? entMid(parseDateFlexible(bRec.fechaSolucion)) : null;
+    let bFin = bRec ? entMid(bloqueoLiberacion(bRec)) : null;
+    const bSinLib = !!(bIni && !bFin);
+    if (bSinLib) bFin = E;
+    if (bIni && bFin && bIni <= E){
+      // Arranca cuando se marcó o cuando el resto del auto quedó listo (lo último): los
+      // días anteriores en que el auto todavía no estaba listo son del área que lo demoraba.
+      const prev = etapas.filter(e => e.area !== 'pagofab' && e.area !== 'certificado' && e.end)
+        .reduce((m, e) => (!m || e.end > m.end) ? e : m, null);
+      const cands = prev ? [{d:prev.end, k:prev.key}, {d:bIni}] : [{d:bIni}];
+      etapa('bloqueo', 'bloqueo', 'Bloqueo saldo / pago' + (bSinLib ? ' (sin fecha de liberación: se toma el turno)' : ''), 'documental', ok(bFin < E ? bFin : E), cands, 0);
+    }
     etapas.forEach(e => { if (e.pred && !S[e.pred]) e.pred = null; });
 
     // Cuándo quedó listo cada circuito (certificado y pago fábrica llegan vía patentamiento)
@@ -8245,7 +8283,7 @@
       if (OKd){
         const tF = finFisico ? finFisico.getTime() : 0, tDc = finDoc ? finDoc.getTime() : 0;
         const circ = tF === tDc ? 'ambos' : (tF > tDc ? 'fisico' : 'documental');
-        const prio = ['arribo','patente','geac','credito','averia','accesorios','pedidoacc','alistaje','certificado','pagofab'];
+        const prio = ['bloqueo','arribo','patente','geac','credito','averia','accesorios','pedidoacc','alistaje','certificado','pagofab'];
         const B = etapas.filter(e => e.end.getTime() === OKd.getTime() && (circ === 'ambos' || e.track === circ))
           .sort((a,b) => (b.exceso - a.exceso) || (prio.indexOf(a.key) - prio.indexOf(b.key)))[0];
         const limT = addBusinessDaysSLA(OKd, OBJ.turno || 0);
@@ -9288,9 +9326,16 @@
         const interno = (r['Interno'] || '').toString().trim();
         const contactRec = OBSERVATIONS.get(obsKey(interno, 'contactacion')) || {};
         const sinBloqueoChecked = !!(contactRec.estadoAveria || '').toString().trim();
+        const bRec = bloqueoRec(r);
+        const bActivo = bloqueoActivo(r);
+        const bTitle = bRec ? `Bloqueo marcado el ${formatDateDisplay(bRec.fechaSolucion)}${bloqueoLiberacion(bRec) ? ' · liberado el ' + entFmt(bloqueoLiberacion(bRec)) : ''}` : 'Tildar si el auto tiene bloqueo de saldo o pago (no se puede dar turno hasta que se libere)';
+        const bloqueoCheck = `<label class="contact-checkbox-label" title="${escapeHtml(bTitle)}" style="${bActivo ? 'color:var(--red); font-weight:600;' : ''}"><input type="checkbox" class="pat-bloqueo-check" data-interno="${escapeHtml(interno)}" ${bActivo ? 'checked' : ''}> 🔒 Con bloqueo de saldo / pago${bActivo ? ` <span style="font-weight:400; font-size:11px;">(desde ${formatDateDisplay(bRec.fechaSolucion)})</span>` : ''}</label>`;
+        const sinTurnoNiEntrega = !tieneTurnoEntregaDado(r) && !isEntregado(r);
         const turnoEntregaCell = isOkParaTurno(r)
-          ? `<label class="contact-checkbox-label"><input type="checkbox" class="contact-bloqueo-check" data-interno="${escapeHtml(interno)}" ${sinBloqueoChecked ? 'checked' : ''}> Sin bloqueo de saldos</label>`
-          : (tieneTurnoEntregaDado(r)
+          ? `<div style="display:flex; flex-direction:column; gap:3px;">${bloqueoCheck}<label class="contact-checkbox-label"><input type="checkbox" class="contact-bloqueo-check" data-interno="${escapeHtml(interno)}" ${sinBloqueoChecked ? 'checked' : ''}> ✅ Ok para entregar</label></div>`
+          : sinTurnoNiEntrega
+            ? `<div style="display:flex; flex-direction:column; gap:3px;">${bloqueoCheck}<span><span class="badge-entrega bad">Sin turno</span></span></div>`
+            : (tieneTurnoEntregaDado(r)
               ? (isEntregado(r)
                   ? `<span class="badge-entrega ok">✅ Con turno (${formatDateDisplay(r['Fecha Turno Entrega'])})</span>`
                   : `<span class="badge-entrega pend">🕓 Turno agendado (${formatDateDisplay(r['Fecha Turno Entrega'])})</span>`)
@@ -9487,6 +9532,29 @@
   });
 
   $('patentadosTableBody').addEventListener('change', e => {
+    if (!e.target.classList.contains('pat-bloqueo-check')) return;
+    const interno = e.target.dataset.interno;
+    const hoyTxt = new Date().toLocaleDateString('es-AR');
+    let p;
+    if (e.target.checked){
+      // Nuevo bloqueo (si había uno anterior ya liberado, arranca un período nuevo)
+      p = saveObservation(interno, 'bloqueosaldo', {estadoAveria:'SI', fechaSolucion: hoyTxt, observacion:''});
+    } else {
+      const rec = OBSERVATIONS.get(obsKey(interno, 'bloqueosaldo')) || {};
+      const ini = entMid(parseDateFlexible(rec.fechaSolucion));
+      const hoy = entMid(new Date());
+      // Destildado el mismo día que se marcó = error de carga → se borra. Si no, queda
+      // registrado el período (desde → liberación) para el análisis de entregas.
+      p = (ini && ini.getTime() === hoy.getTime())
+        ? saveObservation(interno, 'bloqueosaldo', {estadoAveria:'', fechaSolucion:'', observacion:''})
+        : saveObservation(interno, 'bloqueosaldo', {observacion: 'Liberado ' + hoyTxt});
+    }
+    p.catch(() => {});
+    renderPatentadosSection();
+    if (typeof renderEntregasAcelSection === 'function') renderEntregasAcelSection();
+  });
+
+  $('patentadosTableBody').addEventListener('change', e => {
     if (!e.target.classList.contains('contact-bloqueo-check')) return;
     const interno = e.target.dataset.interno;
     if (e.target.checked){
@@ -9566,6 +9634,7 @@
       'Averia': hasAveria(r) ? 'SI' : 'NO',
       'Con Dominio': (r['Dominio'] || '').toString().trim() !== '' ? 'SI' : 'NO',
       'OK para turno': isOkParaTurno(r) ? 'SI' : 'NO',
+      'Bloqueo saldo / pago': bloqueoActivo(r) ? 'SI' : (bloqueoRec(r) ? 'Liberado' : ''),
       'Invitado': isInvitado(r) ? (r['Invitado'] || '').toString().trim() : 'No',
       'Tipo Compra Stock': (r['Tipo Compra Stock'] || '').toString().trim() || 'Sin dato',
       'Dias desde patentamiento': (() => { const d = diasDesdePatentamiento(r); return d === null ? '' : d; })(),
