@@ -6855,6 +6855,13 @@
       cols:[...colMarcaInterno,
         {label:'Patentamiento', get:r => formatDateDisplay(r['Fecha Patentamiento'])},
         {label:'Avería', get:r => formatDateDisplay(r['Fecha Averia'])},
+        {label:'Avería → patent.', get:r => {
+          const fa = parseDateFlexible(r['Fecha Averia']), fp = parseDateFlexible(r['Fecha Patentamiento']);
+          if (!fa || !fp) return '—';
+          const d = Math.round((new Date(fp.getFullYear(), fp.getMonth(), fp.getDate()) - new Date(fa.getFullYear(), fa.getMonth(), fa.getDate())) / 86400000);
+          if (d === 0) return 'mismo día';
+          return d > 0 ? `${d}d antes` : `<span style="color:var(--amber)">${-d}d después</span>`;
+        }},
         {label:'Días', get:r => diasTexto(diasDesdeFecha(r['Fecha Averia']))}
       ]
     });
