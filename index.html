@@ -6841,7 +6841,8 @@
           return /propio/i.test(t) ? `<b>${escapeHtml(t)}</b>` : escapeHtml(t);
         }},
         {label:'Patentamiento', get:r => formatDateDisplay(r['Fecha Patentamiento'])},
-        {label:'Días', get:r => diasTexto(diasDesdeFecha(r['Fecha Patentamiento']))}
+        {label:'Días', get:r => diasTexto(diasDesdeFecha(r['Fecha Patentamiento']))},
+        {label:'', get:r => `<button type="button" class="btn-mark-delivered" data-interno="${escapeHtml((r['Interno'] || '').toString().trim())}" title="Marcar como entregado (ej.: unidad de otro concesionario que nunca arribó)" style="padding:3px 8px; background:#10b981; color:#fff; border:none; border-radius:4px; cursor:pointer; font-size:11px; white-space:nowrap;">✓ Entregado</button>`}
       ]
     });
 
