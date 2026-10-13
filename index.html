@@ -9332,9 +9332,9 @@
         const bloqueoCheck = `<label class="contact-checkbox-label" title="${escapeHtml(bTitle)}" style="${bActivo ? 'color:var(--red); font-weight:600;' : ''}"><input type="checkbox" class="pat-bloqueo-check" data-interno="${escapeHtml(interno)}" ${bActivo ? 'checked' : ''}> 🔒 Con bloqueo de saldo / pago${bActivo ? ` <span style="font-weight:400; font-size:11px;">(desde ${formatDateDisplay(bRec.fechaSolucion)})</span>` : ''}</label>`;
         const sinTurnoNiEntrega = !tieneTurnoEntregaDado(r) && !isEntregado(r);
         const turnoEntregaCell = isOkParaTurno(r)
-          ? `<div style="display:flex; flex-direction:column; gap:3px;">${bloqueoCheck}<label class="contact-checkbox-label"><input type="checkbox" class="contact-bloqueo-check" data-interno="${escapeHtml(interno)}" ${sinBloqueoChecked ? 'checked' : ''}> ✅ Ok para entregar</label></div>`
+          ? `<div style="display:flex; flex-direction:column; gap:10px; padding:4px 0;">${bloqueoCheck}<div style="border-top:1px dashed var(--border); padding-top:10px;"><label class="contact-checkbox-label"><input type="checkbox" class="contact-bloqueo-check" data-interno="${escapeHtml(interno)}" ${sinBloqueoChecked ? 'checked' : ''}> ✅ Ok para entregar</label></div></div>`
           : sinTurnoNiEntrega
-            ? `<div style="display:flex; flex-direction:column; gap:3px;">${bloqueoCheck}<span><span class="badge-entrega bad">Sin turno</span></span></div>`
+            ? `<div style="display:flex; flex-direction:column; gap:10px; padding:4px 0;">${bloqueoCheck}<div style="border-top:1px dashed var(--border); padding-top:10px;"><span class="badge-entrega bad">Sin turno</span></div></div>`
             : (tieneTurnoEntregaDado(r)
               ? (isEntregado(r)
                   ? `<span class="badge-entrega ok">✅ Con turno (${formatDateDisplay(r['Fecha Turno Entrega'])})</span>`
