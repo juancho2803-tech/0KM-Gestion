@@ -1019,6 +1019,7 @@
         <button class="subtab-btn" data-subtab="averias" type="button">⚠️ Averías</button>
         <button class="subtab-btn" data-subtab="fueradq" type="button">📍 No en DQ</button>
         <button class="subtab-btn" data-subtab="accesorios" type="button">🎒 Accesorios</button>
+        <button class="subtab-btn" data-subtab="clienteexterno" type="button">🤝 Cliente externo</button>
         <button class="subtab-btn" data-subtab="contactacion" type="button">📞 Contactación <span id="contactPendingBadge" class="contact-pending-badge" style="display:none;">0</span></button>
       </div>
 
@@ -1425,6 +1426,55 @@
         <div class="hint" id="contactTableHint" style="margin-top:10px;">Mostrando 0 de 0 registros</div>
       </div>
     </div><!-- /tabContactacion -->
+
+    <div class="subtab-content" id="tabClienteExterno">
+      <div class="panel">
+        <div class="panel-head">
+          <h3>🤝 Cliente externo — pendientes de entregar</h3>
+          <div class="hint">Unidades con Tipo Compra Stock = "Cliente Externo" que todavía no se entregaron (incluye turnos futuros). No dependen de una venta nuestra, así que se muestran aunque no tengan reserva/venta cargada.</div>
+          <div class="export-group">
+            <button class="page-btn" id="ceExportXlsxBtn" type="button">⬇️ Excel</button>
+          </div>
+        </div>
+        <div class="pill-group" style="margin-top:4px;">
+          <span class="pill-group-label">Marca</span>
+          <div class="pill-list" id="ceBrandList"></div>
+        </div>
+        <div class="patentados-kpis" id="ceKpis" style="margin-top:12px;"></div>
+        <div class="filter-row" style="margin-top:12px;">
+          <div class="table-search" style="margin:0;">
+            <input type="text" id="ceSearchInput" placeholder="Buscar por interno, VIN, cliente o dominio…" autocomplete="off">
+          </div>
+        </div>
+        <div class="table-scroll" style="margin-top:12px;">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th class="col-marca">Marca</th>
+                <th>Interno</th>
+                <th>VIN (últ. 8)</th>
+                <th>Modelo</th>
+                <th>Color</th>
+                <th>Cliente</th>
+                <th>Estado</th>
+                <th>Pedido</th>
+                <th>Arribo</th>
+                <th>Alistaje</th>
+                <th>Patentamiento</th>
+                <th>Dominio</th>
+                <th>Ubicación</th>
+                <th>Turno entrega</th>
+                <th>Días desde patent.</th>
+                <th>Observación</th>
+                <th>Entrega</th>
+              </tr>
+            </thead>
+            <tbody id="ceTableBody"></tbody>
+          </table>
+        </div>
+        <div class="hint" id="ceTableHint" style="margin-top:10px;">Mostrando 0 de 0 registros</div>
+      </div>
+    </div><!-- /tabClienteExterno -->
     </div><!-- /tabEntregas -->
 
     <div class="tab-content" id="tabGestoria">
@@ -2813,7 +2863,7 @@
     // El rol "entregas" solo puede editar la sección Contactación — el backend ya lo
     // rechaza igual, pero lo cortamos acá antes para no generar un guardado optimista
     // que después haya que revertir, y para avisar al toque por qué no se guardó.
-    if (CURRENT_SESSION && CURRENT_SESSION.role === 'entregas' && seccion !== 'contactacion' && seccion !== 'contactacionfinalizado' && seccion !== 'bloqueosaldo'){
+    if (CURRENT_SESSION && CURRENT_SESSION.role === 'entregas' && seccion !== 'contactacion' && seccion !== 'contactacionfinalizado' && seccion !== 'bloqueosaldo' && seccion !== 'clienteexterno'){
       showToast('⚠️ Tu rol (entregas) solo puede editar Contactación.', true);
       return Promise.reject(new Error('Rol sin permiso de edición para esta sección'));
     }
@@ -2949,7 +2999,7 @@
 
   // ---------- Resumen ----------
   function goToTab(tabName){
-    const SUB_OF_ENTREGAS = ['patentados','averias','fueradq','accesorios','contactacion'];
+    const SUB_OF_ENTREGAS = ['patentados','averias','fueradq','accesorios','contactacion','clienteexterno'];
     if (SUB_OF_ENTREGAS.includes(tabName)){
       const mainBtn = document.querySelector('.tab-btn[data-tab="entregas"]');
       if (mainBtn) mainBtn.click();
@@ -8064,12 +8114,13 @@
   });
 
   // ---------- Sub-pestañas de Entregas ----------
-  const SUBTAB_TARGETS = {patentados:'tabPatentados', averias:'tabAverias', fueradq:'tabFueraDQ', accesorios:'tabAccesorios', contactacion:'tabContactacion'};
+  const SUBTAB_TARGETS = {patentados:'tabPatentados', averias:'tabAverias', fueradq:'tabFueraDQ', accesorios:'tabAccesorios', contactacion:'tabContactacion', clienteexterno:'tabClienteExterno'};
   document.querySelectorAll('#entregasSubNav .subtab-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       document.querySelectorAll('#entregasSubNav .subtab-btn').forEach(b => b.classList.toggle('active', b === btn));
       const target = SUBTAB_TARGETS[btn.dataset.subtab];
       document.querySelectorAll('#tabEntregas .subtab-content').forEach(c => c.classList.toggle('active', c.id === target));
+      if (btn.dataset.subtab === 'clienteexterno' && typeof renderClienteExternoSection === 'function') renderClienteExternoSection();
     });
   });
 
@@ -8856,6 +8907,7 @@
       renderPatentadosSection();
       populateContactBrandFilter();
       renderContactacionSection();
+      try { renderClienteExternoSection(true); } catch(e){ console.error(e); }
       populateAvBrandFilter();
       populateAvTipoAveriaFilter();
       renderAveriasSection();
@@ -8890,6 +8942,7 @@
       renderPatentadosSection();
       renderAveriasSection();
       renderFueraDQSection();
+      try { renderClienteExternoSection(); } catch(e){ console.error(e); }
     }).catch(err => console.error('Error cargando observaciones:', err));
     saveBaseToBackend(rows, meta);
   }
@@ -10860,6 +10913,149 @@
     location.href = location.pathname + '?_v=' + Date.now();
   });
 
+  // ========== Entregas › Cliente externo (pendientes de entregar) ==========
+  const CE_STATE = {brands:new Set(), allBrands:[], estado:null, search:''};
+  const CE_ESTADOS = [
+    {k:'sinArribo',  label:'🚛 Sin arribo',            color:'var(--red)'},
+    {k:'averia',     label:'⚠️ Con avería abierta',    color:'var(--red)'},
+    {k:'sinAlistar', label:'🧹 Arribado, sin alistar', color:'var(--orange)'},
+    {k:'accesorios', label:'🎒 Accesorios pendientes', color:'var(--orange)'},
+    {k:'sinPatente', label:'🏛️ Sin patentar',          color:'var(--amber)'},
+    {k:'listo',      label:'✅ Listo, sin turno',      color:'var(--green)'},
+    {k:'conTurno',   label:'📅 Turno agendado',        color:'var(--blue)'}
+  ];
+  function esClienteExterno(r){ return (r['Tipo Compra Stock'] || '').toString().trim() === 'Cliente Externo'; }
+  function ceEstado(r){
+    if (tieneTurnoEntregaDado(r)) return 'conTurno';
+    if (!(r['Fecha Arribo Unidad'] || '').toString().trim() && !(r['Ubicacion'] || '').toString().trim()) return 'sinArribo';
+    if (hasAveria(r)) return 'averia';
+    if (!isAlistado(r)) return 'sinAlistar';
+    if (tieneAccesorios(r) && !accesoriosListos(r)) return 'accesorios';
+    if (!(r['Fecha Patentamiento'] || '').toString().trim() || !(r['Dominio'] || '').toString().trim()) return 'sinPatente';
+    return 'listo';
+  }
+  function ceDias(v){
+    const d = parseDateFlexible(v);
+    if (!d) return null;
+    const h = new Date();
+    return Math.round((new Date(h.getFullYear(), h.getMonth(), h.getDate()) - new Date(d.getFullYear(), d.getMonth(), d.getDate())) / 86400000);
+  }
+  function ceRowsBase(){
+    return ALL_ROWS.filter(r => esClienteExterno(r) && !isEntregado(r));
+  }
+  function ceFiltradas(){
+    const q = CE_STATE.search.trim().toLowerCase();
+    return ceRowsBase().filter(r => {
+      if (!CE_STATE.brands.has((r['Marca'] || '').toString().trim())) return false;
+      if (q){
+        const hay = [r['Interno'], r['Chasis'], r['Cliente'], r['Dominio'], r['Modelo']].map(x => (x || '').toString().toLowerCase()).join(' ');
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+  }
+  function renderClienteExternoSection(reset){
+    if (!$('ceTableBody')) return;
+    const base = ceRowsBase();
+    if (reset || !CE_STATE.allBrands.length){
+      CE_STATE.allBrands = [...new Set(base.map(r => (r['Marca'] || '').toString().trim()).filter(Boolean))].sort();
+      CE_STATE.brands = new Set(CE_STATE.allBrands);
+      CE_STATE.estado = null;
+      $('ceBrandList').innerHTML = CE_STATE.allBrands.map(b => `<button type="button" class="active" data-brand="${escapeHtml(b)}">${escapeHtml(b)}</button>`).join('');
+      $('ceBrandList').querySelectorAll('button').forEach(btn => btn.addEventListener('click', () => {
+        const b = btn.dataset.brand;
+        if (CE_STATE.brands.has(b)){ CE_STATE.brands.delete(b); btn.classList.remove('active'); }
+        else { CE_STATE.brands.add(b); btn.classList.add('active'); }
+        renderClienteExternoSection();
+      }));
+    }
+    const rows = ceFiltradas();
+    const cnt = {};
+    rows.forEach(r => { const e = ceEstado(r); cnt[e] = (cnt[e] || 0) + 1; });
+    const conDias = rows.map(r => ceDias(r['Fecha Patentamiento'])).filter(d => d !== null);
+    const prom = conDias.length ? Math.round(conDias.reduce((a,b) => a + b, 0) / conDias.length) : null;
+    $('ceKpis').innerHTML =
+      `<div class="pat-brand-card ${CE_STATE.estado === null ? 'active' : ''}" data-ce-estado="">
+         <div class="brand-name">🤝 Pendientes de entregar</div>
+         <div class="brand-count" style="color:var(--text)">${rows.length}</div>
+         <div class="brand-breakdown">${prom !== null ? `prom. ${prom} días desde patentamiento` : '&nbsp;'}</div>
+       </div>` +
+      CE_ESTADOS.map(e => `<div class="pat-brand-card ${CE_STATE.estado === e.k ? 'active' : ''} ${CE_STATE.estado && CE_STATE.estado !== e.k ? 'dimmed' : ''}" data-ce-estado="${e.k}">
+         <div class="brand-name">${e.label}</div>
+         <div class="brand-count" style="color:${e.color}">${cnt[e.k] || 0}</div>
+         <div class="brand-breakdown">${rows.length ? Math.round((cnt[e.k] || 0) / rows.length * 100) : 0}%</div>
+       </div>`).join('');
+
+    const shown = rows.filter(r => !CE_STATE.estado || ceEstado(r) === CE_STATE.estado)
+      .sort((a,b) => (ceDias(b['Fecha Patentamiento']) ?? -1) - (ceDias(a['Fecha Patentamiento']) ?? -1));
+    CE_STATE.lastRows = shown;
+    const lbl = Object.fromEntries(CE_ESTADOS.map(e => [e.k, e]));
+    const fd = v => (v || '').toString().trim() ? formatDateDisplay(v) : '<span style="color:var(--text-faint)">—</span>';
+    $('ceTableBody').innerHTML = !shown.length
+      ? `<tr><td colspan="17" class="table-empty">No hay unidades de cliente externo pendientes con este filtro</td></tr>`
+      : shown.map(r => {
+        const interno = (r['Interno'] || '').toString().trim();
+        const est = lbl[ceEstado(r)];
+        const chasis = (r['Chasis'] || '').toString().trim();
+        const dias = ceDias(r['Fecha Patentamiento']);
+        const diasCol = dias === null ? '<span style="color:var(--text-faint)">—</span>'
+          : `<b style="color:${dias > 15 ? 'var(--red)' : (dias > 4 ? 'var(--orange)' : 'var(--text)')}">${dias}d</b>`;
+        const obs = escapeHtml((OBSERVATIONS.get(obsKey(interno, 'clienteexterno')) || {}).observacion || '');
+        return `<tr>
+          <td class="col-marca">${escapeHtml(r['Marca'])}</td>
+          <td>${escapeHtml(interno)}</td>
+          <td style="font-family:'JetBrains Mono',monospace;">${escapeHtml(chasis.slice(-8)) || '—'}</td>
+          <td>${escapeHtml(r['Modelo'])}</td>
+          <td>${escapeHtml(r['Color'])}</td>
+          <td>${escapeHtml(r['Cliente'])}</td>
+          <td style="white-space:nowrap; color:${est.color}; font-weight:600;">${est.label}</td>
+          <td class="col-fecha">${fd(r['Fecha Pedido'])}</td>
+          <td class="col-fecha">${fd(r['Fecha Arribo Unidad'])}</td>
+          <td class="col-fecha">${fd(r['Fecha Alistaje'])}</td>
+          <td class="col-fecha">${fd(r['Fecha Patentamiento'])}</td>
+          <td>${escapeHtml(r['Dominio'] || '') || '<span style="color:var(--text-faint)">—</span>'}</td>
+          <td>${escapeHtml(r['Ubicacion'] || '') || '<span style="color:var(--text-faint)">—</span>'}</td>
+          <td class="col-fecha">${fd(r['Fecha Turno Entrega'])}</td>
+          <td class="col-fecha">${diasCol}</td>
+          <td><textarea class="obs-input ce-obs-input" data-interno="${escapeHtml(interno)}" rows="1" placeholder="Sin observaciones">${obs}</textarea><span class="obs-saved-tag">✓ guardado</span></td>
+          <td><button type="button" class="btn-mark-delivered" data-interno="${escapeHtml(interno)}" style="padding:4px 8px; background:#10b981; color:white; border:none; border-radius:4px; cursor:pointer; font-size:12px; white-space:nowrap;">✕ Entregado</button></td>
+        </tr>`;
+      }).join('');
+    $('ceTableHint').textContent = `Mostrando ${shown.length.toLocaleString('es-AR')} de ${rows.length.toLocaleString('es-AR')} unidades · ordenado por más días desde el patentamiento`;
+  }
+  if ($('ceKpis')){
+    $('ceKpis').addEventListener('click', e => {
+      const card = e.target.closest('[data-ce-estado]');
+      if (!card) return;
+      const k = card.dataset.ceEstado || null;
+      CE_STATE.estado = (CE_STATE.estado === k) ? null : k;
+      renderClienteExternoSection();
+    });
+    $('ceSearchInput').addEventListener('input', e => { CE_STATE.search = e.target.value; renderClienteExternoSection(); });
+    $('ceTableBody').addEventListener('focusout', e => {
+      if (!e.target.classList.contains('ce-obs-input')) return;
+      saveObservation(e.target.dataset.interno, 'clienteexterno', {observacion: e.target.value}).then(() => showSavedTag(e.target)).catch(() => {});
+    });
+    $('ceExportXlsxBtn').addEventListener('click', () => {
+      const rows = CE_STATE.lastRows || [];
+      if (!rows.length) return;
+      const lbl = Object.fromEntries(CE_ESTADOS.map(e => [e.k, e.label.replace(/^\S+\s/, '')]));
+      const data = rows.map(r => ({
+        'Marca': r['Marca'] || '', 'Interno': r['Interno'] || '', 'Chasis': r['Chasis'] || '',
+        'Modelo': r['Modelo'] || '', 'Color': r['Color'] || '', 'Cliente': r['Cliente'] || '',
+        'Estado': lbl[ceEstado(r)], 'Fecha Pedido': r['Fecha Pedido'] || '', 'Fecha Arribo': r['Fecha Arribo Unidad'] || '',
+        'Fecha Alistaje': r['Fecha Alistaje'] || '', 'Fecha Patentamiento': r['Fecha Patentamiento'] || '',
+        'Dominio': r['Dominio'] || '', 'Ubicacion': r['Ubicacion'] || '', 'Fecha Turno Entrega': r['Fecha Turno Entrega'] || '',
+        'Dias desde patentamiento': ceDias(r['Fecha Patentamiento']) ?? '',
+        'Observacion': (OBSERVATIONS.get(obsKey((r['Interno'] || '').toString().trim(), 'clienteexterno')) || {}).observacion || ''
+      }));
+      const ws = XLSX.utils.json_to_sheet(data);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Cliente externo');
+      XLSX.writeFile(wb, `cliente_externo_pendientes_${todayStamp()}.xlsx`);
+    });
+  }
+
   // ========== Modal Marcar Entregado ==========
   let currentMarkDeliveredInterno = null;
   
@@ -10906,7 +11102,7 @@
         $('markDeliveredModal').style.display = 'none';
         OBSERVATIONS.set(obsKey(currentMarkDeliveredInterno, 'entregadoManual'), {interno: currentMarkDeliveredInterno, seccion:'entregadoManual', observacion:'Marcado como entregado', fechaSolucion: new Date().toISOString().slice(0,10)});
         currentMarkDeliveredInterno = null;
-        try { renderAccesoriosSection(); renderPatentadosSection(); renderLeBombSection(); renderResumenSection(); renderFueraDQSection(); } catch(e){ console.error(e); }
+        try { renderAccesoriosSection(); renderPatentadosSection(); renderLeBombSection(); renderResumenSection(); renderFueraDQSection(); renderClienteExternoSection(); } catch(e){ console.error(e); }
       } else {
         errEl.textContent = payload.error || 'Error desconocido';
       }
