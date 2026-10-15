@@ -2937,7 +2937,7 @@
     'Fecha Entrega Tramite GE','Fecha Observacion Tramite','Fecha Arreglo Observacion','Fecha Fin Tramite',
     'Grupo Localidad','Localidad','Provincia','Fecha Ubicacion',
     'Canal','Catalogo','Tel Celular','Tel Particular','Tel Laboral',
-    'Ultima Ubicacion','Ultima Ubi Dique','Ultima Ubi Fila','Ultima Ubi Columna'
+    'Ultima Ubicacion','Ultima Ubi Dique','Ultima Ubi Fila','Ultima Ubi Columna','Fecha Pedido'
   ];
 
   function buildBaseSyncRows(rows){
@@ -7086,6 +7086,30 @@
         {label:'Turno', get:r => tieneTurnoAlistaje(r) ? '✅ Sí' : '❌ No'},
         {label:'Arribado', get:r => (r['Fecha Arribo Unidad']||'').toString().trim()!=='' ? '✅ Sí' : '❌ No'},
         {label:'Días', get:r => diasTexto(diasDeReferencia(r,['Fecha Arribo Unidad','Fecha Reserva']))}
+      ]
+    });
+
+    const resSinArriboRows = autos.filter(r => categorize(r) === 'Reservado' && (r['Fecha Arribo Unidad'] || '').toString().trim() === '')
+      .sort((a,b) => (diasDesdeFecha(b['Fecha Reserva']) || 0) - (diasDesdeFecha(a['Fecha Reserva']) || 0));
+    const fechaOGuion = v => (v || '').toString().trim() ? formatDateDisplay(v) : '<span style="color:var(--text-faint)">—</span>';
+    sections.push({
+      icon:'🚛', title:'Reservado sin arribar', color:'var(--amber)',
+      sub:'Reservados sin fecha de arribo de la unidad',
+      rows: resSinArriboRows,
+      cols:[...colMarcaInterno,
+        {label:'VIN (últ. 8)', get:r => {
+          const c = (r['Chasis'] || '').toString().trim();
+          return c ? `<span style="font-family:'JetBrains Mono',monospace;">${escapeHtml(c.slice(-8))}</span>` : '<span style="color:var(--text-faint)">—</span>';
+        }},
+        {label:'Tipo compra stock', get:r => {
+          const t = (r['Tipo Compra Stock'] || '').toString().trim();
+          if (!t) return '<span style="color:var(--text-faint)">—</span>';
+          return /propio/i.test(t) ? `<b>${escapeHtml(t)}</b>` : escapeHtml(t);
+        }},
+        {label:'Reserva', get:r => fechaOGuion(r['Fecha Reserva'])},
+        {label:'Pedido', get:r => fechaOGuion(r['Fecha Pedido'])},
+        {label:'Pago fáb.', get:r => fechaOGuion(r['Fecha Pago Fab'])},
+        {label:'Días', get:r => diasTexto(diasDesdeFecha(r['Fecha Reserva']))}
       ]
     });
 
