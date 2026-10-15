@@ -1435,7 +1435,7 @@
       <div class="panel">
         <div class="panel-head">
           <h3>🤝 Cliente externo / Venta directa — pendientes de entregar</h3>
-          <div class="hint">Unidades con Tipo Compra Stock = "Cliente Externo" o "Venta Directa de Fabrica" con Situación = TERCEROS (de fábrica, ej. empleados — las ventas directas PROPIO las gestionó el concesionario y no van acá) que todavía no se entregaron (incluye turnos futuros). No dependen de una venta nuestra, así que se muestran aunque no tengan reserva/venta cargada.</div>
+          <div class="hint">Unidades con Tipo Compra Stock = "Cliente Externo" o "Venta Directa de Fabrica" con Situación = TERCEROS (de fábrica, ej. empleados — las ventas directas PROPIO las gestionó el concesionario y no van acá) que todavía no se entregaron ni tienen turno de entrega. No dependen de una venta nuestra, así que se muestran aunque no tengan reserva/venta cargada.</div>
           <div class="export-group">
             <button class="page-btn" id="ceExportXlsxBtn" type="button">⬇️ Excel</button>
           </div>
@@ -10968,8 +10968,7 @@
     {k:'sinAlistar', label:'🧹 Arribado, sin alistar', color:'var(--orange)'},
     {k:'accesorios', label:'🎒 Accesorios pendientes', color:'var(--orange)'},
     {k:'sinPatente', label:'🏛️ Sin patentar',          color:'var(--amber)'},
-    {k:'listo',      label:'✅ Listo, sin turno',      color:'var(--green)'},
-    {k:'conTurno',   label:'📅 Turno agendado',        color:'var(--blue)'}
+    {k:'listo',      label:'✅ Listo, sin turno',      color:'var(--green)'}
   ];
   function ceTipo(r){ return (r['Tipo Compra Stock'] || '').toString().trim(); }
   function ceSituacion(r){ return (r['Situacion'] || '').toString().trim().toUpperCase(); }
@@ -10981,7 +10980,6 @@
     return t === 'Venta Directa de Fabrica' && ceSituacion(r) !== 'PROPIO';
   }
   function ceEstado(r){
-    if (tieneTurnoEntregaDado(r)) return 'conTurno';
     if (!(r['Fecha Arribo Unidad'] || '').toString().trim() && !(r['Ubicacion'] || '').toString().trim()) return 'sinArribo';
     if (hasAveria(r)) return 'averia';
     if (!isAlistado(r)) return 'sinAlistar';
@@ -10996,7 +10994,8 @@
     return Math.round((new Date(h.getFullYear(), h.getMonth(), h.getDate()) - new Date(d.getFullYear(), d.getMonth(), d.getDate())) / 86400000);
   }
   function ceRowsBase(){
-    return ALL_ROWS.filter(r => esClienteExterno(r) && !isEntregado(r));
+    // Igual que Patentados: fuera los entregados y los que ya tienen turno de entrega
+    return ALL_ROWS.filter(r => esClienteExterno(r) && !isEntregado(r) && !tieneTurnoEntregaDado(r));
   }
   function ceFiltradas(){
     const q = CE_STATE.search.trim().toLowerCase();
