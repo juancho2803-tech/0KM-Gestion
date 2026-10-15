@@ -1472,6 +1472,7 @@
                 <th>Pedido</th>
                 <th>Arribo</th>
                 <th>Alistaje</th>
+                <th>Turno alistaje</th>
                 <th>Patentamiento</th>
                 <th>Dominio</th>
                 <th>Ubicación</th>
@@ -11047,7 +11048,7 @@
     const lbl = Object.fromEntries(CE_ESTADOS.map(e => [e.k, e]));
     const fd = v => (v || '').toString().trim() ? formatDateDisplay(v) : '<span style="color:var(--text-faint)">—</span>';
     $('ceTableBody').innerHTML = !shown.length
-      ? `<tr><td colspan="18" class="table-empty">No hay unidades de cliente externo / venta directa pendientes con este filtro</td></tr>`
+      ? `<tr><td colspan="19" class="table-empty">No hay unidades de cliente externo / venta directa pendientes con este filtro</td></tr>`
       : shown.map(r => {
         const interno = (r['Interno'] || '').toString().trim();
         const est = lbl[ceEstado(r)];
@@ -11068,6 +11069,8 @@
           <td class="col-fecha">${fd(r['Fecha Pedido'])}</td>
           <td class="col-fecha">${fd(r['Fecha Arribo Unidad'])}</td>
           <td class="col-fecha">${fd(r['Fecha Alistaje'])}</td>
+          <td class="col-fecha" style="white-space:nowrap;">${isAlistado(r) ? '<span style="color:var(--text-faint)">—</span>'
+            : (tieneTurnoAlistaje(r) ? `✅ ${formatDateDisplay(r['Fecha Turno Alistaje'])}` : '<span style="color:var(--red); font-weight:600;">❌ Sin turno</span>')}</td>
           <td class="col-fecha">${fd(r['Fecha Patentamiento'])}</td>
           <td>${escapeHtml(r['Dominio'] || '') || '<span style="color:var(--text-faint)">—</span>'}</td>
           <td>${escapeHtml(r['Ubicacion'] || '') || '<span style="color:var(--text-faint)">—</span>'}</td>
@@ -11106,7 +11109,7 @@
         'Marca': r['Marca'] || '', 'Interno': r['Interno'] || '', 'Chasis': r['Chasis'] || '',
         'Modelo': r['Modelo'] || '', 'Color': r['Color'] || '', 'Cliente': r['Cliente'] || '',
         'Tipo Compra Stock': ceTipo(r), 'Situacion': ceSituacion(r), 'Estado': lbl[ceEstado(r)], 'Fecha Pedido': r['Fecha Pedido'] || '', 'Fecha Arribo': r['Fecha Arribo Unidad'] || '',
-        'Fecha Alistaje': r['Fecha Alistaje'] || '', 'Fecha Patentamiento': r['Fecha Patentamiento'] || '',
+        'Fecha Alistaje': r['Fecha Alistaje'] || '', 'Turno Alistaje': isAlistado(r) ? '' : (r['Fecha Turno Alistaje'] || 'Sin turno'), 'Fecha Patentamiento': r['Fecha Patentamiento'] || '',
         'Dominio': r['Dominio'] || '', 'Ubicacion': r['Ubicacion'] || '', 'Fecha Turno Entrega': r['Fecha Turno Entrega'] || '',
         'Dias desde patentamiento': ceDias(r['Fecha Patentamiento']) ?? '',
         'Observacion': (OBSERVATIONS.get(obsKey((r['Interno'] || '').toString().trim(), 'clienteexterno')) || {}).observacion || ''
