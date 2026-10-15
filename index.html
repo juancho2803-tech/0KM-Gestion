@@ -982,6 +982,10 @@
                 <th>Modelo</th>
                 <th>Catálogo / Versión</th>
                 <th>Color</th>
+                <th>Últ. ubicación</th>
+                <th title="Última ubicación — Dique">Dq.</th>
+                <th title="Última ubicación — Fila">Fil.</th>
+                <th title="Última ubicación — Columna">Col.</th>
                 <th>Arribado</th>
                 <th>Pagado a fábrica</th>
                 <th>Certificado</th>
@@ -2932,7 +2936,8 @@
     'Fecha Inicio Tramite','Fecha Gestoria','Fecha Listo GI','Fecha Entrega Encargado GE',
     'Fecha Entrega Tramite GE','Fecha Observacion Tramite','Fecha Arreglo Observacion','Fecha Fin Tramite',
     'Grupo Localidad','Localidad','Provincia','Fecha Ubicacion',
-    'Canal','Catalogo','Tel Celular','Tel Particular','Tel Laboral'
+    'Canal','Catalogo','Tel Celular','Tel Particular','Tel Laboral',
+    'Ultima Ubicacion','Ultima Ubi Dique','Ultima Ubi Fila','Ultima Ubi Columna'
   ];
 
   function buildBaseSyncRows(rows){
@@ -4050,8 +4055,9 @@
       : `<span class="badge-entrega bad">❌</span>`;
 
     if (!shown.length){
-      tbody.innerHTML = `<tr><td colspan="11" class="table-empty">No hay unidades para este filtro</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="15" class="table-empty">No hay unidades para este filtro</td></tr>`;
     } else {
+      const v = (r, c) => escapeHtml((r[c] || '').toString().trim()) || '<span style="color:var(--text-faint)">—</span>';
       tbody.innerHTML = shown.map(r => `
         <tr>
           <td class="col-marca">${escapeHtml(r['Marca'])}</td>
@@ -4059,6 +4065,10 @@
           <td>${escapeHtml(r['Modelo'])}</td>
           <td>${escapeHtml((r['Catalogo'] || '').toString().trim() || '—')}</td>
           <td>${escapeHtml(r['Color'])}</td>
+          <td>${v(r, 'Ultima Ubicacion')}</td>
+          <td style="text-align:center;">${v(r, 'Ultima Ubi Dique')}</td>
+          <td style="text-align:center;">${v(r, 'Ultima Ubi Fila')}</td>
+          <td style="text-align:center;">${v(r, 'Ultima Ubi Columna')}</td>
           <td>${badge(ventaArribado(r))}</td>
           <td>${badge(ventaPagadoFab(r))}</td>
           <td>${badge(ventaCertificado(r))}</td>
@@ -4102,6 +4112,10 @@
       'Modelo': r['Modelo'] || '',
       'Catalogo': (r['Catalogo'] || '').toString().trim(),
       'Color': r['Color'] || '',
+      'Ult. ubicacion': (r['Ultima Ubicacion'] || '').toString().trim(),
+      'Dique': (r['Ultima Ubi Dique'] || '').toString().trim(),
+      'Fila': (r['Ultima Ubi Fila'] || '').toString().trim(),
+      'Columna': (r['Ultima Ubi Columna'] || '').toString().trim(),
       'Arribado': ventaArribado(r) ? 'Sí' : 'No',
       'Pagado a fabrica': ventaPagadoFab(r) ? 'Sí' : 'No',
       'Certificado': ventaCertificado(r) ? 'Sí' : 'No',
