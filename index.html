@@ -1023,7 +1023,7 @@
         <button class="subtab-btn" data-subtab="averias" type="button">⚠️ Averías</button>
         <button class="subtab-btn" data-subtab="fueradq" type="button">📍 No en DQ</button>
         <button class="subtab-btn" data-subtab="accesorios" type="button">🎒 Accesorios</button>
-        <button class="subtab-btn" data-subtab="clienteexterno" type="button">🤝 Cliente externo</button>
+        <button class="subtab-btn" data-subtab="clienteexterno" type="button">🤝 Cliente externo / VD</button>
         <button class="subtab-btn" data-subtab="contactacion" type="button">📞 Contactación <span id="contactPendingBadge" class="contact-pending-badge" style="display:none;">0</span></button>
       </div>
 
@@ -1434,8 +1434,8 @@
     <div class="subtab-content" id="tabClienteExterno">
       <div class="panel">
         <div class="panel-head">
-          <h3>🤝 Cliente externo — pendientes de entregar</h3>
-          <div class="hint">Unidades con Tipo Compra Stock = "Cliente Externo" que todavía no se entregaron (incluye turnos futuros). No dependen de una venta nuestra, así que se muestran aunque no tengan reserva/venta cargada.</div>
+          <h3>🤝 Cliente externo / Venta directa — pendientes de entregar</h3>
+          <div class="hint">Unidades con Tipo Compra Stock = "Cliente Externo" o "Venta Directa de Fabrica" (ej.: empleados de fábrica, que se cargan de las dos formas) que todavía no se entregaron (incluye turnos futuros). No dependen de una venta nuestra, así que se muestran aunque no tengan reserva/venta cargada.</div>
           <div class="export-group">
             <button class="page-btn" id="ceExportXlsxBtn" type="button">⬇️ Excel</button>
           </div>
@@ -1443,6 +1443,13 @@
         <div class="pill-group" style="margin-top:4px;">
           <span class="pill-group-label">Marca</span>
           <div class="pill-list" id="ceBrandList"></div>
+        </div>
+        <div class="pill-group" style="margin-top:8px;">
+          <span class="pill-group-label">Tipo</span>
+          <div class="pill-list" id="ceTipoList">
+            <button type="button" class="active" data-tipo="Cliente Externo">Cliente externo</button>
+            <button type="button" class="active" data-tipo="Venta Directa de Fabrica">Venta directa de fábrica</button>
+          </div>
         </div>
         <div class="patentados-kpis" id="ceKpis" style="margin-top:12px;"></div>
         <div class="filter-row" style="margin-top:12px;">
@@ -1460,6 +1467,7 @@
                 <th>Modelo</th>
                 <th>Color</th>
                 <th>Cliente</th>
+                <th>Tipo</th>
                 <th>Estado</th>
                 <th>Pedido</th>
                 <th>Arribo</th>
@@ -10952,7 +10960,8 @@
   });
 
   // ========== Entregas › Cliente externo (pendientes de entregar) ==========
-  const CE_STATE = {brands:new Set(), allBrands:[], estado:null, search:''};
+  const CE_TIPOS = ['Cliente Externo', 'Venta Directa de Fabrica'];
+  const CE_STATE = {brands:new Set(), allBrands:[], estado:null, search:'', tipos:new Set(CE_TIPOS)};
   const CE_ESTADOS = [
     {k:'sinArribo',  label:'🚛 Sin arribo',            color:'var(--red)'},
     {k:'averia',     label:'⚠️ Con avería abierta',    color:'var(--red)'},
@@ -10962,7 +10971,8 @@
     {k:'listo',      label:'✅ Listo, sin turno',      color:'var(--green)'},
     {k:'conTurno',   label:'📅 Turno agendado',        color:'var(--blue)'}
   ];
-  function esClienteExterno(r){ return (r['Tipo Compra Stock'] || '').toString().trim() === 'Cliente Externo'; }
+  function ceTipo(r){ return (r['Tipo Compra Stock'] || '').toString().trim(); }
+  function esClienteExterno(r){ return CE_TIPOS.includes(ceTipo(r)); }
   function ceEstado(r){
     if (tieneTurnoEntregaDado(r)) return 'conTurno';
     if (!(r['Fecha Arribo Unidad'] || '').toString().trim() && !(r['Ubicacion'] || '').toString().trim()) return 'sinArribo';
@@ -10985,6 +10995,7 @@
     const q = CE_STATE.search.trim().toLowerCase();
     return ceRowsBase().filter(r => {
       if (!CE_STATE.brands.has((r['Marca'] || '').toString().trim())) return false;
+      if (!CE_STATE.tipos.has(ceTipo(r))) return false;
       if (q){
         const hay = [r['Interno'], r['Chasis'], r['Cliente'], r['Dominio'], r['Modelo']].map(x => (x || '').toString().toLowerCase()).join(' ');
         if (!hay.includes(q)) return false;
@@ -11030,7 +11041,7 @@
     const lbl = Object.fromEntries(CE_ESTADOS.map(e => [e.k, e]));
     const fd = v => (v || '').toString().trim() ? formatDateDisplay(v) : '<span style="color:var(--text-faint)">—</span>';
     $('ceTableBody').innerHTML = !shown.length
-      ? `<tr><td colspan="17" class="table-empty">No hay unidades de cliente externo pendientes con este filtro</td></tr>`
+      ? `<tr><td colspan="18" class="table-empty">No hay unidades de cliente externo / venta directa pendientes con este filtro</td></tr>`
       : shown.map(r => {
         const interno = (r['Interno'] || '').toString().trim();
         const est = lbl[ceEstado(r)];
@@ -11046,6 +11057,7 @@
           <td>${escapeHtml(r['Modelo'])}</td>
           <td>${escapeHtml(r['Color'])}</td>
           <td>${escapeHtml(r['Cliente'])}</td>
+          <td style="white-space:nowrap;">${ceTipo(r) === 'Cliente Externo' ? 'Cliente externo' : 'Venta directa'}</td>
           <td style="white-space:nowrap; color:${est.color}; font-weight:600;">${est.label}</td>
           <td class="col-fecha">${fd(r['Fecha Pedido'])}</td>
           <td class="col-fecha">${fd(r['Fecha Arribo Unidad'])}</td>
@@ -11069,6 +11081,12 @@
       CE_STATE.estado = (CE_STATE.estado === k) ? null : k;
       renderClienteExternoSection();
     });
+    $('ceTipoList').querySelectorAll('button').forEach(btn => btn.addEventListener('click', () => {
+      const t = btn.dataset.tipo;
+      if (CE_STATE.tipos.has(t)){ CE_STATE.tipos.delete(t); btn.classList.remove('active'); }
+      else { CE_STATE.tipos.add(t); btn.classList.add('active'); }
+      renderClienteExternoSection();
+    }));
     $('ceSearchInput').addEventListener('input', e => { CE_STATE.search = e.target.value; renderClienteExternoSection(); });
     $('ceTableBody').addEventListener('focusout', e => {
       if (!e.target.classList.contains('ce-obs-input')) return;
@@ -11081,7 +11099,7 @@
       const data = rows.map(r => ({
         'Marca': r['Marca'] || '', 'Interno': r['Interno'] || '', 'Chasis': r['Chasis'] || '',
         'Modelo': r['Modelo'] || '', 'Color': r['Color'] || '', 'Cliente': r['Cliente'] || '',
-        'Estado': lbl[ceEstado(r)], 'Fecha Pedido': r['Fecha Pedido'] || '', 'Fecha Arribo': r['Fecha Arribo Unidad'] || '',
+        'Tipo Compra Stock': ceTipo(r), 'Estado': lbl[ceEstado(r)], 'Fecha Pedido': r['Fecha Pedido'] || '', 'Fecha Arribo': r['Fecha Arribo Unidad'] || '',
         'Fecha Alistaje': r['Fecha Alistaje'] || '', 'Fecha Patentamiento': r['Fecha Patentamiento'] || '',
         'Dominio': r['Dominio'] || '', 'Ubicacion': r['Ubicacion'] || '', 'Fecha Turno Entrega': r['Fecha Turno Entrega'] || '',
         'Dias desde patentamiento': ceDias(r['Fecha Patentamiento']) ?? '',
