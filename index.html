@@ -1435,7 +1435,7 @@
       <div class="panel">
         <div class="panel-head">
           <h3>🤝 Cliente externo / Venta directa — pendientes de entregar</h3>
-          <div class="hint">Unidades con Tipo Compra Stock = "Cliente Externo" o "Venta Directa de Fabrica" con Situación = TERCEROS (de fábrica, ej. empleados — las ventas directas PROPIO las gestionó el concesionario y no van acá) que todavía no se entregaron ni tienen turno de entrega. No dependen de una venta nuestra, así que se muestran aunque no tengan reserva/venta cargada.</div>
+          <div class="hint">Unidades con Tipo Compra Stock = "Cliente Externo" o "Venta Directa de Fabrica" SIN número de operación (clientes de fábrica, ej. empleados — si tiene Nro. Operación la venta la gestionó el concesionario y no va acá) que todavía no se entregaron ni tienen turno de entrega. No dependen de una venta nuestra, así que se muestran aunque no tengan reserva/venta cargada.</div>
           <div class="export-group">
             <button class="page-btn" id="ceExportXlsxBtn" type="button">⬇️ Excel</button>
           </div>
@@ -2946,7 +2946,7 @@
     'Fecha Entrega Tramite GE','Fecha Observacion Tramite','Fecha Arreglo Observacion','Fecha Fin Tramite',
     'Grupo Localidad','Localidad','Provincia','Fecha Ubicacion',
     'Canal','Catalogo','Tel Celular','Tel Particular','Tel Laboral',
-    'Ultima Ubicacion','Ultima Ubi Dique','Ultima Ubi Fila','Ultima Ubi Columna','Fecha Pedido','Situacion'
+    'Ultima Ubicacion','Ultima Ubi Dique','Ultima Ubi Fila','Ultima Ubi Columna','Fecha Pedido','Situacion','Nro. Operacion'
   ];
 
   function buildBaseSyncRows(rows){
@@ -10973,12 +10973,11 @@
   ];
   function ceTipo(r){ return (r['Tipo Compra Stock'] || '').toString().trim(); }
   function ceSituacion(r){ return (r['Situacion'] || '').toString().trim().toUpperCase(); }
-  // Venta directa: solo las de fábrica (Situación = TERCEROS, ej. empleados). Las PROPIO
-  // son ventas directas que gestionó el concesionario → no van acá. Sin dato → se incluye.
+  // Clientes de fábrica (ej. empleados): Cliente Externo o Venta Directa SIN número de
+  // operación. Si tiene Nro. Operación, la venta la gestionó el concesionario → no va acá.
+  function ceNroOperacion(r){ return (r['Nro. Operacion'] || '').toString().trim(); }
   function esClienteExterno(r){
-    const t = ceTipo(r);
-    if (t === 'Cliente Externo') return true;
-    return t === 'Venta Directa de Fabrica' && ceSituacion(r) !== 'PROPIO';
+    return CE_TIPOS.includes(ceTipo(r)) && !ceNroOperacion(r);
   }
   function ceEstado(r){
     if (!(r['Fecha Arribo Unidad'] || '').toString().trim() && !(r['Ubicacion'] || '').toString().trim()) return 'sinArribo';
@@ -11064,7 +11063,7 @@
           <td>${escapeHtml(r['Modelo'])}</td>
           <td>${escapeHtml(r['Color'])}</td>
           <td>${escapeHtml(r['Cliente'])}</td>
-          <td style="white-space:nowrap;">${ceTipo(r) === 'Cliente Externo' ? 'Cliente externo' : 'Venta directa'}${ceSituacion(r) ? ` <span style="color:var(--text-faint); font-size:11px;">· ${escapeHtml(ceSituacion(r))}</span>` : ''}</td>
+          <td style="white-space:nowrap;">${ceTipo(r) === 'Cliente Externo' ? 'Cliente externo' : 'Venta directa'}</td>
           <td style="white-space:nowrap; color:${est.color}; font-weight:600;">${est.label}</td>
           <td class="col-fecha">${fd(r['Fecha Pedido'])}</td>
           <td class="col-fecha">${fd(r['Fecha Arribo Unidad'])}</td>
@@ -11108,7 +11107,7 @@
       const data = rows.map(r => ({
         'Marca': r['Marca'] || '', 'Interno': r['Interno'] || '', 'Chasis': r['Chasis'] || '',
         'Modelo': r['Modelo'] || '', 'Color': r['Color'] || '', 'Cliente': r['Cliente'] || '',
-        'Tipo Compra Stock': ceTipo(r), 'Situacion': ceSituacion(r), 'Estado': lbl[ceEstado(r)], 'Fecha Pedido': r['Fecha Pedido'] || '', 'Fecha Arribo': r['Fecha Arribo Unidad'] || '',
+        'Tipo Compra Stock': ceTipo(r), 'Estado': lbl[ceEstado(r)], 'Fecha Pedido': r['Fecha Pedido'] || '', 'Fecha Arribo': r['Fecha Arribo Unidad'] || '',
         'Fecha Alistaje': r['Fecha Alistaje'] || '', 'Turno Alistaje': isAlistado(r) ? 'Alistado' : (tieneTurnoAlistaje(r) ? 'Con turno ' + formatDateDisplay(r['Fecha Turno Alistaje']) : 'Sin turno'), 'Fecha Patentamiento': r['Fecha Patentamiento'] || '',
         'Dominio': r['Dominio'] || '', 'Ubicacion': r['Ubicacion'] || '', 'Fecha Turno Entrega': r['Fecha Turno Entrega'] || '',
         'Dias desde patentamiento': ceDias(r['Fecha Patentamiento']) ?? '',
