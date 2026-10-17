@@ -710,6 +710,32 @@
   .ent-obj{display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-top:12px; font-size:11.5px; color:var(--text-dim);}
   .ent-obj label{display:flex; align-items:center; gap:4px; background:var(--surface-2); border:1px solid var(--border); border-radius:8px; padding:4px 8px;}
   .ent-obj input{width:44px; background:var(--surface); color:var(--text); border:1px solid var(--border); border-radius:5px; padding:2px 4px; font-family:'JetBrains Mono',monospace;}
+  /* ---- Análisis comercial ---- */
+  .an-sel{display:flex; align-items:center; gap:6px; font-size:12px; color:var(--text-dim);}
+  .an-kpis{display:grid; grid-template-columns:repeat(auto-fit, minmax(190px, 1fr)); gap:10px;}
+  .an-kpi{background:var(--surface-2); border:1px solid var(--border); border-left:3px solid var(--kc,var(--blue)); border-radius:10px; padding:11px 13px;}
+  .an-kpi .l{font-family:'Barlow Condensed',sans-serif; font-size:11.5px; text-transform:uppercase; letter-spacing:.8px; color:var(--text-dim); font-weight:600;}
+  .an-kpi .v{font-family:'JetBrains Mono',monospace; font-weight:700; font-size:24px; margin-top:4px;}
+  .an-kpi .s{font-size:11.5px; color:var(--text-dim); margin-top:4px; line-height:1.45;}
+  .an-kpi .s b{color:var(--text);}
+  .an-up{color:var(--green); font-weight:700;} .an-down{color:var(--red); font-weight:700;} .an-eq{color:var(--text-dim); font-weight:700;}
+  .an-grid{display:grid; grid-template-columns:repeat(auto-fit, minmax(460px, 1fr)); gap:16px;}
+  .an-grid > .panel{margin-top:0;}
+  @media (max-width:560px){ .an-grid{grid-template-columns:1fr;} }
+  .an-map-wrap{display:grid; grid-template-columns:minmax(180px, 260px) 1fr; gap:16px; align-items:start;}
+  @media (max-width:560px){ .an-map-wrap{grid-template-columns:1fr;} }
+  .an-map svg{width:100%; height:auto; display:block;}
+  .an-map path{stroke:var(--bg); stroke-width:.7; transition:opacity .12s;}
+  .an-map path:hover{stroke:var(--text); stroke-width:1.2;}
+  .an-sub{font-family:'Barlow Condensed',sans-serif; font-size:11.5px; text-transform:uppercase; letter-spacing:.8px; color:var(--text-dim); font-weight:600; margin-bottom:6px;}
+  .an-bar{display:grid; grid-template-columns:minmax(110px,1.3fr) 1fr 74px; gap:8px; align-items:center; font-size:12px; padding:2px 0;}
+  .an-bar .t{height:8px; background:var(--surface-3); border-radius:4px; overflow:hidden;}
+  .an-bar .t span{display:block; height:100%; background:var(--blue); border-radius:4px;}
+  .an-bar .n{font-family:'JetBrains Mono',monospace; text-align:right; white-space:nowrap;}
+  .an-table td, .an-table th{white-space:nowrap;}
+  .an-table td.num, .an-table th.num{text-align:right; font-family:'JetBrains Mono',monospace;}
+  .an-table td.heat{text-align:center; font-family:'JetBrains Mono',monospace;}
+  .an-table th.sel, .an-table td.sel{outline:2px solid var(--blue); outline-offset:-2px;}
 </style>
 </head>
 <body data-theme="dark">
@@ -872,6 +898,7 @@
       <button class="tab-btn active" data-tab="aceleracion" type="button">🚀 Aceleración</button>
       <button class="tab-btn" data-tab="lebomb" type="button">💣 Le Bomb</button>
       <button class="tab-btn" data-tab="ventas" type="button">🏷️ Ventas</button>
+      <button class="tab-btn" data-tab="analisis" type="button">📊 Análisis</button>
       <button class="tab-btn" data-tab="entregas" type="button">🚚 Entregas</button>
       <button class="tab-btn" data-tab="gestoria" type="button">📋 Gestoría</button>
       <button class="tab-btn" data-tab="auditoria" type="button">🕵️ Auditoría</button>
@@ -2428,6 +2455,89 @@
       </div><!-- /sub Informe Germán -->
     </div><!-- /tabAceleracion -->
 
+    <div class="tab-content" id="tabAnalisis">
+      <div class="panel">
+        <div class="panel-head">
+          <h3>📊 Análisis comercial</h3>
+          <div class="hint">Cómo se movió el negocio: mes contra mes anterior, proyección de cierre, modelos, clientes, invitados, vendedores y de dónde son los clientes. Se calcula sobre la base cargada (12 meses). Ventas = fecha de venta (facturación).</div>
+        </div>
+        <div class="filter-row" style="align-items:center; gap:10px; flex-wrap:wrap;">
+          <div class="pill-group">
+            <span class="pill-group-label">Marca</span>
+            <div class="pill-list" id="anBrandList"></div>
+          </div>
+          <label class="an-sel">Mes
+            <select id="anMesSelect" class="month-select"></select>
+          </label>
+          <label class="an-sel">Rankings sobre
+            <select id="anPeriodoSelect" class="month-select">
+              <option value="1">el mes elegido</option>
+              <option value="3" selected>los últimos 3 meses</option>
+              <option value="12">los últimos 12 meses</option>
+            </select>
+          </label>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head"><h3>📈 Pulso del mes</h3><div class="hint" id="anPulsoHint"></div></div>
+        <div class="an-kpis" id="anKpis"></div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head"><h3>📅 Evolución mensual</h3><div class="hint">Unidades por mes según la fecha de cada evento</div></div>
+        <div style="position:relative; height:280px;"><canvas id="anEvolChart"></canvas></div>
+      </div>
+
+      <div class="an-grid">
+        <div class="panel">
+          <div class="panel-head"><h3>🗺️ De dónde son los clientes</h3><div class="hint" id="anMapaHint"></div></div>
+          <div class="an-map-wrap">
+            <div id="anMapa" class="an-map"></div>
+            <div>
+              <div class="an-sub">Provincias</div>
+              <div id="anProvList"></div>
+              <div class="an-sub" style="margin-top:14px;">Córdoba — localidades</div>
+              <div id="anLocList"></div>
+            </div>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="panel-head"><h3>💳 Cómo compran</h3><div class="hint" id="anPagoHint"></div></div>
+          <div id="anPago"></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head"><h3>🚗 Modelos más vendidos por mes</h3><div class="hint">Top 15 modelos del período elegido · columnas = ventas de cada mes · Δ = período contra el anterior de igual duración</div></div>
+        <div class="table-scroll"><table class="data-table an-table" id="anModelosTable"></table></div>
+      </div>
+
+      <div class="an-grid">
+        <div class="panel">
+          <div class="panel-head"><h3>🤝 Invitados / reventas</h3><div class="hint" id="anInvHint"></div></div>
+          <div class="an-kpis" id="anInvKpis" style="margin-bottom:10px;"></div>
+          <div class="table-scroll" style="max-height:420px;"><table class="data-table an-table" id="anInvTable"></table></div>
+        </div>
+        <div class="panel">
+          <div class="panel-head"><h3>🏆 Clientes que más compran</h3><div class="hint">Agrupados por DNI/CUIT (si no hay, por nombre) · se excluyen los clientes de invitados</div></div>
+          <div class="table-scroll" style="max-height:470px;"><table class="data-table an-table" id="anCliTable"></table></div>
+        </div>
+      </div>
+
+      <div class="an-grid">
+        <div class="panel">
+          <div class="panel-head"><h3>🧑‍💼 Vendedores</h3><div class="hint">Ventas del período · Δ contra el período anterior</div></div>
+          <div class="table-scroll" style="max-height:420px;"><table class="data-table an-table" id="anVendTable"></table></div>
+        </div>
+        <div class="panel">
+          <div class="panel-head"><h3>⏳ Stock y rotación</h3><div class="hint">Días de arribo a venta (mediana) de lo vendido en el período, y stock propio arribado sin reserva ni venta hoy</div></div>
+          <div class="an-kpis" id="anStockKpis" style="margin-bottom:10px;"></div>
+          <div class="table-scroll" style="max-height:330px;"><table class="data-table an-table" id="anStockTable"></table></div>
+        </div>
+      </div>
+    </div><!-- /tabAnalisis -->
+
     <div class="tab-content" id="tabAuditoria">
       <div class="panel">
         <div class="panel-head">
@@ -2946,7 +3056,8 @@
     'Fecha Entrega Tramite GE','Fecha Observacion Tramite','Fecha Arreglo Observacion','Fecha Fin Tramite',
     'Grupo Localidad','Localidad','Provincia','Fecha Ubicacion',
     'Canal','Catalogo','Tel Celular','Tel Particular','Tel Laboral',
-    'Ultima Ubicacion','Ultima Ubi Dique','Ultima Ubi Fila','Ultima Ubi Columna','Fecha Pedido','Situacion','Nro. Operacion'
+    'Ultima Ubicacion','Ultima Ubi Dique','Ultima Ubi Fila','Ultima Ubi Columna','Fecha Pedido','Situacion','Nro. Operacion',
+    'Nro. Documento','Importe Venta Unidad','Personeria','Sucursal'
   ];
 
   function buildBaseSyncRows(rows){
@@ -8150,13 +8261,16 @@
   });
 
   // ---------- Tabs ----------
-  const TAB_TARGETS = {general:'tabGeneral', lebomb:'tabLeBomb', ventas:'tabVentas', entregas:'tabEntregas', gestoria:'tabGestoria', aceleracion:'tabAceleracion', auditoria:'tabAuditoria', usuarios:'tabUsuarios'};
+  const TAB_TARGETS = {general:'tabGeneral', lebomb:'tabLeBomb', ventas:'tabVentas', entregas:'tabEntregas', gestoria:'tabGestoria', aceleracion:'tabAceleracion', auditoria:'tabAuditoria', usuarios:'tabUsuarios', analisis:'tabAnalisis'};
   document.querySelectorAll('.tab-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b === btn));
       const target = TAB_TARGETS[btn.dataset.tab] || 'tabGeneral';
       document.querySelectorAll('.tab-content').forEach(c => c.classList.toggle('active', c.id === target));
       $('filterBar').style.display = (btn.dataset.tab !== 'general' || !ALL_ROWS.length) ? 'none' : 'flex';
+      if (btn.dataset.tab === 'analisis' && typeof renderAnalisisSection === 'function'){
+        try { renderAnalisisSection(); } catch(e){ console.error('renderAnalisisSection', e); }
+      }
     });
   });
 
@@ -10413,6 +10527,7 @@
             safeStep(() => renderContactacionSection(), 'renderContactacionSection (post-extra)');
             safeStep(() => renderLeBombSection(), 'renderLeBombSection (post-extra)');
             safeStep(() => renderVentasSection(), 'renderVentasSection (post-extra)');
+            safeStep(() => renderAnalisisSection(), 'renderAnalisisSection (post-extra)');
             safeStep(() => renderFueraDQSection(), 'renderFueraDQSection (post-extra)');
             safeStep(() => populateResumenFilters(), 'populateResumenFilters (post-extra)');
             safeStep(() => renderResumenSection(), 'renderResumenSection (post-extra)');
@@ -11118,6 +11233,339 @@
       XLSX.utils.book_append_sheet(wb, ws, 'Cliente externo');
       XLSX.writeFile(wb, `cliente_externo_pendientes_${todayStamp()}.xlsx`);
     });
+  }
+
+  // =====================================================================
+  // ---------- Análisis comercial (v28) ----------
+  // Todo se calcula en el navegador y SOLO cuando la pestaña está abierta: no
+  // agrega carga al ingreso ni al resto de la app. Mapa: Natural Earth (dominio
+  // público), simplificado y embebido acá (~15 KB).
+  // =====================================================================
+  const AN_MAP = {"w":300,"h":636.3,"p":{"ENTRE RIOS":"M231.7,203.9L232.5,215.5L231.6,216.3L228.2,216.5L228.5,220.2L227.0,222.3L226.4,227.6L228.1,233.2L225.8,234.6L219.1,230.4L216.1,229.8L215.6,228.3L213.7,228.6L211.8,227.0L210.5,227.5L208.0,226.2L196.2,215.7L193.0,206.4L194.6,196.7L193.7,193.9L194.8,189.9L198.3,189.1L202.1,184.7L208.8,173.0L210.2,168.1L209.6,163.6L213.7,163.0L216.0,163.7L219.5,161.0L221.5,161.5L225.8,160.0L231.2,161.9L233.7,165.2L234.9,168.7L237.6,171.4L237.6,174.5L236.0,175.2L236.9,177.4L236.1,180.8L233.5,185.3L234.9,186.8L234.9,188.5L233.8,191.8L231.6,193.3L232.5,195.7L231.9,198.3L233.2,200.7L231.7,203.9Z","SALTA":"M94.7,39.2L95.2,37.2L103.9,46.1L106.5,46.9L108.8,43.1L108.4,30.7L110.2,30.7L114.2,33.4L114.1,41.2L117.7,43.8L117.8,45.7L120.4,50.1L125.0,51.9L126.7,51.0L130.3,53.8L131.8,51.0L134.9,54.1L136.7,51.5L139.7,50.0L141.6,46.9L141.5,33.3L138.7,33.0L137.6,35.1L134.3,31.9L131.1,32.7L129.9,29.1L128.6,28.3L129.0,23.9L125.7,22.3L125.2,16.3L124.0,15.3L126.3,6.0L128.9,5.9L135.4,8.1L139.3,20.8L140.5,14.4L145.2,4.1L148.1,5.0L149.7,4.0L162.3,4.2L162.6,6.6L165.0,8.8L165.0,9.9L169.2,13.1L169.3,50.0L153.3,74.1L145.4,73.9L141.3,72.6L136.9,84.8L132.7,84.6L130.0,85.8L125.4,83.9L124.4,82.0L122.5,82.9L119.1,82.0L118.3,86.3L113.3,85.4L110.9,83.8L108.1,88.0L101.8,77.0L102.8,74.4L105.5,74.2L106.6,73.1L107.0,70.6L105.6,66.7L86.8,66.9L76.5,64.5L78.4,63.8L75.2,57.8L76.5,53.8L77.1,54.4L77.9,51.9L79.0,51.9L80.3,49.7L93.6,42.9L94.7,39.2Z","JUJUY":"M95.2,37.2L98.8,23.2L96.1,19.8L98.6,16.3L98.5,14.1L102.3,12.3L103.0,8.4L109.5,5.5L110.7,0.0L115.1,3.0L117.5,6.1L126.3,6.0L124.0,15.3L125.2,16.3L125.6,22.0L128.9,23.7L128.5,28.1L129.9,29.1L131.0,32.7L134.3,31.9L137.6,35.1L138.7,33.0L141.4,33.0L141.8,46.1L139.7,50.0L136.7,51.5L135.0,54.0L131.8,51.0L130.1,53.8L126.7,51.0L125.0,51.9L120.3,50.0L117.8,45.7L117.7,43.8L114.1,41.2L114.3,33.6L111.5,31.3L108.4,30.7L108.8,43.1L106.5,46.9L103.9,46.1L95.2,37.2Z","FORMOSA":"M169.2,13.1L170.7,14.4L170.6,15.6L175.0,23.9L178.4,27.9L181.7,29.8L181.9,31.0L187.8,34.8L189.4,38.6L199.4,42.6L204.0,42.5L212.6,49.1L214.5,51.7L222.5,57.2L227.5,58.6L229.6,61.3L231.3,60.3L234.9,62.9L236.6,63.1L238.4,64.9L241.3,69.9L241.1,72.3L238.1,74.9L238.6,75.3L236.1,80.0L236.6,80.8L232.4,84.1L233.1,85.2L232.1,85.8L231.5,88.6L232.0,93.0L231.1,93.0L230.9,95.1L229.6,96.1L229.7,97.5L227.8,96.6L220.3,88.4L217.3,86.3L214.4,87.1L213.3,84.1L209.6,83.1L209.5,80.9L203.9,74.8L201.8,74.2L200.9,70.9L197.0,65.5L188.3,59.5L186.3,55.1L182.8,54.3L177.8,48.9L169.3,44.6L169.2,13.1Z","MISIONES":"M286.0,74.0L286.5,72.4L288.2,74.6L289.0,72.6L292.1,72.6L291.7,71.6L293.2,70.9L293.5,72.9L293.7,72.0L295.0,72.5L295.5,74.0L296.5,73.7L297.5,79.9L300.0,84.8L298.4,94.3L299.1,98.6L297.5,102.7L296.8,102.0L296.3,102.9L295.5,102.7L293.6,105.2L292.3,104.4L290.7,107.9L289.7,107.3L289.4,108.4L288.3,107.5L288.2,108.5L286.8,109.0L286.1,108.4L284.6,110.3L282.8,109.8L281.4,111.7L281.2,113.8L278.7,114.6L279.5,116.0L275.2,117.2L273.3,120.4L270.5,121.6L267.4,117.3L264.6,107.3L266.1,106.0L268.5,108.2L271.0,106.0L270.9,102.9L272.9,101.6L273.7,99.3L275.7,98.5L277.8,98.8L278.0,97.1L280.3,95.7L281.1,93.5L283.0,92.9L285.4,84.4L285.0,80.2L285.8,79.6L286.1,77.0L285.3,74.1L286.0,74.0Z","CHACO":"M229.4,97.5L227.5,98.5L227.0,100.9L226.5,100.5L226.2,101.9L224.8,102.7L225.6,105.8L221.3,108.9L222.4,113.4L221.6,118.8L178.8,118.9L178.1,74.1L153.3,74.1L169.3,50.0L169.3,44.6L177.8,48.9L182.8,54.3L186.3,55.1L188.3,59.5L197.0,65.5L200.9,70.9L201.8,74.2L203.9,74.8L209.5,80.9L209.6,83.1L213.3,84.1L214.4,87.1L217.3,86.3L220.3,88.4L229.4,97.5Z","CORRIENTES":"M231.1,104.6L235.5,105.0L242.0,107.6L244.7,107.6L247.0,109.0L251.2,107.7L253.2,109.4L256.6,108.4L258.8,110.9L260.6,107.2L262.6,105.7L265.3,106.1L264.6,108.4L266.7,113.4L267.3,117.1L270.5,121.6L268.3,123.3L269.9,125.1L269.4,126.5L267.2,125.5L266.3,126.1L266.3,127.7L264.7,128.4L264.2,130.5L260.5,133.8L258.4,139.3L255.5,141.1L254.4,144.3L249.4,151.1L248.1,152.6L245.4,153.6L244.9,156.7L242.1,159.9L240.1,160.8L239.9,163.4L236.3,167.6L237.6,171.4L234.9,168.7L233.7,165.2L230.7,161.5L225.2,160.0L221.5,161.5L219.5,161.0L216.0,163.7L213.7,163.0L209.6,163.6L209.5,162.7L210.6,158.1L209.5,154.2L210.8,145.2L211.9,142.0L216.6,138.4L218.3,130.8L218.3,122.2L221.2,120.2L222.0,117.3L222.4,113.4L221.3,108.9L227.0,105.0L231.1,104.6Z","CATAMARCA":"M78.8,100.6L79.3,97.8L75.0,89.3L75.3,86.4L77.8,83.4L74.7,70.5L76.5,64.5L86.8,66.9L105.7,66.7L107.0,70.6L106.6,73.1L102.0,75.2L102.0,77.9L107.9,87.9L110.7,83.9L113.3,85.4L111.8,90.9L116.3,94.6L115.8,98.6L111.2,105.8L114.4,107.3L116.3,114.6L118.6,115.4L120.6,119.8L123.9,116.2L126.6,117.1L128.1,127.0L126.4,131.2L127.8,132.7L128.6,143.6L130.9,148.6L129.7,149.7L130.2,154.5L127.1,158.3L123.1,159.8L118.2,147.6L117.2,142.8L112.3,137.4L108.6,135.2L109.0,132.9L107.1,130.9L105.3,126.6L99.4,124.0L96.2,125.7L88.4,125.3L86.6,126.2L85.0,121.2L82.6,121.8L77.3,118.8L77.3,113.9L71.1,114.9L66.8,114.5L71.7,102.0L73.1,101.8L75.1,102.8L76.1,101.2L78.8,100.6Z","LA RIOJA":"M62.5,122.9L64.3,118.8L66.0,117.9L66.8,114.5L71.1,114.9L76.4,113.8L77.5,114.3L77.3,118.8L82.6,121.8L85.0,121.2L86.6,126.2L88.4,125.3L96.2,125.7L99.4,124.0L105.3,126.6L106.3,127.8L107.1,130.9L109.0,133.0L108.6,135.2L112.3,137.4L117.2,142.8L118.2,147.6L123.1,159.8L117.6,178.1L117.7,193.2L113.3,192.9L108.5,194.1L103.1,193.0L101.2,188.4L98.3,186.2L97.4,183.0L97.8,174.2L89.4,161.9L78.9,151.1L73.4,149.5L68.7,149.9L69.7,143.9L68.8,140.9L70.2,138.0L66.0,130.2L61.7,127.0L59.0,126.5L61.5,122.6L62.5,122.9Z","SAN JUAN":"M54.4,158.9L55.1,153.4L53.2,143.7L55.1,140.7L56.7,139.9L57.5,131.7L59.0,126.5L63.8,128.1L66.4,130.7L70.2,138.3L68.9,140.2L69.7,143.9L68.5,149.7L73.4,149.5L78.9,151.1L89.4,161.9L97.8,174.2L97.4,183.0L98.3,186.2L101.2,188.4L103.1,193.0L93.5,192.7L93.1,200.4L91.6,199.5L86.5,199.9L83.1,196.7L78.0,198.2L73.5,201.8L70.6,201.8L70.0,196.8L68.3,196.7L66.2,194.5L64.5,196.4L62.1,196.4L59.7,197.7L58.9,200.3L54.1,201.2L49.1,200.9L47.9,196.2L49.5,196.3L50.1,194.3L46.6,191.9L44.9,187.1L45.2,182.1L46.6,178.1L47.6,179.1L48.7,177.0L49.8,176.9L48.7,175.1L50.5,167.0L51.6,165.5L51.2,164.1L54.3,164.3L56.3,160.2L54.4,158.9Z","MENDOZA":"M53.6,220.2L52.1,217.7L52.1,215.2L53.8,212.1L51.4,209.5L51.1,207.0L51.7,206.3L49.9,201.4L58.9,200.3L59.7,197.7L62.1,196.4L64.5,196.4L66.1,194.5L68.5,196.8L70.0,196.8L70.6,201.8L73.5,201.8L78.0,198.2L83.6,196.7L86.5,199.9L92.0,199.5L93.1,200.4L94.2,203.6L96.1,209.9L95.6,212.9L96.7,222.7L102.8,234.9L102.6,237.2L101.7,238.0L101.8,241.0L105.9,251.3L106.2,262.2L104.8,271.9L79.7,272.3L80.2,301.7L77.5,301.3L76.3,299.6L72.5,298.1L69.1,298.0L66.5,294.5L60.9,294.3L58.3,293.2L56.6,291.0L57.0,288.4L52.8,283.6L51.3,283.0L49.9,279.0L48.6,279.1L48.1,278.1L47.5,269.4L48.4,268.4L46.7,260.0L47.3,259.6L45.1,257.7L48.0,255.9L49.6,248.9L49.0,247.9L52.8,241.6L52.9,239.2L56.4,238.1L55.1,229.3L55.9,228.4L55.6,225.2L57.0,221.8L55.8,219.3L53.6,220.2Z","NEUQUEN":"M46.3,275.0L47.3,274.4L48.2,275.2L48.4,278.9L49.9,279.0L51.3,283.0L52.8,283.6L57.0,288.4L56.6,291.0L58.3,293.2L60.9,294.3L66.5,294.5L69.1,298.0L72.5,298.1L76.3,299.6L77.5,301.3L80.2,301.7L80.1,322.8L83.8,328.8L80.0,329.2L79.1,328.5L74.8,331.8L69.4,338.6L65.2,340.5L61.1,345.0L58.6,345.0L54.6,347.4L52.5,356.4L50.6,358.7L47.1,359.2L45.7,358.2L43.5,359.7L39.1,360.7L36.7,363.5L38.2,365.4L38.1,366.5L35.9,368.9L33.3,369.2L25.6,367.7L24.3,362.2L25.9,360.2L26.7,356.3L27.7,356.5L28.5,354.9L28.4,353.9L26.4,352.7L26.4,350.2L28.4,350.3L29.4,346.7L28.0,343.6L28.1,340.4L31.1,340.8L30.5,339.5L32.5,335.4L32.4,328.0L35.2,325.7L39.5,324.4L41.2,321.3L39.1,318.3L38.6,311.5L35.9,304.5L36.9,299.9L35.6,296.6L37.4,293.0L35.6,290.5L36.7,290.1L35.8,287.9L36.5,285.1L37.9,285.0L38.1,281.2L39.7,280.9L40.4,279.5L43.0,279.8L43.1,277.0L45.0,274.6L46.3,275.0Z","CHUBUT":"M24.8,390.0L27.4,388.7L27.1,386.7L127.2,386.7L128.3,386.9L131.3,390.4L137.0,391.5L135.2,394.7L137.5,395.2L142.7,394.8L143.5,393.8L143.2,391.8L139.1,391.2L147.7,388.1L150.3,392.4L150.6,398.0L149.2,402.0L142.6,403.6L140.4,401.5L141.2,398.8L138.4,396.6L135.0,396.5L130.0,399.2L129.2,401.7L134.5,404.4L139.7,405.4L130.0,410.4L128.7,411.5L128.6,413.4L124.2,418.5L125.1,424.2L126.3,425.6L125.9,427.5L124.5,428.7L125.9,431.9L124.2,433.7L125.0,434.8L123.5,434.8L123.6,436.1L122.2,435.9L119.5,437.7L118.2,440.4L118.4,441.6L121.3,442.7L118.8,445.2L116.5,444.1L115.0,445.0L111.1,443.9L109.8,445.2L106.6,445.7L106.2,446.6L107.0,447.3L105.2,446.7L106.2,448.2L100.1,449.0L94.0,455.8L93.5,459.1L92.1,459.8L90.2,463.2L28.9,463.2L29.3,461.9L27.3,460.3L26.7,458.2L27.2,455.0L31.3,453.6L31.1,451.9L32.8,451.1L33.9,449.2L29.8,443.6L22.5,442.2L22.3,439.9L31.2,439.1L34.2,440.1L36.9,435.1L35.6,433.1L25.7,432.1L26.6,430.9L25.8,427.0L28.8,423.5L27.3,420.5L26.4,420.3L28.0,418.9L27.9,417.3L25.5,416.1L25.6,414.6L24.3,414.3L25.1,412.0L27.4,411.4L27.5,409.4L22.8,407.8L21.4,405.8L21.5,397.3L23.1,395.9L21.6,392.2L23.5,389.0L24.8,390.0Z","RIO NEGRO":"M27.1,386.7L24.8,380.0L25.9,378.4L25.1,374.6L25.6,367.7L34.2,369.4L36.5,368.5L38.3,365.7L36.8,363.3L39.1,360.7L43.5,359.7L45.7,358.2L47.1,359.2L50.2,358.9L52.3,356.8L54.6,347.4L58.6,345.0L61.1,345.0L65.2,340.5L69.4,338.6L74.8,331.8L79.1,328.5L80.0,329.2L83.8,328.8L80.1,322.8L80.2,301.7L86.2,302.5L87.7,303.8L88.1,306.6L86.2,308.4L85.9,310.3L88.4,312.1L90.1,314.9L96.4,314.4L98.0,318.0L104.3,320.8L105.6,323.6L114.7,324.3L118.8,325.8L120.7,325.0L123.6,326.2L129.6,325.5L137.1,326.5L144.1,329.3L151.5,335.1L153.5,335.5L153.5,362.0L157.8,362.8L162.3,368.3L157.8,370.5L147.6,370.6L143.3,368.3L143.3,367.5L141.6,367.7L134.5,364.6L130.5,364.2L132.9,363.8L132.6,362.5L129.4,362.2L130.5,363.1L129.0,363.1L127.3,364.4L126.5,366.9L127.6,373.8L129.3,377.6L128.3,386.9L27.1,386.7Z","SANTA CRUZ":"M25.0,486.8L25.5,485.0L23.6,483.5L24.9,482.3L24.1,481.3L24.4,478.8L26.1,478.3L28.5,475.8L27.2,467.9L25.0,465.9L27.1,465.3L28.9,463.2L90.2,463.2L89.6,466.3L92.6,474.0L97.1,476.7L102.2,482.4L111.1,484.0L114.4,483.6L117.9,486.2L118.1,492.1L116.4,496.5L113.6,496.5L110.0,498.7L108.2,498.8L115.6,497.0L117.7,500.5L115.2,500.3L114.6,502.3L115.3,503.6L112.4,503.8L109.3,506.5L108.9,508.2L104.3,509.7L101.0,512.7L97.3,514.3L96.0,517.1L90.6,520.9L89.8,524.0L88.0,525.8L88.3,526.6L86.5,527.8L88.1,528.0L89.0,525.7L89.9,525.6L88.0,535.5L86.5,538.8L82.8,541.4L78.8,541.9L74.1,535.1L72.8,534.5L75.2,538.3L68.7,539.8L75.1,539.1L78.7,542.5L70.7,546.0L67.7,550.4L66.6,553.9L66.8,557.0L62.7,560.4L66.3,558.4L69.4,569.5L67.1,570.4L63.2,569.5L59.6,570.8L64.3,570.2L66.5,571.0L65.9,572.0L69.3,570.7L73.6,578.1L78.4,583.8L77.6,585.3L77.1,583.7L65.7,580.6L61.5,580.5L54.5,578.1L24.9,577.8L23.9,575.0L19.1,572.1L18.7,570.3L16.9,569.4L18.3,567.9L19.7,563.5L17.5,560.9L19.6,558.1L19.7,555.7L18.4,553.9L19.1,552.1L16.0,551.2L13.7,552.5L12.2,551.5L7.8,554.2L5.9,554.0L4.3,546.1L0.6,542.4L1.4,539.9L0.0,538.2L1.6,535.1L5.6,533.6L7.7,531.2L7.1,525.7L5.8,525.1L6.0,524.2L8.4,520.4L11.9,519.3L14.3,517.1L14.9,510.1L19.2,507.8L18.5,502.8L15.4,499.8L18.5,493.8L18.2,490.9L21.1,490.1L23.1,487.8L23.2,486.1L25.0,486.8Z","TIERRA DEL FUEGO":"M74.3,631.2L74.5,590.2L79.2,595.4L80.5,599.0L79.7,597.4L78.7,597.4L76.1,599.4L75.6,601.6L77.1,602.8L82.3,603.7L84.2,608.6L88.3,612.5L90.6,613.1L90.4,614.5L102.5,621.0L106.8,625.1L116.4,628.6L127.0,628.6L123.7,633.9L122.2,633.1L119.1,634.8L118.3,633.6L114.6,633.5L114.2,634.8L109.3,635.2L107.3,636.3L98.5,633.5L85.0,632.7L79.4,631.4L79.0,632.3L76.1,632.5L74.3,631.2ZM145.9,630.2L147.1,630.2L144.7,631.8L144.5,630.7L140.5,632.2L140.4,631.1L139.5,631.1L134.8,633.5L132.8,632.1L133.9,630.9L136.4,631.2L136.1,629.9L138.4,631.2L138.7,629.7L141.4,630.5L145.9,630.2Z","BUENOS AIRES":"M254.8,286.0L254.5,289.6L248.9,298.9L242.4,306.9L241.3,312.5L232.3,318.4L218.7,323.4L207.6,326.2L187.3,329.3L176.8,328.9L173.4,327.8L172.0,325.6L168.7,325.4L168.7,327.4L170.3,328.4L169.0,331.2L170.5,334.2L169.5,334.1L174.0,336.3L173.5,337.1L171.5,335.2L170.1,335.2L173.5,337.9L172.7,345.0L171.9,345.7L169.8,344.8L169.0,352.1L167.0,354.3L168.1,357.2L170.4,359.0L170.4,360.5L169.2,359.9L169.4,361.2L171.6,360.4L169.3,365.1L163.1,368.4L157.5,362.7L153.5,362.0L153.6,244.7L154.2,240.9L178.7,240.8L190.0,227.5L190.8,225.3L197.4,226.4L200.3,220.4L200.1,219.4L209.9,227.3L211.8,227.0L213.7,228.6L215.6,228.3L216.1,229.8L219.1,230.4L225.1,234.6L228.7,234.2L229.0,237.2L227.7,238.8L226.1,239.1L227.8,240.6L227.0,242.0L227.5,243.6L226.6,244.5L226.5,247.2L228.0,248.5L229.9,246.2L236.6,249.5L241.9,253.0L246.0,257.5L247.8,261.2L244.4,266.7L244.2,271.7L246.0,275.1L250.7,279.2L253.7,277.9L254.8,286.0Z","CIUDAD DE BUENOS AIRES":"M227.5,243.6L229.0,244.6L229.5,245.3L229.9,246.2L229.8,246.5L229.5,246.8L229.0,246.9L228.6,247.3L228.0,248.5L226.5,247.2L226.2,246.1L226.6,244.5L227.5,243.6Z","SANTA FE":"M210.6,118.9L221.6,118.8L220.8,120.7L218.3,122.2L218.3,130.8L216.6,138.4L211.9,142.0L210.8,145.2L209.5,154.2L210.6,158.1L209.5,162.7L210.3,166.0L209.6,171.2L202.1,184.7L198.3,189.1L194.8,189.9L193.7,193.9L194.6,196.7L193.0,206.4L196.2,215.7L200.3,220.4L197.0,226.6L190.8,225.3L190.0,227.5L178.7,240.8L161.5,240.9L175.6,216.7L178.0,214.5L178.4,210.9L176.0,208.0L175.7,204.2L171.1,198.0L171.6,194.7L170.8,190.2L172.6,187.9L176.5,171.1L172.4,165.1L178.8,118.9L210.6,118.9Z","TUCUMAN":"M119.2,82.0L122.5,82.9L124.4,82.0L125.4,83.9L130.0,85.8L132.7,84.6L136.9,84.8L136.7,93.6L135.5,93.5L134.1,96.0L131.0,105.6L128.2,108.8L129.6,109.5L128.1,111.2L129.2,114.6L127.8,116.9L125.7,117.4L123.9,116.2L120.7,119.9L118.6,115.4L116.3,114.6L114.4,107.3L111.2,105.8L115.8,98.6L116.3,95.0L111.8,90.9L112.6,86.7L113.3,85.4L118.4,86.2L119.2,82.0Z","SANTIAGO DEL ESTERO":"M153.3,74.1L178.1,74.1L178.6,75.7L178.8,118.9L173.1,160.1L170.0,152.8L153.5,152.7L152.3,150.5L147.1,150.4L143.8,148.4L143.5,147.0L140.4,146.1L130.9,148.6L128.6,143.6L127.8,132.7L126.4,131.2L128.1,127.0L126.6,117.1L128.1,116.7L129.2,114.6L128.1,111.2L129.6,109.5L128.2,108.8L131.0,105.6L134.1,96.0L135.5,93.5L136.7,93.6L136.3,89.0L137.8,81.1L141.3,72.6L145.4,73.9L153.3,74.1Z","SAN LUIS":"M127.9,252.8L127.8,271.9L104.7,271.8L106.5,255.1L105.5,249.9L103.0,245.4L101.8,241.0L101.7,238.0L102.6,237.2L102.8,234.9L96.7,222.7L95.6,212.9L96.1,209.9L93.1,201.2L93.2,193.3L93.8,192.4L108.5,194.1L113.3,192.9L119.0,193.2L124.5,196.5L126.3,201.6L130.3,201.1L130.9,207.2L128.7,216.6L127.2,218.4L127.9,252.8Z","LA PAMPA":"M127.7,271.9L127.9,252.8L153.5,252.8L153.5,335.5L151.5,335.1L144.1,329.3L137.1,326.5L129.6,325.5L123.6,326.2L120.7,325.0L118.8,325.8L114.7,324.3L105.6,323.6L104.3,320.8L98.0,318.0L96.4,314.4L90.1,314.9L88.4,312.1L85.9,310.3L86.2,308.4L88.1,306.6L87.7,303.8L86.2,302.5L80.2,301.7L79.9,272.0L127.7,271.9Z","CORDOBA":"M173.1,160.1L172.4,165.5L176.5,171.1L172.6,187.9L170.8,190.0L171.6,194.7L171.1,198.0L175.6,204.1L176.0,208.0L178.3,210.6L177.7,215.1L175.6,216.7L161.5,240.9L154.2,240.9L153.7,241.5L153.5,252.8L127.9,252.8L127.2,218.4L128.7,216.6L130.9,207.2L130.4,201.3L126.3,201.6L124.5,196.5L119.5,193.3L117.7,193.2L117.6,178.1L123.1,159.8L127.1,158.3L130.0,154.8L129.9,149.1L140.4,146.1L143.5,147.0L143.8,148.4L147.1,150.4L152.3,150.5L153.5,152.7L170.0,152.8L173.1,160.1Z"}};
+  const AN = {brands:null, mes:null, periodo:3, chart:null, ready:false};
+  const AN_MESES = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+
+  function anMid(d){ return d ? new Date(d.getFullYear(), d.getMonth(), d.getDate()) : null; }
+  function anMk(d){ return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0'); }
+  function anMkLabel(k){ const [y,m] = k.split('-'); return AN_MESES[parseInt(m,10)-1] + ' ' + y.slice(2); }
+  function anShiftMk(k, n){ const [y,m] = k.split('-').map(Number); return anMk(new Date(y, m-1+n, 1)); }
+  function anModelo(r){ return (r['Modelo'] || '').toString().toUpperCase().replace(/[\s.]+$/,'').replace(/\s+/g,' ').trim() || '(sin modelo)'; }
+  function anTxt(v){ return (v || '').toString().normalize('NFD').replace(/[̀-ͯ]/g,'').toUpperCase().trim(); }
+  function anProv(r){
+    const p = anTxt(r['Provincia']);
+    if (!p) return '';
+    if (p === 'CAPITAL FEDERAL' || p.startsWith('CIUDAD AUTONOMA') || p === 'CABA') return 'CIUDAD DE BUENOS AIRES';
+    if (p === 'TIERRA DEL FUEGO, ANTARTIDA E ISLAS DEL ATLANTICO SUR') return 'TIERRA DEL FUEGO';
+    return p;
+  }
+  function anProvLabel(k){ return k === 'CIUDAD DE BUENOS AIRES' ? 'CABA' : k.toLowerCase().replace(/(^|\s)\S/g, c => c.toUpperCase()); }
+  function anImporte(r){
+    const s = (r['Importe Venta Unidad'] || '').toString().trim();
+    if (!s) return 0;
+    const n = parseFloat(s.includes(',') ? s.replace(/\./g,'').replace(',', '.') : s);
+    return isNaN(n) ? 0 : n;
+  }
+  function anPlata(n){
+    if (n >= 1e9) return '$ ' + (n/1e9).toLocaleString('es-AR', {maximumFractionDigits:2}) + ' mil M';
+    if (n >= 1e6) return '$ ' + (n/1e6).toLocaleString('es-AR', {maximumFractionDigits:1}) + ' M';
+    return '$ ' + Math.round(n).toLocaleString('es-AR');
+  }
+  function anDelta(a, b){
+    if (!b) return a ? '<span class="an-up">nuevo</span>' : '<span class="an-eq">—</span>';
+    const p = Math.round((a - b) / b * 100);
+    const cls = p > 0 ? 'an-up' : (p < 0 ? 'an-down' : 'an-eq');
+    return `<span class="${cls}">${p > 0 ? '▲ +' : (p < 0 ? '▼ ' : '')}${p}%</span>`;
+  }
+  const anN = n => (n || 0).toLocaleString('es-AR');
+
+  // Fechas de cada evento por auto (se calculan una vez por fila)
+  function anEventos(r){
+    return {
+      reserva: anMid(parseDateFlexible(r['Fecha Reserva'])),
+      venta: anMid(parseDateFlexible(r['Fecha Venta'])),
+      patente: anMid(parseDateFlexible(r['Fecha Patentamiento'])),
+      entrega: anMid(fechaEntregaEfectiva(r))
+    };
+  }
+
+  function anInitFilters(rows){
+    const brands = CAR_BRANDS.filter(b => rows.some(r => (r['Marca'] || '').toString().trim().toUpperCase() === b));
+    AN.brands = new Set(brands);
+    $('anBrandList').innerHTML = brands.map(b => `<button type="button" class="active" data-v="${b}">${escapeHtml(PATENTADOS_BRAND_LABELS[b] || b)}</button>`).join('');
+    $('anBrandList').querySelectorAll('button').forEach(btn => btn.addEventListener('click', () => {
+      const v = btn.dataset.v;
+      if (AN.brands.has(v)){ AN.brands.delete(v); btn.classList.remove('active'); } else { AN.brands.add(v); btn.classList.add('active'); }
+      renderAnalisisSection();
+    }));
+    const set = new Set();
+    rows.forEach(r => { const d = parseDateFlexible(r['Fecha Venta']); if (d) set.add(anMk(d)); });
+    const hoyMk = anMk(new Date());
+    const meses = [...set].sort().reverse().slice(0, 13);
+    AN.mes = meses[0];
+    $('anMesSelect').innerHTML = meses.map(k => `<option value="${k}">${anMkLabel(k)}${k === hoyMk ? ' (en curso)' : ''}</option>`).join('');
+  }
+
+  function anBarList(items, total, max, color){
+    if (!items.length) return '<div class="hint">Sin datos</div>';
+    return items.map(([k, v, extra]) => `<div class="an-bar" title="${escapeHtml(k)}: ${anN(v)}">
+      <span style="overflow:hidden; text-overflow:ellipsis;">${escapeHtml(k)}</span>
+      <span class="t"><span style="width:${Math.max(2, v / max * 100)}%; ${color ? 'background:' + color : ''}"></span></span>
+      <span class="n">${anN(v)} · ${total ? Math.round(v / total * 100) : 0}%${extra || ''}</span></div>`).join('');
+  }
+
+  function renderAnalisisSection(){
+    const tab = $('tabAnalisis');
+    if (!tab || !tab.classList.contains('active')) return;
+    if (!ALL_ROWS.length){ $('anKpis').innerHTML = '<div class="hint">Cargá la base para ver el análisis.</div>'; return; }
+    if (!AN.ready || AN.dataRef !== ALL_ROWS){ AN.ready = true; AN.dataRef = ALL_ROWS; anInitFilters(ALL_ROWS); }
+    $('anMesSelect').value = AN.mes;
+    $('anPeriodoSelect').value = String(AN.periodo);
+
+    const rows = ALL_ROWS.filter(r => AN.brands.has((r['Marca'] || '').toString().trim().toUpperCase()));
+    const ev = rows.map(r => ({r, e: anEventos(r)}));
+    // "Hoy" = el último día con movimientos en la base (si la base es de ayer, no
+    // cuenta hoy como día sin ventas). Nunca después de la fecha real.
+    const hoyReal = anMid(new Date());
+    let hoy = null;
+    ev.forEach(x => ['reserva','venta','patente'].forEach(k => { const d = x.e[k]; if (d && d <= hoyReal && (!hoy || d > hoy)) hoy = d; }));
+    if (!hoy) hoy = hoyReal;
+    const mes = AN.mes, mesAnt = anShiftMk(mes, -1);
+    const [my, mm] = mes.split('-').map(Number);
+    const ini = new Date(my, mm-1, 1), fin = new Date(my, mm, 0);
+    const enCurso = hoy >= ini && hoy <= fin;
+    const iniAnt = new Date(my, mm-2, 1), finAnt = new Date(my, mm-1, 0);
+    const antes = d => { const x = new Date(d); x.setDate(x.getDate() - 1); return x; };
+    const dhTot = diasHabilesSLA(antes(ini), fin) || 1;
+    const dhTrans = enCurso ? Math.max(1, diasHabilesSLA(antes(ini), hoy) || 0) : dhTot;
+    // Mismo punto del mes anterior: el mismo número de día hábil
+    const corteAnt = enCurso ? (addBusinessDaysSLA(antes(iniAnt), dhTrans) || finAnt) : finAnt;
+    const cuenta = (tipo, desde, hasta) => ev.filter(x => x.e[tipo] && x.e[tipo] >= desde && x.e[tipo] <= hasta);
+
+    // ---------- Pulso ----------
+    const tipos = [
+      {k:'reserva', l:'📝 Reservas', c:'var(--amber)'},
+      {k:'venta', l:'🧾 Ventas (facturadas)', c:'var(--blue)'},
+      {k:'patente', l:'🏛️ Patentamientos', c:'var(--green)'},
+      {k:'entrega', l:'🚚 Entregas', c:'#8b5cf6'}
+    ];
+    const hastaHoy = enCurso ? hoy : fin;
+    let html = tipos.map(t => {
+      const act = cuenta(t.k, ini, hastaHoy).length;
+      const antIgual = cuenta(t.k, iniAnt, corteAnt).length;
+      const antTot = cuenta(t.k, iniAnt, finAnt).length;
+      const proy = enCurso ? Math.round(act / dhTrans * dhTot) : null;
+      return `<div class="an-kpi" style="--kc:${t.c}">
+        <div class="l">${t.l}</div>
+        <div class="v">${anN(act)}</div>
+        <div class="s">${enCurso ? `vs ${anMkLabel(mesAnt)} al mismo día hábil: <b>${anN(antIgual)}</b> ${anDelta(act, antIgual)}<br>` : `vs ${anMkLabel(mesAnt)}: <b>${anN(antTot)}</b> ${anDelta(act, antTot)}<br>`}
+        ${enCurso ? `📐 Proyección de cierre: <b>${anN(proy)}</b> ${anDelta(proy, antTot)} vs ${anMkLabel(mesAnt)} completo (${anN(antTot)})` : ''}</div>
+      </div>`;
+    }).join('');
+    const vMes = cuenta('venta', ini, hastaHoy), vAnt = cuenta('venta', iniAnt, corteAnt), vAntTot = cuenta('venta', iniAnt, finAnt);
+    const conImp = vMes.filter(x => anImporte(x.r) > 0);
+    const pct0 = (n, t) => t ? Math.round(n / t * 100) + '%' : '—';
+    if (rows.some(r => anImporte(r) > 0)){
+      const fact = vMes.reduce((s,x) => s + anImporte(x.r), 0);
+      const factAnt = vAnt.reduce((s,x) => s + anImporte(x.r), 0);
+      const factAntTot = vAntTot.reduce((s,x) => s + anImporte(x.r), 0);
+      const ticket = conImp.length ? fact / conImp.length : 0;
+      const antImp = vAnt.filter(x => anImporte(x.r) > 0);
+      const ticketAnt = antImp.length ? factAnt / antImp.length : 0;
+      html += `<div class="an-kpi" style="--kc:var(--orange)"><div class="l">💰 Facturación unidades</div><div class="v" style="font-size:20px;">${anPlata(fact)}</div>
+        <div class="s">solo ventas con importe cargado (${pct0(conImp.length, vMes.length)})<br>vs ${anMkLabel(mesAnt)}${enCurso ? ' al mismo día hábil' : ''}: <b>${anPlata(enCurso ? factAnt : factAntTot)}</b> ${anDelta(fact, enCurso ? factAnt : factAntTot)}<br>
+        ${enCurso ? `📐 Proyección: <b>${anPlata(fact / dhTrans * dhTot)}</b>` : ''}</div></div>
+        <div class="an-kpi" style="--kc:var(--orange)"><div class="l">🎟️ Ticket promedio</div><div class="v" style="font-size:20px;">${anPlata(ticket)}</div>
+        <div class="s">vs ${anMkLabel(mesAnt)}: <b>${anPlata(ticketAnt)}</b> ${anDelta(ticket, ticketAnt)}<br>${anN(conImp.length)} de ${anN(vMes.length)} ventas con importe cargado</div></div>`;
+    }
+    $('anKpis').innerHTML = html;
+    $('anPulsoHint').textContent = enCurso
+      ? `${anMkLabel(mes)} en curso: día hábil ${dhTrans} de ${dhTot}. La proyección extiende el ritmo diario hasta fin de mes; la comparación es contra ${anMkLabel(mesAnt)} cortado en el mismo día hábil (${entFmt(corteAnt)}).`
+      : `${anMkLabel(mes)} cerrado (${dhTot} días hábiles) contra ${anMkLabel(mesAnt)} completo.`;
+
+    // ---------- Evolución ----------
+    const mesesEvol = []; for (let i = 11; i >= 0; i--) mesesEvol.push(anShiftMk(mes, -i));
+    const serie = k => mesesEvol.map(m => ev.filter(x => x.e[k] && anMk(x.e[k]) === m).length);
+    const css = getComputedStyle(document.body);
+    const cText = css.getPropertyValue('--text-dim').trim() || '#8b95a3';
+    const cGrid = css.getPropertyValue('--border').trim() || '#262c37';
+    if (AN.chart) { AN.chart.destroy(); AN.chart = null; }
+    if (window.Chart){
+      AN.chart = new Chart($('anEvolChart'), {
+        type:'line',
+        data:{labels: mesesEvol.map(anMkLabel), datasets: tipos.map(t => ({
+          label: t.l.replace(/^\S+\s/, ''), data: serie(t.k),
+          borderColor: t.c.startsWith('var') ? css.getPropertyValue(t.c.slice(4,-1)).trim() : t.c,
+          backgroundColor: 'transparent', borderWidth: t.k === 'venta' ? 3 : 2, pointRadius: 3, tension: .25
+        }))},
+        options:{responsive:true, maintainAspectRatio:false, interaction:{mode:'index', intersect:false},
+          plugins:{legend:{labels:{color:cText, usePointStyle:true, boxWidth:8}}},
+          scales:{x:{ticks:{color:cText}, grid:{color:cGrid}}, y:{beginAtZero:true, ticks:{color:cText}, grid:{color:cGrid}}}}
+      });
+    }
+
+    // ---------- Período para rankings ----------
+    const P = AN.periodo;
+    const pIni = new Date(my, mm-P, 1), pFin = fin;
+    const qIni = new Date(my, mm-2*P, 1), qFin = new Date(my, mm-P, 0);
+    // Si el período anterior cae antes del inicio de la base, no hay contra qué comparar
+    let baseIni = null; ev.forEach(x => { if (x.e.venta && (!baseIni || x.e.venta < baseIni)) baseIni = x.e.venta; });
+    const hayPrev = !!baseIni && new Date(baseIni.getFullYear(), baseIni.getMonth(), 1) <= qIni;
+    const vend = cuenta('venta', pIni, pFin), vendPrev = hayPrev ? cuenta('venta', qIni, qFin) : [];
+    const anD = (a, b) => hayPrev ? anDelta(a, b) : '<span class="an-eq" title="La base no tiene el período anterior completo">—</span>';
+    const perTxt = P === 1 ? anMkLabel(mes) : `${anMkLabel(anMk(pIni))} – ${anMkLabel(mes)}`;
+
+    // ---------- Mapa ----------
+    const porProv = {}; let sinProv = 0;
+    vend.forEach(x => { const p = anProv(x.r); if (!p) { sinProv++; return; } porProv[p] = (porProv[p] || 0) + 1; });
+    const maxProv = Math.max(1, ...Object.values(porProv));
+    const blue = css.getPropertyValue('--blue').trim() || '#4c8dff';
+    const surf = css.getPropertyValue('--surface-3').trim() || '#20262f';
+    $('anMapa').innerHTML = `<svg viewBox="0 0 ${AN_MAP.w} ${AN_MAP.h}" role="img" aria-label="Mapa de ventas por provincia">` +
+      Object.entries(AN_MAP.p).map(([k, d]) => {
+        const v = porProv[k] || 0;
+        const fill = v ? blue : surf;
+        const op = v ? (0.15 + 0.85 * Math.log(1 + v) / Math.log(1 + maxProv)).toFixed(2) : 1;
+        return `<path d="${d}" fill="${fill}" fill-opacity="${op}"><title>${anProvLabel(k)}: ${anN(v)} venta${v === 1 ? '' : 's'}</title></path>`;
+      }).join('') + '</svg>';
+    const conProv = vend.length - sinProv;
+    $('anMapaHint').textContent = `Ventas ${perTxt} por provincia del cliente · ${anN(sinProv)} sin provincia cargada`;
+    const provItems = Object.entries(porProv).sort((a,b) => b[1] - a[1]).map(([k,v]) => [anProvLabel(k), v]);
+    $('anProvList').innerHTML = anBarList(provItems.slice(0, 12), conProv, provItems.length ? provItems[0][1] : 1);
+    const porLoc = {};
+    vend.filter(x => anProv(x.r) === 'CORDOBA').forEach(x => {
+      let l = anTxt(x.r['Localidad']).replace(/\s*\(CAP\)$/, '').replace(/ CAPITAL$/, '');
+      if (!l) l = '(sin localidad)';
+      porLoc[l] = (porLoc[l] || 0) + 1;
+    });
+    const locItems = Object.entries(porLoc).sort((a,b) => b[1] - a[1]).map(([k,v]) => [anProvLabel(k), v]);
+    const totCba = locItems.reduce((s,x) => s + x[1], 0);
+    $('anLocList').innerHTML = anBarList(locItems.slice(0, 10), totCba, locItems.length ? locItems[0][1] : 1, 'var(--green)');
+
+    // ---------- Cómo compran ----------
+    const pct = (n, t) => t ? Math.round(n / t * 100) + '%' : '—';
+    const canal = {};
+    vend.forEach(x => { const c = (x.r['Canal'] || '').toString().trim() || '(sin canal)'; canal[c] = (canal[c] || 0) + 1; });
+    const canalItems = Object.entries(canal).sort((a,b) => b[1] - a[1]);
+    const nUsado = vend.filter(x => (x.r['Tiene Pago Usado'] || '').toString().trim().toUpperCase() === 'SI').length;
+    const nCred = vend.filter(x => (x.r['Credito?'] || '').toString().trim().toUpperCase() === 'SI').length;
+    const nEmp = vend.filter(x => (x.r['Personeria'] || '').toString().trim().toUpperCase() === 'J').length;
+    const hayPers = vend.some(x => (x.r['Personeria'] || '').toString().trim());
+    const nInv = vend.filter(x => isInvitado(x.r)).length;
+    const pv = cnt => vendPrev.length ? ` <span style="color:var(--text-faint)">(antes ${pct(cnt, vendPrev.length)})</span>` : '';
+    $('anPagoHint').textContent = `Sobre ${anN(vend.length)} ventas ${perTxt} · entre paréntesis, el período anterior`;
+    $('anPago').innerHTML = `<div class="an-kpis" style="margin-bottom:12px;">
+        <div class="an-kpi" style="--kc:var(--amber)"><div class="l">🔁 Entregan usado</div><div class="v">${pct(nUsado, vend.length)}</div><div class="s">${anN(nUsado)} autos${pv(vendPrev.filter(x => (x.r['Tiene Pago Usado'] || '').toString().trim().toUpperCase() === 'SI').length)}</div></div>
+        <div class="an-kpi" style="--kc:var(--red)"><div class="l">💳 Con crédito</div><div class="v">${pct(nCred, vend.length)}</div><div class="s">${anN(nCred)} autos${pv(vendPrev.filter(x => (x.r['Credito?'] || '').toString().trim().toUpperCase() === 'SI').length)}</div></div>
+        <div class="an-kpi" style="--kc:var(--blue)"><div class="l">🤝 Vía invitado</div><div class="v">${pct(nInv, vend.length)}</div><div class="s">${anN(nInv)} autos${pv(vendPrev.filter(x => isInvitado(x.r)).length)}</div></div>
+        ${hayPers ? `<div class="an-kpi" style="--kc:var(--gray)"><div class="l">🏢 Empresas</div><div class="v">${pct(nEmp, vend.length)}</div><div class="s">${anN(nEmp)} autos (persona jurídica)</div></div>` : ''}
+      </div>
+      <div class="an-sub">Canal</div>${anBarList(canalItems, vend.length, canalItems.length ? canalItems[0][1] : 1, 'var(--amber)')}`;
+
+    // ---------- Modelos ----------
+    const mesesTabla = []; for (let i = Math.max(P, 6) - 1; i >= 0; i--) mesesTabla.push(anShiftMk(mes, -i));
+    const modP = {}, modPrev = {}, modMes = {};
+    vend.forEach(x => { const m = anModelo(x.r); modP[m] = (modP[m] || 0) + 1; });
+    vendPrev.forEach(x => { const m = anModelo(x.r); modPrev[m] = (modPrev[m] || 0) + 1; });
+    ev.forEach(x => { if (!x.e.venta) return; const k = anMk(x.e.venta); if (!mesesTabla.includes(k)) return; const m = anModelo(x.r); (modMes[m] = modMes[m] || {})[k] = ((modMes[m] || {})[k] || 0) + 1; });
+    const topMod = Object.entries(modP).sort((a,b) => b[1] - a[1]).slice(0, 15);
+    const maxCell = Math.max(1, ...topMod.map(([m]) => Math.max(0, ...mesesTabla.map(k => (modMes[m] || {})[k] || 0))));
+    $('anModelosTable').innerHTML = !topMod.length ? '<tr><td class="table-empty">Sin ventas en el período</td></tr>' :
+      `<thead><tr><th>#</th><th>Modelo</th>${mesesTabla.map(k => `<th class="num ${k === mes ? 'sel' : ''}">${anMkLabel(k)}</th>`).join('')}<th class="num">Período</th><th class="num">% del total</th><th class="num">Δ</th></tr></thead><tbody>` +
+      topMod.map(([m, v], i) => `<tr><td>${i + 1}</td><td><b>${escapeHtml(m)}</b></td>${mesesTabla.map(k => {
+        const c = (modMes[m] || {})[k] || 0;
+        return `<td class="heat ${k === mes ? 'sel' : ''}" style="background:rgba(76,141,255,${c ? (0.08 + 0.5 * c / maxCell).toFixed(2) : 0})">${c || '<span style="color:var(--text-faint)">·</span>'}</td>`;
+      }).join('')}<td class="num"><b>${anN(v)}</b></td><td class="num">${pct(v, vend.length)}</td><td class="num">${anD(v, modPrev[m] || 0)}</td></tr>`).join('') + '</tbody>';
+
+    // ---------- Invitados ----------
+    const retorno = r => /RETORNO/i.test((r['Instancia Carga Averia'] || '').toString());
+    const conInv = vend.filter(x => isInvitado(x.r)), sinInv = vend.filter(x => !isInvitado(x.r));
+    const tasa = (arr, f) => arr.length ? (arr.filter(x => f(x.r)).length / arr.length * 100) : 0;
+    const tRetInv = tasa(conInv, retorno), tRetDir = tasa(sinInv, retorno);
+    const tAvInv = tasa(conInv, tuvoAveria), tAvDir = tasa(sinInv, tuvoAveria);
+    $('anInvHint').textContent = `Operaciones ${perTxt} · "regresan con avería" = avería cargada en la instancia Retornos y Egresos`;
+    $('anInvKpis').innerHTML = `
+      <div class="an-kpi" style="--kc:var(--blue)"><div class="l">🤝 Ventas vía invitado</div><div class="v">${anN(conInv.length)}</div><div class="s">${pct(conInv.length, vend.length)} del total · ${anN(new Set(conInv.map(x => anTxt(x.r['Invitado']))).size)} invitados activos</div></div>
+      <div class="an-kpi" style="--kc:var(--red)"><div class="l">🔙 Regresan con avería</div><div class="v">${anN(conInv.filter(x => retorno(x.r)).length)} · ${tRetInv.toFixed(1)}%</div><div class="s">vs <b>${tRetDir.toFixed(1)}%</b> en ventas directas ${tRetInv > tRetDir * 1.2 && tRetInv > 0 ? '<span class="an-down">▲ más alto</span>' : ''}</div></div>
+      <div class="an-kpi" style="--kc:var(--amber)"><div class="l">⚠️ Con alguna avería</div><div class="v">${tAvInv.toFixed(1)}%</div><div class="s">vs <b>${tAvDir.toFixed(1)}%</b> en ventas directas (cualquier instancia)</div></div>`;
+    const inv = {};
+    conInv.forEach(x => {
+      const k = anTxt(x.r['Invitado']);
+      const o = inv[k] = inv[k] || {n:0, ret:0, av:0, marcas:{}, prev:0};
+      o.n++; if (retorno(x.r)) o.ret++; if (tuvoAveria(x.r)) o.av++;
+      const mc = (x.r['Marca'] || '').toString().trim(); o.marcas[mc] = (o.marcas[mc] || 0) + 1;
+    });
+    vendPrev.filter(x => isInvitado(x.r)).forEach(x => { const k = anTxt(x.r['Invitado']); if (inv[k]) inv[k].prev++; });
+    const invRows = Object.entries(inv).sort((a,b) => b[1].n - a[1].n).slice(0, 25);
+    $('anInvTable').innerHTML = !invRows.length ? '<tr><td class="table-empty">Sin ventas vía invitado en el período</td></tr>' :
+      `<thead><tr><th>#</th><th>Invitado</th><th class="num">Autos</th><th class="num">Δ</th><th>Marca principal</th><th class="num">Con avería</th><th class="num">Regresan c/ avería</th></tr></thead><tbody>` +
+      invRows.map(([k, o], i) => {
+        const mp = Object.entries(o.marcas).sort((a,b) => b[1] - a[1])[0];
+        return `<tr><td>${i + 1}</td><td>${escapeHtml(k)}</td><td class="num"><b>${o.n}</b></td><td class="num">${anD(o.n, o.prev)}</td><td>${escapeHtml(PATENTADOS_BRAND_LABELS[(mp[0] || '').toUpperCase()] || mp[0])}</td>
+          <td class="num">${o.av ? `${o.av} <span style="color:var(--text-faint)">(${pct(o.av, o.n)})</span>` : '0'}</td>
+          <td class="num" style="${o.ret ? 'color:var(--red); font-weight:700;' : ''}">${o.ret ? `${o.ret} (${pct(o.ret, o.n)})` : '0'}</td></tr>`;
+      }).join('') + '</tbody>';
+
+    // ---------- Top clientes ----------
+    const cli = {};
+    sinInv.forEach(x => {
+      const doc = (x.r['Nro. Documento'] || '').toString().replace(/\D/g, '');
+      const nom = (x.r['Cliente'] || '').toString().trim();
+      if (!doc && !nom) return;
+      const k = doc ? 'D' + doc : 'N' + anTxt(nom);
+      const o = cli[k] = cli[k] || {nom, n:0, modelos:{}, ult:null, emp:false, doc};
+      o.n++;
+      const m = anModelo(x.r); o.modelos[m] = (o.modelos[m] || 0) + 1;
+      if (!o.ult || x.e.venta > o.ult) o.ult = x.e.venta;
+      if ((x.r['Personeria'] || '').toString().trim().toUpperCase() === 'J') o.emp = true;
+    });
+    const cliRows = Object.values(cli).filter(o => o.n > 1).sort((a,b) => b.n - a.n || b.ult - a.ult).slice(0, 25);
+    $('anCliTable').innerHTML = !cliRows.length ? '<tr><td class="table-empty">Ningún cliente compró más de un auto en el período</td></tr>' :
+      `<thead><tr><th>#</th><th>Cliente</th><th class="num">Autos</th><th>Modelos</th><th>Última compra</th></tr></thead><tbody>` +
+      cliRows.map((o, i) => `<tr><td>${i + 1}</td><td>${o.emp ? '🏢 ' : ''}${escapeHtml(o.nom)}</td><td class="num"><b>${o.n}</b></td>
+        <td style="white-space:normal; min-width:180px;">${(() => { const ms = Object.entries(o.modelos).sort((a,b) => b[1] - a[1]); return ms.slice(0, 3).map(([m, c]) => `${escapeHtml(m)}${c > 1 ? ' ×' + c : ''}`).join(', ') + (ms.length > 3 ? ` <span style="color:var(--text-faint)">+${ms.length - 3} más</span>` : ''); })()}</td>
+        <td class="col-fecha">${entFmt(o.ult)}</td></tr>`).join('') + '</tbody>';
+
+    // ---------- Vendedores ----------
+    const vd = {}, vdPrev = {};
+    vend.forEach(x => { const k = (x.r['Vendedor'] || '').toString().trim(); if (k) vd[k] = (vd[k] || 0) + 1; });
+    vendPrev.forEach(x => { const k = (x.r['Vendedor'] || '').toString().trim(); if (k) vdPrev[k] = (vdPrev[k] || 0) + 1; });
+    const vdRows = Object.entries(vd).sort((a,b) => b[1] - a[1]);
+    const vdTot = vdRows.reduce((s,x) => s + x[1], 0);
+    $('anVendTable').innerHTML = !vdRows.length ? '<tr><td class="table-empty">Sin ventas con vendedor cargado</td></tr>' :
+      `<thead><tr><th>#</th><th>Vendedor</th><th class="num">Ventas</th><th class="num">% del total</th><th class="num">Antes</th><th class="num">Δ</th></tr></thead><tbody>` +
+      vdRows.map(([k, v], i) => `<tr><td>${i + 1}</td><td>${escapeHtml(k)}</td><td class="num"><b>${v}</b></td><td class="num">${pct(v, vdTot)}</td><td class="num">${hayPrev ? (vdPrev[k] || 0) : '—'}</td><td class="num">${anD(v, vdPrev[k] || 0)}</td></tr>`).join('') + '</tbody>';
+
+    // ---------- Stock y rotación ----------
+    const med = arr => { if (!arr.length) return null; const s = arr.slice().sort((a,b) => a - b); const h = Math.floor(s.length / 2); return s.length % 2 ? s[h] : Math.round((s[h-1] + s[h]) / 2); };
+    const rot = {};
+    vend.forEach(x => {
+      const a = anMid(parseDateFlexible(x.r['Fecha Arribo Unidad']));
+      if (!a || !x.e.venta || x.e.venta < a) return;
+      const m = anModelo(x.r); (rot[m] = rot[m] || []).push(Math.round((x.e.venta - a) / 86400000));
+    });
+    const stock = rows.filter(r => (r['Fecha Arribo Unidad'] || '').toString().trim() && !(r['Fecha Reserva'] || '').toString().trim()
+      && !(r['Fecha Venta'] || '').toString().trim() && !isEntregado(r) && /propio/i.test((r['Tipo Compra Stock'] || '').toString()));
+    const stockDias = r => Math.round((hoy - anMid(parseDateFlexible(r['Fecha Arribo Unidad']))) / 86400000);
+    const stk = {};
+    stock.forEach(r => { const m = anModelo(r); const d = stockDias(r); const o = stk[m] = stk[m] || {n:0, d:[], v90:0}; o.n++; o.d.push(d); if (d > 90) o.v90++; });
+    const todosRot = [].concat(...Object.values(rot));
+    const sd = stock.map(stockDias);
+    $('anStockKpis').innerHTML = `
+      <div class="an-kpi" style="--kc:var(--blue)"><div class="l">⏱️ Arribo → venta</div><div class="v">${todosRot.length ? med(todosRot) + ' días' : '—'}</div><div class="s">mediana de lo vendido ${perTxt}</div></div>
+      <div class="an-kpi" style="--kc:var(--amber)"><div class="l">📦 Stock propio libre</div><div class="v">${anN(stock.length)}</div><div class="s">arribados sin reserva ni venta</div></div>
+      <div class="an-kpi" style="--kc:var(--red)"><div class="l">🐢 Más de 90 días</div><div class="v">${anN(sd.filter(d => d > 90).length)}</div><div class="s">${pct(sd.filter(d => d > 90).length, stock.length)} del stock libre · 60–90 d: ${anN(sd.filter(d => d > 60 && d <= 90).length)}</div></div>`;
+    const stkRows = Object.entries(stk).sort((a,b) => b[1].n - a[1].n).slice(0, 20);
+    $('anStockTable').innerHTML = !stkRows.length ? '<tr><td class="table-empty">Sin stock libre</td></tr>' :
+      `<thead><tr><th>Modelo</th><th class="num">En stock</th><th class="num">Días (mediana)</th><th class="num">+90 días</th><th class="num">Arribo→venta</th><th class="num">Vendidos</th></tr></thead><tbody>` +
+      stkRows.map(([m, o]) => `<tr><td>${escapeHtml(m)}</td><td class="num"><b>${o.n}</b></td><td class="num">${med(o.d)}</td>
+        <td class="num" style="${o.v90 ? 'color:var(--red); font-weight:700;' : ''}">${o.v90}</td>
+        <td class="num">${rot[m] ? med(rot[m]) + ' d' : '—'}</td><td class="num">${modP[m] || 0}</td></tr>`).join('') + '</tbody>';
+  }
+
+  if ($('anMesSelect')){
+    $('anMesSelect').addEventListener('change', e => { AN.mes = e.target.value; renderAnalisisSection(); });
+    $('anPeriodoSelect').addEventListener('change', e => { AN.periodo = parseInt(e.target.value, 10) || 12; renderAnalisisSection(); });
+    new MutationObserver(() => { try { renderAnalisisSection(); } catch(e){} }).observe(document.body, {attributes:true, attributeFilter:['data-theme']});
   }
 
   // ========== Modal Marcar Entregado ==========
