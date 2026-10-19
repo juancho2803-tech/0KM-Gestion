@@ -7542,7 +7542,8 @@
     {k:'alistaje', label:'🧹 Sin alistar'},
     {k:'accesorios', label:'🎒 Accesorios pendientes'},
     {k:'credito', label:'💳 Crédito sin liquidar'},
-    {k:'ubicacion', label:'📍 Fuera de Pre-entrega DQ'},
+    {k:'ubicacion', label:'📍 Fuera de DQ (sin arribo / reparación / exhibición)'},
+    {k:'otraubic', label:'🚛 Otra ubicación (traslado / depósito)'},
     {k:'dominio', label:'🏛️ Sin dominio cargado'},
     {k:'turno', label:'📅 Ya tiene turno asignado'}
   ];
@@ -7555,7 +7556,17 @@
     if (!isAlistado(row)) m.push('alistaje');
     if (tieneAccesorios(row) && !accesoriosListos(row)) m.push('accesorios');
     if (tieneCreditoSinLiquidar(row)) m.push('credito');
-    if (up('Ubicacion') !== 'PRE-ENTREGA D.QUIROS') m.push('ubicacion');
+    // Fuera de DQ: según dónde está y por qué. Taller VW/GM por accesorio → Accesorios;
+    // Maipú Garage → Averías; sin arribo / reparación / exhibición → Fuera de DQ.
+    const ubic = up('Ubicacion');
+    if (ubic !== 'PRE-ENTREGA D.QUIROS'){
+      const mot = up('Motivo Cambio Ubicacion');
+      const add = k => { if (!m.includes(k)) m.push(k); };
+      if (ubic.includes('MAIPU GARAGE')) add('averia');
+      else if (ubic.startsWith('TALLER') && mot.includes('ACCESORIO')) add('accesorios');
+      else if (!ubic || up('Fecha Arribo Unidad') === '' || mot.includes('REPARACION') || mot.includes('EXHIBICION')) add('ubicacion');
+      else if (!m.length) add('otraubic');
+    }
     if (up('Dominio') === '') m.push('dominio');
     if (up('Fecha Turno Entrega') !== '') m.push('turno');
     return m;
