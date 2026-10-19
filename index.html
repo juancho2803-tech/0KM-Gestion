@@ -1850,7 +1850,7 @@
           <div class="panel-head" style="margin-top:18px;"><h3 style="font-size:14px;">Detalle — para que el área analice y ajuste</h3></div>
           <div class="table-scroll" style="max-height:420px;">
             <table class="data-table">
-              <thead><tr><th class="col-marca">Marca</th><th>Interno</th><th>Fecha arribo</th><th>Fecha venta</th><th>Fecha alistaje</th><th>Fecha turno alistaje</th><th>Estado</th><th>Días</th></tr></thead>
+              <thead><tr><th class="col-marca">Marca</th><th>Interno</th><th>Fecha arribo</th><th>Fecha venta</th><th>Fecha patentamiento</th><th>Fecha alistaje</th><th>Fecha turno alistaje</th><th>Estado</th><th>Días</th></tr></thead>
               <tbody id="acelAlistajeTableBody"></tbody>
             </table>
           </div>
@@ -5596,6 +5596,7 @@
     {get:c => escapeHtml(c.row['Interno'])},
     {get:acelFechaCell('Fecha Arribo Unidad'), cls:'col-fecha'},
     {get:acelFechaCell('Fecha Venta'), cls:'col-fecha'},
+    {get:acelFechaCell('Fecha Patentamiento'), cls:'col-fecha'},
     {get:acelFechaCell('Fecha Alistaje'), cls:'col-fecha'},
     {get:acelFechaCell('Fecha Turno Alistaje'), cls:'col-fecha'},
     {get:acelEstadoCell},
