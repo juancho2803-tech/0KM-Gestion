@@ -9502,12 +9502,26 @@
           <span class="pm-n">${n}</span>
         </div>`;
       }).join('');
+    // Con un motivo seleccionado: desglose de esos autos por unidad de negocio (Canal)
+    let canalHtml = '';
+    if (patMotivoFilter){
+      const sel = noOkRows.filter(r => patMotivosNoOk(r).includes(patMotivoFilter));
+      const porCanal = {};
+      sel.forEach(r => { const c = (r['Canal'] || '').toString().trim() || 'Sin dato'; porCanal[c] = (porCanal[c] || 0) + 1; });
+      const items = Object.entries(porCanal).sort((a,b) => b[1] - a[1]);
+      const mot = PAT_MOTIVOS_NOOK.find(m => m.k === patMotivoFilter);
+      canalHtml = items.length ? `<div class="pat-motivos" style="margin-top:8px;"><div class="pm-title">${mot ? mot.label : ''} — por unidad de negocio</div>` +
+        items.map(([c, n]) => `<div class="pat-motivo" style="cursor:default;">
+          <span class="pm-label">${escapeHtml(c)}</span>
+          <span class="pm-bar"><span style="width:${Math.max(Math.round(n / sel.length * 100), 3)}%; background:var(--blue);"></span></span>
+          <span class="pm-n">${n}</span></div>`).join('') + '</div>' : '';
+    }
     $('patentadosKpis').innerHTML = cardDefs.map(c => `
       <div class="pat-brand-card ${patEstadoEntregaFilter.has(c.estado) ? 'active' : ''} ${!patEstadoEntregaFilter.has(c.estado) ? 'dimmed' : ''} ${c.estado === 'noOk' ? 'pat-card-noOk' : ''}" data-estado="${c.estado}">
         <div class="brand-name">${c.label}</div>
         <div class="brand-count" style="color:${c.color}">${counts[c.estado].toLocaleString('es-AR')}</div>
         <div class="brand-breakdown">de ${totalConFiltroMarca.toLocaleString('es-AR')} pendientes de entregar</div>
-        ${c.estado === 'noOk' && motivosHtml ? `<div class="pat-motivos"><div class="pm-title">Qué los frena (un auto puede tener varios)${patMotivoFilter ? ' · <u>clic de nuevo para quitar el filtro</u>' : ''}</div>${motivosHtml}</div>` : ''}
+        ${c.estado === 'noOk' && motivosHtml ? `<div class="pat-motivos"><div class="pm-title">Qué los frena (un auto puede tener varios)${patMotivoFilter ? ' · <u>clic de nuevo para quitar el filtro</u>' : ''}</div>${motivosHtml}</div>${canalHtml}` : ''}
       </div>
     `).join('') + (() => {
       const cordobaCount = rowsEstadoFiltrado.filter(esCbaSLA).length;
