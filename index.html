@@ -1085,6 +1085,12 @@
             <button type="button" class="pill-action" id="patBrandSelectAll">Todas</button>
             <button type="button" class="pill-action" id="patBrandSelectNone">Ninguna</button>
           </div>
+          <div class="pill-group" id="patCanalFilterWrap">
+            <span class="pill-group-label">Canal</span>
+            <div class="pill-list" id="patCanalCheckList"></div>
+            <button type="button" class="pill-action" id="patCanalSelectAll">Todos</button>
+            <button type="button" class="pill-action" id="patCanalSelectNone">Ninguno</button>
+          </div>
           <div class="segmented" id="patAveriaSegmented">
             <button class="active" data-averia="todos" type="button">Avería: Todas</button>
             <button data-averia="si" type="button">⚠️ Sí</button>
@@ -9459,9 +9465,11 @@
       return CAR_BRANDS.includes(marca) && categorize(r) === 'Patentado' && !isEntregado(r);
     });
 
+    syncPatCanalFilter();
     function pasaOtrosFiltros(r){
       const marca = (r['Marca'] || '').toString().trim();
       if (PAT_ALL_BRANDS.length && !patSelectedBrands.has(marca)) return false;
+      if (PAT_ALL_CANAL.length && patSelectedCanal.size < PAT_ALL_CANAL.length && !patSelectedCanal.has(patCanalDe(r))) return false;
       if (patAveriaFilter === 'si' && !hasAveria(r)) return false;
       if (patAveriaFilter === 'no' && hasAveria(r)) return false;
       if (patInvitadoFilter === 'si' && !isInvitado(r)) return false;
@@ -9687,6 +9695,45 @@
     $('patPrevPageBtn').disabled = patCurrentPage <= 1;
     $('patNextPageBtn').disabled = patCurrentPage >= totalPages;
   }
+
+  // ---- Filtro por Canal (unidad de negocio). Canal llega en la carga en 2do plano,
+  // así que la lista se arma/actualiza al renderizar si aparecen canales nuevos.
+  let PAT_ALL_CANAL = [];
+  let patSelectedCanal = new Set();
+  function patCanalDe(r){ return (r['Canal'] || '').toString().trim() || 'Sin dato'; }
+  function syncPatCanalFilter(){
+    const list = $('patCanalCheckList');
+    if (!list) return;
+    const set = new Set();
+    ALL_ROWS.forEach(r => { if (CAR_BRANDS.includes((r['Marca'] || '').toString().trim().toUpperCase())) set.add(patCanalDe(r)); });
+    const all = [...set].sort((a,b) => (a === 'Sin dato') - (b === 'Sin dato') || a.localeCompare(b));
+    if (all.join('|') === PAT_ALL_CANAL.join('|')) return;
+    const nuevos = all.filter(c => !PAT_ALL_CANAL.includes(c));
+    const todos = !PAT_ALL_CANAL.length || patSelectedCanal.size === PAT_ALL_CANAL.length;
+    PAT_ALL_CANAL = all;
+    patSelectedCanal = todos ? new Set(all) : new Set([...patSelectedCanal, ...nuevos].filter(c => all.includes(c)));
+    $('patCanalFilterWrap').style.display = all.length > 1 ? '' : 'none';
+    list.innerHTML = all.map(c => `<button type="button" class="${patSelectedCanal.has(c) ? 'active' : ''}" data-canal="${escapeHtml(c)}">${escapeHtml(c)}</button>`).join('');
+    list.querySelectorAll('button').forEach(btn => btn.addEventListener('click', () => {
+      const c = btn.dataset.canal;
+      if (patSelectedCanal.has(c)){ patSelectedCanal.delete(c); btn.classList.remove('active'); }
+      else { patSelectedCanal.add(c); btn.classList.add('active'); }
+      patCurrentPage = 1;
+      renderPatentadosSection();
+    }));
+  }
+  $('patCanalSelectAll').addEventListener('click', () => {
+    patSelectedCanal = new Set(PAT_ALL_CANAL);
+    $('patCanalCheckList').querySelectorAll('button').forEach(b => b.classList.add('active'));
+    patCurrentPage = 1;
+    renderPatentadosSection();
+  });
+  $('patCanalSelectNone').addEventListener('click', () => {
+    patSelectedCanal = new Set();
+    $('patCanalCheckList').querySelectorAll('button').forEach(b => b.classList.remove('active'));
+    patCurrentPage = 1;
+    renderPatentadosSection();
+  });
 
   function populatePatBrandFilter(){
     PAT_ALL_BRANDS = CAR_BRANDS.slice();
@@ -10996,6 +11043,7 @@
 
   $('clearPatentadosFiltersBtn').addEventListener('click', () => {
     $('patBrandSelectAll').click();
+    $('patCanalSelectAll').click();
     document.querySelector('#patAveriaSegmented button[data-averia="todos"]').click();
     setSelectValue('patInvitadoSelect', 'todos');
     setSelectValue('patTipoCompraSelect', 'todos');
