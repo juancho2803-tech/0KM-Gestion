@@ -1134,6 +1134,7 @@
                 <th class="sortable" data-sort="color">Color<span class="sort-arrow">↕</span></th>
                 <th class="sortable" data-sort="cliente">Cliente<span class="sort-arrow">↕</span></th>
                 <th class="sortable sort-active" data-sort="fechaPat">Fecha patentamiento<span class="sort-arrow">▼</span></th>
+                <th class="sortable" data-sort="fechaArribo">Fecha arribo<span class="sort-arrow">↕</span></th>
                 <th class="sortable" data-sort="invitado">Invitado<span class="sort-arrow">↕</span></th>
                 <th class="sortable" data-sort="tipoCompra">Tipo compra stock<span class="sort-arrow">↕</span></th>
                 <th class="sortable" data-sort="dias">Días desde patentamiento<span class="sort-arrow">↕</span></th>
@@ -7303,6 +7304,7 @@
       color: r => (r['Color'] || '').toString(),
       cliente: r => (r['Cliente'] || '').toString(),
       fechaPat: r => { const d = parseDateFlexible(r['Fecha Patentamiento']); return d ? d.getTime() : -Infinity; },
+      fechaArribo: r => { const d = parseDateFlexible(r['Fecha Arribo Unidad']); return d ? d.getTime() : -Infinity; },
       invitado: r => isInvitado(r) ? 1 : 0,
       tipoCompra: r => (r['Tipo Compra Stock'] || '').toString(),
       dias: r => { const d = diasDesdePatentamiento(r); return d === null ? -Infinity : d; },
@@ -7547,8 +7549,9 @@
     {k:'alistaje', label:'🧹 Sin alistar'},
     {k:'accesorios', label:'🎒 Accesorios pendientes'},
     {k:'credito', label:'💳 Crédito sin liquidar'},
-    {k:'ubicacion', label:'📍 Fuera de DQ (sin arribo / reparación / exhibición)'},
-    {k:'otraubic', label:'🚛 Otra ubicación (traslado / depósito)'},
+    {k:'sinarribo', label:'🚛 Sin arribar'},
+    {k:'ubicacion', label:'📍 No en DQ (reparación / exhibición)'},
+    {k:'otraubic', label:'📦 Otra ubicación (traslado / depósito)'},
     {k:'dominio', label:'🏛️ Sin dominio cargado'},
     {k:'turno', label:'📅 Ya tiene turno asignado'}
   ];
@@ -7558,7 +7561,9 @@
     if (bloqueoActivo(row)) m.push('bloqueo');
     if (up('Patenta?') === 'MAIPU' && up('Fecha Entrega Tramite a GEAC') === '') m.push('geac');
     if (hasAveria(row)) m.push('averia');
-    if (!isAlistado(row)) m.push('alistaje');
+    const arribado = up('Fecha Arribo Unidad') !== '' && up('Ubicacion') !== '';
+    // Sin alistar: solo cuenta si el auto ya arribó (si no arribó, el freno es el arribo)
+    if (arribado && !isAlistado(row)) m.push('alistaje');
     if (tieneAccesorios(row) && !accesoriosListos(row)) m.push('accesorios');
     if (tieneCreditoSinLiquidar(row)) m.push('credito');
     // Fuera de DQ: según dónde está y por qué. Taller VW/GM por accesorio → Accesorios;
@@ -7569,7 +7574,8 @@
       const add = k => { if (!m.includes(k)) m.push(k); };
       if (ubic.includes('MAIPU GARAGE')) add('averia');
       else if (ubic.startsWith('TALLER') && mot.includes('ACCESORIO')) add('accesorios');
-      else if (!ubic || up('Fecha Arribo Unidad') === '' || mot.includes('REPARACION') || mot.includes('EXHIBICION')) add('ubicacion');
+      else if (!arribado) add('sinarribo');
+      else if (mot.includes('REPARACION') || mot.includes('EXHIBICION')) add('ubicacion');
       else if (!m.length) add('otraubic');
     }
     if (up('Dominio') === '') m.push('dominio');
@@ -9535,7 +9541,7 @@
     const tbody = $('patentadosTableBody');
 
     if (!shown.length){
-      tbody.innerHTML = `<tr><td colspan="22" class="table-empty">No hay unidades para este filtro</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="23" class="table-empty">No hay unidades para este filtro</td></tr>`;
     } else {
       const badge = (ok, title) => ok
         ? `<span class="badge-entrega ok"${title ? ` title="${escapeHtml(title)}"` : ''}>✅</span>`
@@ -9595,6 +9601,7 @@
           <td>${escapeHtml(r['Color'])}</td>
           <td>${escapeHtml(r['Cliente'])}</td>
           <td class="col-fecha">${formatDateDisplay(r['Fecha Patentamiento'])}</td>
+          <td class="col-fecha">${(r['Fecha Arribo Unidad'] || '').toString().trim() ? formatDateDisplay(r['Fecha Arribo Unidad']) : '<span class="badge-entrega bad">Sin arribo</span>'}</td>
           <td>${escapeHtml(invitadoVal)}</td>
           <td>${escapeHtml(tipoCompraVal)}</td>
           <td class="col-fecha">${dias === null ? '—' : dias}</td>
@@ -9863,6 +9870,7 @@
       'Color': r['Color'] || '',
       'Cliente': r['Cliente'] || '',
       'Fecha Patentamiento': formatDateDisplay(r['Fecha Patentamiento']),
+      'Fecha Arribo': formatDateDisplay(r['Fecha Arribo Unidad']),
       'Entrega': isEntregado(r) ? 'Entregado' : 'Falta entregar',
       'Averia': hasAveria(r) ? 'SI' : 'NO',
       'Con Dominio': (r['Dominio'] || '').toString().trim() !== '' ? 'SI' : 'NO',
