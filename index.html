@@ -1101,6 +1101,11 @@
             <option value="si">Sí</option>
             <option value="no">No</option>
           </select>
+          <select class="month-select" id="patPatentaSelect">
+            <option value="todos">Patenta Maipú: todos</option>
+            <option value="si">Patenta Maipú: Sí</option>
+            <option value="no">Patenta Maipú: No</option>
+          </select>
           <select class="month-select" id="patTipoCompraSelect">
             <option value="todos">Tipo compra stock: todos</option>
           </select>
@@ -7389,7 +7394,8 @@
   let patArriboFilter = 'todos';
   let patEstadoEntregaFilter = new Set(['okDentro','okFuera','noOk']);
   let patLocalidadFilter = new Set(['cordoba','otras']); // Córdoba (Capital) / Otras provincias
-  let patMesPatFilter = null; // null | 'actual' | 'anterior' — mes de patentamiento
+  let patMesPatFilter = null;
+  let patPatentaFilter = 'todos'; // Patenta? = MAIPU (sí) / otro (no) // null | 'actual' | 'anterior' — mes de patentamiento
   function patMesPatDe(r){
     const d = parseDateFlexible(r['Fecha Patentamiento']);
     if (!d) return null;
@@ -9472,6 +9478,10 @@
       if (PAT_ALL_CANAL.length && patSelectedCanal.size < PAT_ALL_CANAL.length && !patSelectedCanal.has(patCanalDe(r))) return false;
       if (patAveriaFilter === 'si' && !hasAveria(r)) return false;
       if (patAveriaFilter === 'no' && hasAveria(r)) return false;
+      if (patPatentaFilter !== 'todos'){
+        const esMaipu = (r['Patenta?'] || '').toString().trim().toUpperCase() === 'MAIPU';
+        if ((patPatentaFilter === 'si') !== esMaipu) return false;
+      }
       if (patInvitadoFilter === 'si' && !isInvitado(r)) return false;
       if (patInvitadoFilter === 'no' && isInvitado(r)) return false;
       if (patTipoCompraFilter !== 'todos'){
@@ -9810,6 +9820,11 @@
     });
   });
 
+  $('patPatentaSelect').addEventListener('change', e => {
+    patPatentaFilter = e.target.value;
+    patCurrentPage = 1;
+    renderPatentadosSection();
+  });
   $('patInvitadoSelect').addEventListener('change', e => {
     patInvitadoFilter = e.target.value;
     patCurrentPage = 1;
@@ -11046,6 +11061,7 @@
     $('patCanalSelectAll').click();
     document.querySelector('#patAveriaSegmented button[data-averia="todos"]').click();
     setSelectValue('patInvitadoSelect', 'todos');
+    setSelectValue('patPatentaSelect', 'todos');
     setSelectValue('patTipoCompraSelect', 'todos');
     setSelectValue('patUsadoSelect', 'todos');
     setSelectValue('patTurnoEntregaSelect', 'todos');
