@@ -1746,6 +1746,12 @@
               <button type="button" class="pill-action" id="slaBrandSelectAll">Todas</button>
               <button type="button" class="pill-action" id="slaBrandSelectNone">Ninguna</button>
             </div>
+            <div class="pill-group" id="slaCanalFilterWrap">
+              <span class="pill-group-label">Canal</span>
+              <div class="pill-list" id="slaCanalCheckList"></div>
+              <button type="button" class="pill-action" id="slaCanalSelectAll">Todos</button>
+              <button type="button" class="pill-action" id="slaCanalSelectNone">Ninguno</button>
+            </div>
             <div class="segmented" id="slaVistaSegmented">
               <button class="active" data-vista="mensual" type="button">Mensual</button>
               <button data-vista="semanal" type="button">Semanal</button>
@@ -2702,6 +2708,40 @@
   let slaVista = 'mensual';
   let slaPeriodoN = 12;
   let slaInvitadoFilter = 'todos';
+  // Canal (unidad de negocio): llega en la carga en 2do plano → la lista se sincroniza al renderizar
+  let SLA_ALL_CANAL = [];
+  let slaSelectedCanal = new Set();
+  function slaCanalDe(r){ return (r['Canal'] || '').toString().trim() || 'Sin dato'; }
+  function syncSlaCanalFilter(){
+    const list = $('slaCanalCheckList');
+    if (!list) return;
+    const set = new Set();
+    ALL_ROWS.forEach(r => { if (CAR_BRANDS.includes((r['Marca'] || '').toString().trim().toUpperCase())) set.add(slaCanalDe(r)); });
+    const all = [...set].sort((a,b) => (a === 'Sin dato') - (b === 'Sin dato') || a.localeCompare(b));
+    if (all.join('|') === SLA_ALL_CANAL.join('|')) return;
+    const nuevos = all.filter(c => !SLA_ALL_CANAL.includes(c));
+    const todos = !SLA_ALL_CANAL.length || slaSelectedCanal.size === SLA_ALL_CANAL.length;
+    SLA_ALL_CANAL = all;
+    slaSelectedCanal = todos ? new Set(all) : new Set([...slaSelectedCanal, ...nuevos].filter(c => all.includes(c)));
+    $('slaCanalFilterWrap').style.display = all.length > 1 ? '' : 'none';
+    list.innerHTML = all.map(c => `<button type="button" class="${slaSelectedCanal.has(c) ? 'active' : ''}" data-canal="${escapeHtml(c)}">${escapeHtml(c)}</button>`).join('');
+    list.querySelectorAll('button').forEach(btn => btn.addEventListener('click', () => {
+      const c = btn.dataset.canal;
+      if (slaSelectedCanal.has(c)){ slaSelectedCanal.delete(c); btn.classList.remove('active'); }
+      else { slaSelectedCanal.add(c); btn.classList.add('active'); }
+      renderSlaSection();
+    }));
+  }
+  $('slaCanalSelectAll').addEventListener('click', () => {
+    slaSelectedCanal = new Set(SLA_ALL_CANAL);
+    $('slaCanalCheckList').querySelectorAll('button').forEach(b => b.classList.add('active'));
+    renderSlaSection();
+  });
+  $('slaCanalSelectNone').addEventListener('click', () => {
+    slaSelectedCanal = new Set();
+    $('slaCanalCheckList').querySelectorAll('button').forEach(b => b.classList.remove('active'));
+    renderSlaSection();
+  });
 
   function populateSlaBrandFilter(rows){
     const set = new Set();
@@ -3393,10 +3433,12 @@
     const dimColor = getComputedStyle(document.body).getPropertyValue('--text-dim');
     const realColor = getComputedStyle(document.body).getPropertyValue('--text');
 
+    syncSlaCanalFilter();
     const slaRows = ALL_ROWS.filter(r => {
       const marca = (r['Marca'] || '').toString().trim();
       if (!CAR_BRANDS.includes(marca.toUpperCase())) return false;
       if (SLA_ALL_BRANDS.length && !slaSelectedBrands.has(marca)) return false;
+      if (SLA_ALL_CANAL.length && slaSelectedCanal.size < SLA_ALL_CANAL.length && !slaSelectedCanal.has(slaCanalDe(r))) return false;
       if (slaInvitadoFilter === 'si' && !isInvitado(r)) return false;
       if (slaInvitadoFilter === 'no' && isInvitado(r)) return false;
       return true;
@@ -11111,6 +11153,7 @@
 
   $('clearSlaFiltersBtn').addEventListener('click', () => {
     $('slaBrandSelectAll').click();
+    $('slaCanalSelectAll').click();
     document.querySelector('#slaVistaSegmented button[data-vista="mensual"]').click();
     setSelectValue('slaPeriodoSelect', '12');
     document.querySelector('#slaInvitadoSegmented button[data-invitado="todos"]').click();
