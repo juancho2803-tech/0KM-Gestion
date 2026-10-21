@@ -7365,6 +7365,16 @@
   let patArriboFilter = 'todos';
   let patEstadoEntregaFilter = new Set(['okDentro','okFuera','noOk']);
   let patLocalidadFilter = new Set(['cordoba','otras']); // Córdoba (Capital) / Otras provincias
+  let patMesPatFilter = null; // null | 'actual' | 'anterior' — mes de patentamiento
+  function patMesPatDe(r){
+    const d = parseDateFlexible(r['Fecha Patentamiento']);
+    if (!d) return null;
+    const h = new Date();
+    const ant = new Date(h.getFullYear(), h.getMonth() - 1, 1);
+    if (d.getFullYear() === h.getFullYear() && d.getMonth() === h.getMonth()) return 'actual';
+    if (d.getFullYear() === ant.getFullYear() && d.getMonth() === ant.getMonth()) return 'anterior';
+    return 'previos';
+  }
 
   function patCumplePlazoPatentamiento(row){
     const pat = parseDateFlexible(row['Fecha Patentamiento']);
@@ -9463,7 +9473,8 @@
     // (así ninguna de las dos cards de localidad se autoexcluye a cero).
     const rowsEstadoFiltrado = baseRowsConFiltros.filter(r => patEstadoEntregaFilter.has(patEstadoEntregaDeRow(r)))
       .filter(r => !patMotivoFilter || (patEstadoEntregaDeRow(r) === 'noOk' && patMotivosNoOk(r).includes(patMotivoFilter)));
-    const rows = rowsEstadoFiltrado.filter(r => patLocalidadFilter.has(esCbaSLA(r) ? 'cordoba' : 'otras'));
+    const rowsLoc = rowsEstadoFiltrado.filter(r => patLocalidadFilter.has(esCbaSLA(r) ? 'cordoba' : 'otras'));
+    const rows = patMesPatFilter ? rowsLoc.filter(r => patMesPatDe(r) === patMesPatFilter) : rowsLoc;
 
     $('patTotalValue').textContent = rows.length.toLocaleString('es-AR');
 
@@ -9512,7 +9523,20 @@
         <div class="brand-count" style="color:var(--purple, #a78bfa)">${otrasCount.toLocaleString('es-AR')}</div>
         <div class="brand-breakdown">de ${rowsEstadoFiltrado.length.toLocaleString('es-AR')} pendientes de entregar (con el estado seleccionado)</div>
       </div>
-    `;
+    ` + (() => {
+        const h = new Date();
+        const nom = d => d.toLocaleDateString('es-AR', {month:'long'});
+        const actN = rowsLoc.filter(r => patMesPatDe(r) === 'actual').length;
+        const antN = rowsLoc.filter(r => patMesPatDe(r) === 'anterior').length;
+        const prevN = rowsLoc.length - actN - antN;
+        const card = (k, label, n, color) => `<div class="pat-brand-card ${patMesPatFilter === k ? 'active' : ''} ${patMesPatFilter && patMesPatFilter !== k ? 'dimmed' : ''}" data-mespat="${k}" title="Clic para ver solo estos autos">
+          <div class="brand-name">${label}</div>
+          <div class="brand-count" style="color:${color}">${n.toLocaleString('es-AR')}</div>
+          <div class="brand-breakdown">de ${rowsLoc.length.toLocaleString('es-AR')} pendientes · por fecha de patentamiento${k === 'anterior' && prevN ? ` · ${prevN} de meses anteriores` : ''}</div>
+        </div>`;
+        return card('actual', `🗓️ Patentados en ${nom(h)}`, actN, 'var(--green)') +
+          card('anterior', `🗓️ Patentados en ${nom(new Date(h.getFullYear(), h.getMonth() - 1, 1))}`, antN, 'var(--amber)');
+      })();
     })();
 
     const sortGetters = patSortColDefs();
@@ -9680,6 +9704,10 @@
       } else {
         patEstadoEntregaFilter.add(estado);
       }
+      patCurrentPage = 1;
+      renderPatentadosSection();
+    } else if (card.dataset.mespat){
+      patMesPatFilter = patMesPatFilter === card.dataset.mespat ? null : card.dataset.mespat;
       patCurrentPage = 1;
       renderPatentadosSection();
     } else if (card.dataset.localidad){
@@ -10945,6 +10973,7 @@
     setSelectValue('patArriboSelect', 'todos');
     patEstadoEntregaFilter = new Set(['okDentro','okFuera','noOk']);
     patLocalidadFilter = new Set(['cordoba','otras']);
+    patMesPatFilter = null;
     patMotivoFilter = null;
     if (patSearchTerm){ patSearchTerm = ''; $('patSearchInput').value = ''; }
     patCurrentPage = 1;
