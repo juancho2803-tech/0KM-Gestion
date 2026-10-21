@@ -7564,7 +7564,8 @@
     const arribado = up('Fecha Arribo Unidad') !== '' && up('Ubicacion') !== '';
     // Sin alistar: solo cuenta si el auto ya arribó (si no arribó, el freno es el arribo)
     if (arribado && !isAlistado(row)) m.push('alistaje');
-    if (tieneAccesorios(row) && !accesoriosListos(row)) m.push('accesorios');
+    // Accesorios pendientes: igual que alistaje, solo si el auto ya arribó
+    if (arribado && tieneAccesorios(row) && !accesoriosListos(row)) m.push('accesorios');
     if (tieneCreditoSinLiquidar(row)) m.push('credito');
     // Fuera de DQ: según dónde está y por qué. Taller VW/GM por accesorio → Accesorios;
     // Maipú Garage → Averías; sin arribo / reparación / exhibición → Fuera de DQ.
