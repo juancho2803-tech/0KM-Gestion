@@ -7841,7 +7841,7 @@
     const DAYS = 60;
     const winEnd = new Date(startDate); winEnd.setDate(winEnd.getDate() + DAYS - 1);
 
-    const dFac = {}, dPat = {}, dEnt = {}, dReal = {};
+    const dFac = {}, dPat = {}, dEnt = {}, dReal = {}, dPatReal = {};
 
     rows.forEach(r => {
       const fv = parseDateFlexible(r['Fecha Venta']);
@@ -7859,6 +7859,8 @@
       }
       const real = fechaEntregaFinalCalc(r);
       if (real && real >= startDate && real <= winEnd){ const k = dayKeyLocal(real); dReal[k] = (dReal[k] || 0) + 1; }
+      const patReal = parseDateFlexible(r['Fecha Patentamiento']);
+      if (patReal && patReal >= startDate && patReal <= winEnd){ const k = dayKeyLocal(patReal); dPatReal[k] = (dPatReal[k] || 0) + 1; }
     });
 
     const days = [];
@@ -7868,6 +7870,9 @@
     const pVals = dkeys.map(k => dPat[k] || 0);
     const eVals = dkeys.map(k => dEnt[k] || 0);
     const rVals = dkeys.map(k => dReal[k] || 0);
+    // Patentamiento real: solo hasta hoy (después no hay datos, no es "cero")
+    const hoyKey = dayKeyLocal(new Date());
+    const prVals = dkeys.map(k => k <= hoyKey ? (dPatReal[k] || 0) : null);
 
     const CAP_SEMANA = 24, CAP_SABADO = 9;
     const capArr = days.map(d => {
@@ -7901,6 +7906,7 @@
         datasets:[
           {label:'Facturación', data:fVals, borderColor:'#4c8dff', backgroundColor:'#4c8dff', pointRadius:2, tension:0.25},
           {label:'Patentamiento sim.', data:pVals, borderColor:'#33d391', backgroundColor:'#33d391', borderDash:[5,3], pointRadius:2, tension:0.25},
+          {label:'Patentamiento real', data:prVals, borderColor:'#8b5cf6', backgroundColor:'#8b5cf6', pointRadius:2, tension:0.25, borderWidth:2},
           {label:'Entrega simulada', data:eVals, borderColor:'#ff8a3d', backgroundColor:'#ff8a3d', borderDash:[5,3], pointRadius:2, tension:0.25},
           {label:'Entrega real', data:rVals, borderColor:realColor, backgroundColor:realColor, pointRadius:2, tension:0.25, borderWidth:2},
           {label:'Entrega c/cap.', data:eAjustada, borderColor:'#ff5c4d', backgroundColor:'#ff5c4d', pointRadius:2, tension:0.25, borderWidth:2},
