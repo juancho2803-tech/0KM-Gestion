@@ -5957,7 +5957,7 @@
   let acelAvSelectedVenta = new Set();
   let ACEL_AV_ALL_PAT = [];
   let acelAvSelectedPat = new Set();
-  let acelAvEstadoFilter = new Set(['arribo','entrega','estadia','retornoEgresos','sinDato']);
+  let acelAvEstadoFilter = new Set(['arribo','entrega','estadia','retornoEgresos','sinDato','historico']);
   let acelAvResolutionFilter = new Set(['antesFactura','hasta2dias','entreFacturaPat','despuesPatentamiento']); // todas activas por defecto
   let acelAvResueltaFilter = new Set(['resuelta','sinResolver']);
   let acelAvSearchTerm = '';
@@ -5968,14 +5968,19 @@
     estadia: '🅿️ Estadía',
     retornoEgresos: '↩️ Retorno y egresos',
     entrega: '📤 Entrega',
-    sinDato: '❔ Sin instancia cargada'
+    sinDato: '❔ Sin instancia cargada',
+    historico: '📁 Antes de jun-26 (sin instancia)'
   };
+  // La instancia empezó a cargarse en junio 2026: lo anterior sin instancia no es
+  // un error de proceso, es histórico. Se muestra aparte y no entra en los %.
+  const ACEL_AV_INSTANCIA_DESDE = new Date(2026, 5, 1);
   const ACEL_AV_BUCKET_COLORS = {
     arribo: 'var(--blue)',
     estadia: 'var(--amber)',
     retornoEgresos: 'var(--green)',
     entrega: 'var(--orange)',
-    sinDato: 'var(--gray)'
+    sinDato: 'var(--red)',
+    historico: 'var(--gray)'
   };
 
   const ACEL_AV_RESOLUTION_BUCKET_LABELS = {
@@ -5998,7 +6003,10 @@
   // egresos" no matcheara y quedara clasificado como "sin dato" por error.
   function acelAvBucket(row){
     const v = (row['Instancia Carga Averia'] || '').toString().trim().toUpperCase();
-    if (!v) return 'sinDato';
+    if (!v){
+      const f = parseDateFlexible(row['Fecha Averia']);
+      return (f && f < ACEL_AV_INSTANCIA_DESDE) ? 'historico' : 'sinDato';
+    }
     if (v.includes('RETORNO') || v.includes('EGRESO')) return 'retornoEgresos';
     if (v.includes('ESTAD')) return 'estadia'; // cubre "Estadia" y "Estadía"
     if (v.includes('ARRIBO')) return 'arribo';
@@ -6179,7 +6187,7 @@
     $('acelAveriasVentaAll').click();
     $('acelAveriasPatAll').click();
     $('acelAveriasCanalAll').click();
-    acelAvEstadoFilter = new Set(['arribo','entrega','estadia','retornoEgresos','sinDato']);
+    acelAvEstadoFilter = new Set(['arribo','entrega','estadia','retornoEgresos','sinDato','historico']);
     acelAvResolutionFilter = new Set(['antesFactura','hasta2dias','entreFacturaPat','despuesPatentamiento']);
     acelAvResueltaFilter = new Set(['resuelta','sinResolver']);
     document.querySelectorAll('#acelAveriasResueltaSegmented button').forEach(b => b.classList.add('active'));
@@ -6225,16 +6233,26 @@
 
     const universoFiltradoEstado = universo.filter(r => acelAvResueltaFilter.has(acelAvResuelta(r) ? 'resuelta' : 'sinResolver'));
 
-    const counts = {arribo:0, entrega:0, estadia:0, retornoEgresos:0, sinDato:0};
+    const counts = {arribo:0, entrega:0, estadia:0, retornoEgresos:0, sinDato:0, historico:0};
     universoFiltradoEstado.forEach(r => { counts[acelAvBucket(r)]++; });
+    const baseInst = universoFiltradoEstado.length - counts.historico;
 
     $('acelAveriasKpis').innerHTML = Object.keys(ACEL_AV_BUCKET_LABELS).map(k => {
-      const pct = universoFiltradoEstado.length ? (counts[k] / universoFiltradoEstado.length * 100) : 0;
+      if (k === 'historico'){
+        if (!counts.historico) return '';
+        return `
+      <div class="pat-brand-card ${acelAvEstadoFilter.has(k) ? 'active' : ''} ${!acelAvEstadoFilter.has(k) ? 'dimmed' : ''}" data-estado="${k}" title="Averías anteriores al 01/06/2026, cuando todavía no se cargaba la instancia — no cuentan en los %">
+        <div class="brand-name">${ACEL_AV_BUCKET_LABELS[k]}</div>
+        <div class="brand-count" style="color:${ACEL_AV_BUCKET_COLORS[k]}">${counts[k].toLocaleString('es-AR')}</div>
+        <div class="brand-breakdown">histórico · no entra en los %</div>
+      </div>`;
+      }
+      const pct = baseInst ? (counts[k] / baseInst * 100) : 0;
       return `
       <div class="pat-brand-card ${acelAvEstadoFilter.has(k) ? 'active' : ''} ${!acelAvEstadoFilter.has(k) ? 'dimmed' : ''}" data-estado="${k}">
         <div class="brand-name">${ACEL_AV_BUCKET_LABELS[k]}</div>
         <div class="brand-count" style="color:${ACEL_AV_BUCKET_COLORS[k]}">${counts[k].toLocaleString('es-AR')} <span style="font-size:14px; font-weight:600;">(${pct.toFixed(1)}%)</span></div>
-        <div class="brand-breakdown">de ${universoFiltradoEstado.length.toLocaleString('es-AR')} autos con avería</div>
+        <div class="brand-breakdown">de ${baseInst.toLocaleString('es-AR')} autos con avería (sin el histórico)</div>
       </div>
     `;
     }).join('');
