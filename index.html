@@ -771,6 +771,8 @@
   .ag-cell .c{font-size:10.5px; color:var(--text-dim); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:190px;}
   .ag-cell .nt{font-size:10.5px; font-style:italic; color:var(--text-dim); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:190px;}
   .ag-cell .w{position:absolute; top:4px; right:6px; font-size:13px;}
+  .ag-cell .f{font-size:10.5px; color:var(--red); font-weight:700; white-space:normal; line-height:1.25; margin-top:2px;}
+  #agPendTabs button{flex:1;}
   .ag-cell.libre-pick{border-color:var(--green); border-style:solid;}
   .ag-side{background:var(--surface-2); border:1px solid var(--border); border-radius:10px; padding:10px; max-height:560px; overflow:auto;}
   .ag-pend{display:grid; grid-template-columns:62px 1fr; gap:2px 8px; padding:6px; border-radius:7px; cursor:pointer; font-size:12px; border:1px solid transparent;}
@@ -1261,7 +1263,11 @@
             <div class="hint" id="agEstado" style="margin-top:8px; font-size:11.5px;"></div>
           </div>
           <div class="ag-side">
-            <div class="an-sub">✅ OK para entregar, sin turno en la agenda</div>
+            <div class="segmented" id="agPendTabs" style="margin-bottom:8px; width:100%;">
+              <button type="button" class="active" data-v="ok">✅ OK para entregar</button>
+              <button type="button" data-v="nook">⚠️ No OK</button>
+            </div>
+            <div class="an-sub" id="agPendTitle">Sin turno en la agenda</div>
             <div class="hint" style="margin-bottom:6px; font-size:11px;">Clic en uno para elegirlo y después clic en un casillero libre.</div>
             <div id="agPendientes"></div>
           </div>
@@ -11922,7 +11928,7 @@
     ofrecido:  {label:'Ofrecido',  icon:'🟡'},
     bloqueado: {label:'Bloqueado', icon:'⛔'}
   };
-  const AG = {fecha:null, cfg:null, data:new Map(), desde:null, hasta:null, loading:false, loadedOnce:false, pick:null, edit:null, editEstado:''};
+  const AG = {pendTab:'ok', fecha:null, cfg:null, data:new Map(), desde:null, hasta:null, loading:false, loadedOnce:false, pick:null, edit:null, editEstado:''};
 
   const agKey = d => d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
   const agFromKey = k => { const [y,m,d] = k.split('-').map(Number); return new Date(y, m-1, d); };
@@ -11958,7 +11964,8 @@
     const m = patMotivosNoOk(r).filter(k => k !== 'turno');
     const labels = m.map(k => (PAT_MOTIVOS_NOOK.find(x => x.k === k) || {label:k}).label);
     if (categorize(r) !== 'Patentado') labels.unshift('🏛️ Sin patentar');
-    return labels.length ? {lvl:'bad', txt:'No OK: ' + labels.join(' · '), r} : {lvl:'ok', txt:'✅ OK para entregar', r};
+    const corto = labels.map(l => l.replace(/^\S+\s/, '').replace(/\s*\(.*\)$/, '').replace(/^Falta\s+/i, ''));
+    return labels.length ? {lvl:'bad', txt:'No OK: ' + labels.join(' · '), falta:corto, r} : {lvl:'ok', txt:'✅ OK para entregar', falta:[], r};
   }
   function agStats(d){
     const k = agKey(d), dia = agDia(d);
@@ -12054,11 +12061,15 @@
           const attrs = `data-hora="${escapeHtml(h)}" data-ent="${escapeHtml(e)}"`;
           if (!t) return `<td class="ag-cell ${edit ? 'edit' : ''} ${edit && AG.pick ? 'libre-pick' : ''}" ${attrs}></td>`;
           const ints = agInternos(t.interno);
-          let warn = '', sub = '';
+          let warn = '', sub = '', falta = '';
           if (ints.length && t.estado !== 'bloqueado'){
             const ests = ints.map(agEstadoInterno);
             const bad = ests.filter(x => x.lvl !== 'ok');
-            if (bad.length) warn = `<span class="w" title="${escapeHtml(bad.map((x,i) => ints[ests.indexOf(x)] + ': ' + x.txt).join('\n'))}">⚠️</span>`;
+            if (bad.length){
+              warn = `<span class="w" title="${escapeHtml(bad.map(x => ints[ests.indexOf(x)] + ': ' + x.txt).join('\n'))}">⚠️</span>`;
+              const fl = [...new Set([].concat(...bad.map(x => x.falta && x.falta.length ? x.falta : [x.txt])))];
+              falta = `<div class="f">Falta: ${escapeHtml(fl.join(', '))}</div>`;
+            }
             const r0 = ests[0].r;
             if (r0) sub = `${escapeHtml((r0['Cliente'] || '').toString())} · ${escapeHtml((r0['Modelo'] || '').toString())}`;
           }
@@ -12066,7 +12077,7 @@
           return `<td class="ag-cell ${escapeHtml(t.estado || '')} ${edit ? 'edit' : ''}" ${attrs} title="Cargado por ${escapeHtml(t.usuario || '?')} · ${escapeHtml(t.actualizado || '')}">
             ${warn}<div class="e">${es.icon} ${es.label}</div>
             ${t.interno ? `<div class="i">${escapeHtml(t.interno)}</div>` : ''}
-            ${sub ? `<div class="c">${sub}</div>` : ''}
+            ${sub ? `<div class="c">${sub}</div>` : ''}${falta}
             ${t.nota ? `<div class="nt">${escapeHtml(t.nota)}</div>` : ''}</td>`;
         }).join('')}</tr>`).join('') + '</tbody>';
     }
@@ -12085,18 +12096,26 @@
 
     // Pendientes OK sin turno en la agenda (de hoy en adelante)
     const conTurno = new Set(Object.keys(cuenta));
-    const pend = ALL_ROWS.filter(r => CAR_BRANDS.includes((r['Marca'] || '').toString().trim().toUpperCase())
-        && categorize(r) === 'Patentado' && !isEntregado(r) && isOkParaTurno(r) && !conTurno.has((r['Interno'] || '').toString().trim()))
+    const base = ALL_ROWS.filter(r => CAR_BRANDS.includes((r['Marca'] || '').toString().trim().toUpperCase())
+        && categorize(r) === 'Patentado' && !isEntregado(r) && !tieneTurnoEntregaDado(r) && !conTurno.has((r['Interno'] || '').toString().trim()))
       .sort((a,b) => (parseDateFlexible(a['Fecha Patentamiento']) || 0) - (parseDateFlexible(b['Fecha Patentamiento']) || 0));
-    $('agPendientes').innerHTML = !pend.length ? '<div class="hint">No hay autos OK para entregar sin turno 🎉</div>' :
+    const pendOk = base.filter(r => isOkParaTurno(r)), pendNo = base.filter(r => !isOkParaTurno(r));
+    const pend = AG.pendTab === 'nook' ? pendNo : pendOk;
+    document.querySelectorAll('#agPendTabs button').forEach(b => {
+      b.classList.toggle('active', b.dataset.v === AG.pendTab);
+      b.textContent = b.dataset.v === 'ok' ? `✅ OK (${pendOk.length})` : `⚠️ No OK (${pendNo.length})`;
+    });
+    $('agPendTitle').textContent = AG.pendTab === 'nook' ? 'Patentados sin turno que todavía no están OK — se puede reservar igual' : 'OK para entregar, sin turno en la agenda';
+    $('agPendientes').innerHTML = !pend.length ? `<div class="hint">${AG.pendTab === 'nook' ? 'No hay patentados No OK sin turno' : 'No hay autos OK para entregar sin turno 🎉'}</div>` :
       pend.map(r => {
         const i = (r['Interno'] || '').toString().trim();
         const dias = diasDesdePatentamiento(r);
         return `<div class="ag-pend ${AG.pick === i ? 'sel' : ''}" data-interno="${escapeHtml(i)}" title="${edit ? 'Clic para elegirlo y después clic en un casillero libre' : ''}">
           <span class="i">${escapeHtml(i)}</span><span>${escapeHtml((r['Cliente'] || '').toString())}</span>
-          <span class="s">${escapeHtml((r['Modelo'] || '').toString())} · ${escapeHtml(PATENTADOS_BRAND_LABELS[(r['Marca'] || '').toString().trim().toUpperCase()] || '')}${dias !== null ? ` · ${dias} d desde patent.` : ''}</span></div>`;
+          <span class="s">${escapeHtml((r['Modelo'] || '').toString())} · ${escapeHtml(PATENTADOS_BRAND_LABELS[(r['Marca'] || '').toString().trim().toUpperCase()] || '')}${dias !== null ? ` · ${dias} d desde patent.` : ''}</span>
+          ${AG.pendTab === 'nook' ? `<span class="s" style="grid-column:2; color:var(--red);">Falta: ${escapeHtml((agEstadoInterno(i).falta || []).join(', '))}</span>` : ''}</div>`;
       }).join('');
-    $('agInternosList').innerHTML = pend.slice(0, 300).map(r => `<option value="${escapeHtml((r['Interno'] || '').toString().trim())}">${escapeHtml((r['Cliente'] || '').toString())}</option>`).join('');
+    $('agInternosList').innerHTML = pendOk.concat(pendNo).slice(0, 400).map(r => `<option value="${escapeHtml((r['Interno'] || '').toString().trim())}">${escapeHtml((r['Cliente'] || '').toString())}</option>`).join('');
 
     agRenderBuscar();
     agRenderEstado();
@@ -12229,6 +12248,7 @@
       if (!c || !agCanEdit()) return;
       agOpenEditor(c.dataset.hora, c.dataset.ent);
     });
+    $('agPendTabs').addEventListener('click', e => { const b = e.target.closest('button'); if (b){ AG.pendTab = b.dataset.v; renderAgendaSection(); } });
     $('agPendientes').addEventListener('click', e => {
       const p = e.target.closest('.ag-pend');
       if (!p || !agCanEdit()) return;
