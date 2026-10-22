@@ -12294,7 +12294,7 @@
       return `<div class="ag-info ${e.lvl}"><b>${escapeHtml(i)}</b>${r ? ` · ${escapeHtml((r['Cliente'] || '').toString())} · ${escapeHtml((r['Modelo'] || '').toString())} ${escapeHtml((r['Color'] || '').toString())}` : ''}<br>${escapeHtml(e.txt)}` +
         (r && agPatentaCliente(r) ? `<br><b style="color:var(--blue)">🙋 Patenta cliente — la documentación la trae el cliente</b>` : '') +
         (r && tieneTurnoEntregaDado(r) ? `<br>📅 En el sistema ya figura turno el ${formatDateDisplay(r['Fecha Turno Entrega'])}` : '') +
-        (otros.length ? `<br><span style="color:var(--red)">⚠️ Ya tiene turno en la agenda: ${otros.map(t => entFmt(agFromKey(t.fecha)).slice(0,5) + ' ' + escapeHtml(t.hora) + ' (' + escapeHtml(t.entregador) + ')').join(', ')}</span>` : '') + marcaWarn + '</div>';
+        (otros.length ? `<br><span style="color:var(--amber)">🔁 Ya tiene turno en la agenda: ${otros.map(t => entFmt(agFromKey(t.fecha)).slice(0,5) + ' ' + escapeHtml(t.hora) + ' (' + escapeHtml(t.entregador) + ')').join(', ')} — al guardar se mueve a este casillero y el anterior queda libre</span>` : '') + marcaWarn + '</div>';
     }).join('');
   }
   function agSave(){
@@ -12307,13 +12307,30 @@
     if (AG.pick && agInternos(interno).includes(AG.pick)) AG.pick = null;
     $('agModal').style.display = 'none';
     AG.edit = null;
+    if (estado && estado !== 'bloqueado') agLiberarOtros(agInternos(interno), fecha, hora, ent);
     agGuardar(fecha, hora, ent, estado, interno, nota);
   }
   function agRefrescarVistas(){
     try { renderAgendaSection(); } catch(e){}
     try { if ($('tabContactacion') && $('tabContactacion').classList.contains('active')) renderContactacionSection(); } catch(e){}
   }
-  function agGuardar(fecha, hora, ent, estado, interno, nota){
+  // Un interno no puede tener dos turnos a futuro: al asignarlo en otro casillero,
+  // se libera de los anteriores (si el casillero tenía varios internos, solo se lo saca a él).
+  function agLiberarOtros(internos, fecha, hora, ent){
+    const hoyK = agKey(new Date()), movidos = [];
+    [...AG.data.values()].forEach(t => {
+      if (t.fecha < hoyK || (t.fecha === fecha && t.hora === hora && t.entregador === ent) || t.estado === 'bloqueado') return;
+      const tInts = agInternos(t.interno);
+      const quitar = tInts.filter(i => internos.includes(i));
+      if (!quitar.length) return;
+      const resto = tInts.filter(i => !internos.includes(i));
+      movidos.push(`${quitar.join(', ')} (${entFmt(agFromKey(t.fecha)).slice(0,5)} ${t.hora} · ${t.entregador})`);
+      if (resto.length) agGuardar(t.fecha, t.hora, t.entregador, t.estado, resto.join(' - '), t.nota, true);
+      else agGuardar(t.fecha, t.hora, t.entregador, '', '', '', true);
+    });
+    if (movidos.length) showToast('🔁 Se liberó el turno anterior: ' + movidos.join('; '));
+  }
+  function agGuardar(fecha, hora, ent, estado, interno, nota, silencioso){
     const key = agSlot(fecha, hora, ent);
     const prev = AG.data.get(key);
     if (estado === '' && !nota) AG.data.delete(key);
@@ -12322,7 +12339,7 @@
     return apiPost({token: currentToken(), type:'turno', fecha, hora, entregador:ent, estado, interno, nota}).then(res => {
       handleAuthResult(res);
       if (!res || res.ok === false) throw new Error((res && res.error) || 'el servidor rechazó el guardado');
-      showToast(estado ? `✓ ${AG_ESTADOS[estado].label} guardado · ${ent} ${hora}` : `✓ Casillero liberado · ${ent} ${hora}`);
+      if (!silencioso) showToast(estado ? `✓ ${AG_ESTADOS[estado].label} guardado · ${ent} ${hora}` : `✓ Casillero liberado · ${ent} ${hora}`);
     }).catch(err => {
       if (err && err.isParseError){ showToast('⚠️ Se envió, pero el servidor respondió raro — revisá que se haya reflejado', false); return; }
       if (prev) AG.data.set(key, prev); else AG.data.delete(key);
@@ -12468,7 +12485,7 @@
     const ya = agTurnosDe(i);
     $('agPickInfo').innerHTML = `<div class="ag-info ${e.lvl}"><b>${escapeHtml(i)}</b>${r ? ` · ${escapeHtml((r['Cliente'] || '').toString())} · ${escapeHtml((r['Modelo'] || '').toString())} · ${escapeHtml(PATENTADOS_BRAND_LABELS[AGP.marca] || AGP.marca)}` : ''}<br>${escapeHtml(e.txt)}` +
       (r && agPatentaCliente(r) ? `<br><b style="color:var(--blue)">🙋 Patenta cliente — la documentación la trae el cliente</b>` : '') +
-      (ya.length ? `<br><span style="color:var(--red)">⚠️ Ya tiene en la agenda: ${ya.map(t => `${entFmt(agFromKey(t.fecha)).slice(0,5)} ${escapeHtml(t.hora)} · ${escapeHtml(t.entregador)} (${(AG_ESTADOS[t.estado] || {label:t.estado}).label})`).join(', ')}</span>` : '') + '</div>';
+      (ya.length ? `<br><span style="color:var(--amber)">🔁 Ya tiene en la agenda: ${ya.map(t => `${entFmt(agFromKey(t.fecha)).slice(0,5)} ${escapeHtml(t.hora)} · ${escapeHtml(t.entregador)} (${(AG_ESTADOS[t.estado] || {label:t.estado}).label})`).join(', ')} — al guardar se reprograma y ese lugar queda libre</span>` : '') + '</div>';
     const R = agReglas();
     const sug = agPrimerLibre(AGP.marca);
     $('agPickSug').innerHTML = sug
@@ -12502,6 +12519,7 @@
         AGP.slot = null; agRenderPicker(); return;
       }
       $('agPickModal').style.display = 'none';
+      agLiberarOtros([AGP.interno], fk, hora, ent);
       agGuardar(fk, hora, ent, AGP.estado, AGP.interno, $('agPickNota').value.trim());
     });
   }
@@ -12512,7 +12530,7 @@
       // el botón se muestra igual aunque todavía no haya llegado.
       if (!AG.loadedOnce && !AG.loading && !AG.contactTry){ AG.contactTry = true; agAsegurarCarga(); }
       const ya = AG.loadedOnce ? agTurnosDe(interno) : [];
-      const btn = agCanEdit() ? `<button type="button" class="page-btn ag-dar-turno" data-interno="${escapeHtml(interno)}" style="padding:3px 8px; font-size:11.5px;">📅 ${ya.length ? 'Otro' : 'Dar turno'}</button>` : '';
+      const btn = agCanEdit() ? `<button type="button" class="page-btn ag-dar-turno" data-interno="${escapeHtml(interno)}" style="padding:3px 8px; font-size:11.5px;">${ya.length ? '🔁 Reprogramar' : '📅 Dar turno'}</button>` : '';
       return ya.map(t => `<div class="ag-contact-turno">${(AG_ESTADOS[t.estado] || {icon:''}).icon} ${entFmt(agFromKey(t.fecha)).slice(0,5)} ${escapeHtml(t.hora)} · ${escapeHtml(t.entregador)}</div>`).join('') + btn;
     } catch(e){ return ''; }
   }
