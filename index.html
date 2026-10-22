@@ -12485,8 +12485,10 @@
   // Celda de la columna "Agenda" en Contactación
   function agContactCell(interno){
     try {
-      if (!AG.loadedOnce){ agAsegurarCarga(); return '<span class="hint">…</span>'; }
-      const ya = agTurnosDe(interno);
+      // Carga la agenda una sola vez en segundo plano (sin bucles si el servidor falla);
+      // el botón se muestra igual aunque todavía no haya llegado.
+      if (!AG.loadedOnce && !AG.loading && !AG.contactTry){ AG.contactTry = true; agAsegurarCarga(); }
+      const ya = AG.loadedOnce ? agTurnosDe(interno) : [];
       const btn = agCanEdit() ? `<button type="button" class="page-btn ag-dar-turno" data-interno="${escapeHtml(interno)}" style="padding:3px 8px; font-size:11.5px;">📅 ${ya.length ? 'Otro' : 'Dar turno'}</button>` : '';
       return ya.map(t => `<div class="ag-contact-turno">${(AG_ESTADOS[t.estado] || {icon:''}).icon} ${entFmt(agFromKey(t.fecha)).slice(0,5)} ${escapeHtml(t.hora)} · ${escapeHtml(t.entregador)}</div>`).join('') + btn;
     } catch(e){ return ''; }
