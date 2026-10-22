@@ -1259,6 +1259,11 @@
           <button type="button" class="pill-action" id="agBrandAll">Todas</button>
           <button type="button" class="pill-action" id="agBrandNone">Ninguna</button>
         </div>
+        <div class="segmented" id="agInvSeg" style="margin-top:10px; margin-left:8px; display:inline-flex;">
+          <button type="button" class="active" data-v="todos">Invitado: todos</button>
+          <button type="button" data-v="si">Sí</button>
+          <button type="button" data-v="no">No</button>
+        </div>
         <div id="agBuscarRes"></div>
         <div class="ag-semana" id="agSemana"></div>
         <div class="an-kpis" id="agKpis" style="margin-top:12px;"></div>
@@ -11934,7 +11939,7 @@
     ofrecido:  {label:'Ofrecido',  icon:'🟡'},
     bloqueado: {label:'Bloqueado', icon:'⛔'}
   };
-  const AG = {brands:new Set(CAR_BRANDS), pendTab:'ok', fecha:null, cfg:null, data:new Map(), desde:null, hasta:null, loading:false, loadedOnce:false, pick:null, edit:null, editEstado:''};
+  const AG = {inv:'todos', brands:new Set(CAR_BRANDS), pendTab:'ok', fecha:null, cfg:null, data:new Map(), desde:null, hasta:null, loading:false, loadedOnce:false, pick:null, edit:null, editEstado:''};
 
   const agKey = d => d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
   const agFromKey = k => { const [y,m,d] = k.split('-').map(Number); return new Date(y, m-1, d); };
@@ -12031,8 +12036,10 @@
       $('agBrandList').innerHTML = CAR_BRANDS.map(b => `<button type="button" data-v="${b}">${escapeHtml(PATENTADOS_BRAND_LABELS[b] || b)}</button>`).join('');
     }
     $('agBrandList').querySelectorAll('button').forEach(b => b.classList.toggle('active', AG.brands.has(b.dataset.v)));
-    const agMarcaOk = r => AG.brands.has((r['Marca'] || '').toString().trim().toUpperCase());
-    const todasMarcas = AG.brands.size === CAR_BRANDS.length;
+    document.querySelectorAll('#agInvSeg button').forEach(b => b.classList.toggle('active', b.dataset.v === AG.inv));
+    const agMarcaOk = r => AG.brands.has((r['Marca'] || '').toString().trim().toUpperCase())
+      && (AG.inv === 'todos' || (AG.inv === 'si') === isInvitado(r));
+    const todasMarcas = AG.brands.size === CAR_BRANDS.length && AG.inv === 'todos';
     $('agFecha').value = k;
     $('agConfigBtn').style.display = (CURRENT_SESSION && CURRENT_SESSION.role === 'admin') ? '' : 'none';
     const fer = typeof esFeriadoSLA === 'function' && esFeriadoSLA(f);
@@ -12267,6 +12274,7 @@
       if (AG.brands.has(b.dataset.v)) AG.brands.delete(b.dataset.v); else AG.brands.add(b.dataset.v);
       renderAgendaSection();
     });
+    $('agInvSeg').addEventListener('click', e => { const b = e.target.closest('button'); if (b){ AG.inv = b.dataset.v; renderAgendaSection(); } });
     $('agBrandAll').addEventListener('click', () => { AG.brands = new Set(CAR_BRANDS); renderAgendaSection(); });
     $('agBrandNone').addEventListener('click', () => { AG.brands = new Set(); renderAgendaSection(); });
     $('agPendTabs').addEventListener('click', e => { const b = e.target.closest('button'); if (b){ AG.pendTab = b.dataset.v; renderAgendaSection(); } });
