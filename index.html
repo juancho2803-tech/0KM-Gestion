@@ -1253,6 +1253,12 @@
           <div class="table-search" style="margin:0;"><input type="text" id="agBuscar" placeholder="🔎 Buscar interno en la agenda…" autocomplete="off"></div>
           <button type="button" class="page-btn" id="agConfigBtn" style="display:none;">⚙️ Horarios y entregadores</button>
         </div>
+        <div class="pill-group" style="margin-top:10px;">
+          <span class="pill-group-label">Marca</span>
+          <div class="pill-list" id="agBrandList"></div>
+          <button type="button" class="pill-action" id="agBrandAll">Todas</button>
+          <button type="button" class="pill-action" id="agBrandNone">Ninguna</button>
+        </div>
         <div id="agBuscarRes"></div>
         <div class="ag-semana" id="agSemana"></div>
         <div class="an-kpis" id="agKpis" style="margin-top:12px;"></div>
@@ -11928,7 +11934,7 @@
     ofrecido:  {label:'Ofrecido',  icon:'🟡'},
     bloqueado: {label:'Bloqueado', icon:'⛔'}
   };
-  const AG = {pendTab:'ok', fecha:null, cfg:null, data:new Map(), desde:null, hasta:null, loading:false, loadedOnce:false, pick:null, edit:null, editEstado:''};
+  const AG = {brands:new Set(CAR_BRANDS), pendTab:'ok', fecha:null, cfg:null, data:new Map(), desde:null, hasta:null, loading:false, loadedOnce:false, pick:null, edit:null, editEstado:''};
 
   const agKey = d => d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
   const agFromKey = k => { const [y,m,d] = k.split('-').map(Number); return new Date(y, m-1, d); };
@@ -12021,6 +12027,12 @@
     if (!AG.loadedOnce && !AG.loading){ agLoad(true); }
     else if (!AG.loading && !(agKey(AG.fecha) >= AG.desde && agKey(AG.fecha) <= AG.hasta)) { agLoad(false); }
     const f = AG.fecha, k = agKey(f), edit = agCanEdit();
+    if (!$('agBrandList').children.length){
+      $('agBrandList').innerHTML = CAR_BRANDS.map(b => `<button type="button" data-v="${b}">${escapeHtml(PATENTADOS_BRAND_LABELS[b] || b)}</button>`).join('');
+    }
+    $('agBrandList').querySelectorAll('button').forEach(b => b.classList.toggle('active', AG.brands.has(b.dataset.v)));
+    const agMarcaOk = r => AG.brands.has((r['Marca'] || '').toString().trim().toUpperCase());
+    const todasMarcas = AG.brands.size === CAR_BRANDS.length;
     $('agFecha').value = k;
     $('agConfigBtn').style.display = (CURRENT_SESSION && CURRENT_SESSION.role === 'admin') ? '' : 'none';
     const fer = typeof esFeriadoSLA === 'function' && esFeriadoSLA(f);
@@ -12074,7 +12086,9 @@
             if (r0) sub = `${escapeHtml((r0['Cliente'] || '').toString())} · ${escapeHtml((r0['Modelo'] || '').toString())}`;
           }
           const es = AG_ESTADOS[t.estado] || {label:t.estado || 'Nota', icon:'📝'};
-          return `<td class="ag-cell ${escapeHtml(t.estado || '')} ${edit ? 'edit' : ''}" ${attrs} title="Cargado por ${escapeHtml(t.usuario || '?')} · ${escapeHtml(t.actualizado || '')}">
+          const rMarca = ints.length ? agRowIndex().get(ints[0]) : null;
+          const fuera = !todasMarcas && rMarca && !agMarcaOk(rMarca);
+          return `<td class="ag-cell ${escapeHtml(t.estado || '')} ${edit ? 'edit' : ''}" ${attrs} style="${fuera ? 'opacity:.3;' : ''}" title="Cargado por ${escapeHtml(t.usuario || '?')} · ${escapeHtml(t.actualizado || '')}">
             ${warn}<div class="e">${es.icon} ${es.label}</div>
             ${t.interno ? `<div class="i">${escapeHtml(t.interno)}</div>` : ''}
             ${sub ? `<div class="c">${sub}</div>` : ''}${falta}
@@ -12096,7 +12110,7 @@
 
     // Pendientes OK sin turno en la agenda (de hoy en adelante)
     const conTurno = new Set(Object.keys(cuenta));
-    const base = ALL_ROWS.filter(r => CAR_BRANDS.includes((r['Marca'] || '').toString().trim().toUpperCase())
+    const base = ALL_ROWS.filter(r => agMarcaOk(r)
         && categorize(r) === 'Patentado' && !isEntregado(r) && !tieneTurnoEntregaDado(r) && !conTurno.has((r['Interno'] || '').toString().trim()))
       .sort((a,b) => (parseDateFlexible(a['Fecha Patentamiento']) || 0) - (parseDateFlexible(b['Fecha Patentamiento']) || 0));
     const pendOk = base.filter(r => isOkParaTurno(r)), pendNo = base.filter(r => !isOkParaTurno(r));
@@ -12248,6 +12262,13 @@
       if (!c || !agCanEdit()) return;
       agOpenEditor(c.dataset.hora, c.dataset.ent);
     });
+    $('agBrandList').addEventListener('click', e => {
+      const b = e.target.closest('button'); if (!b) return;
+      if (AG.brands.has(b.dataset.v)) AG.brands.delete(b.dataset.v); else AG.brands.add(b.dataset.v);
+      renderAgendaSection();
+    });
+    $('agBrandAll').addEventListener('click', () => { AG.brands = new Set(CAR_BRANDS); renderAgendaSection(); });
+    $('agBrandNone').addEventListener('click', () => { AG.brands = new Set(); renderAgendaSection(); });
     $('agPendTabs').addEventListener('click', e => { const b = e.target.closest('button'); if (b){ AG.pendTab = b.dataset.v; renderAgendaSection(); } });
     $('agPendientes').addEventListener('click', e => {
       const p = e.target.closest('.ag-pend');
