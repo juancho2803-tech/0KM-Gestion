@@ -740,6 +740,53 @@
   .an-table td.num, .an-table th.num{text-align:right; font-family:'JetBrains Mono',monospace;}
   .an-table td.heat{text-align:center; font-family:'JetBrains Mono',monospace;}
   .an-table th.sel, .an-table td.sel{outline:2px solid var(--blue); outline-offset:-2px;}
+  /* ---- Agenda de turnos ---- */
+  .ag-toolbar{display:flex; align-items:center; gap:8px; flex-wrap:wrap;}
+  .ag-dia{font-family:'Barlow Condensed',sans-serif; font-size:18px; font-weight:700; text-transform:capitalize; margin-left:6px;}
+  .ag-dia .ag-fer{font-size:12px; color:var(--red); margin-left:6px; text-transform:none;}
+  .ag-semana{display:grid; grid-template-columns:repeat(6, minmax(0,1fr)); gap:8px; margin-top:12px;}
+  @media (max-width:700px){ .ag-semana{grid-template-columns:repeat(3, minmax(0,1fr));} }
+  .ag-dchip{background:var(--surface-2); border:1px solid var(--border); border-radius:10px; padding:7px 10px; cursor:pointer; text-align:center;}
+  .ag-dchip:hover{border-color:var(--blue);}
+  .ag-dchip.sel{box-shadow:0 0 0 2px var(--blue); border-color:transparent;}
+  .ag-dchip .d{font-size:11px; color:var(--text-dim); text-transform:capitalize;}
+  .ag-dchip .n{font-family:'JetBrains Mono',monospace; font-weight:700; font-size:15px; margin-top:2px;}
+  .ag-dchip .b{height:5px; background:var(--surface-3); border-radius:3px; overflow:hidden; margin-top:5px;}
+  .ag-dchip .b span{display:block; height:100%; border-radius:3px;}
+  .ag-layout{display:grid; grid-template-columns:minmax(0,1fr) 300px; gap:16px; margin-top:12px; align-items:start;}
+  @media (max-width:980px){ .ag-layout{grid-template-columns:1fr;} }
+  .ag-grid{border-collapse:separate; border-spacing:4px; width:100%; min-width:520px; table-layout:fixed;}
+  .ag-grid th{font-family:'Barlow Condensed',sans-serif; text-transform:uppercase; letter-spacing:.6px; font-size:13px; padding:6px; background:var(--surface-3); border-radius:6px; color:var(--text);}
+  .ag-grid th.h{width:64px;}
+  .ag-grid td.h{font-family:'JetBrains Mono',monospace; font-weight:700; text-align:center; color:var(--text-dim);}
+  .ag-cell{height:58px; border:1px dashed var(--border); border-radius:8px; padding:5px 7px; vertical-align:top; font-size:12px; position:relative;}
+  .ag-cell.edit{cursor:pointer;}
+  .ag-cell.edit:hover{border-color:var(--blue); border-style:solid;}
+  .ag-cell.turno{background:rgba(51,211,145,.14); border:1px solid rgba(51,211,145,.55);}
+  .ag-cell.reservado{background:rgba(167,139,250,.16); border:1px solid rgba(167,139,250,.6);}
+  .ag-cell.ofrecido{background:rgba(255,176,32,.16); border:1px solid rgba(255,176,32,.6);}
+  .ag-cell.bloqueado{background:repeating-linear-gradient(45deg, rgba(255,92,77,.16), rgba(255,92,77,.16) 6px, rgba(255,92,77,.07) 6px, rgba(255,92,77,.07) 12px); border:1px solid rgba(255,92,77,.5);}
+  .ag-cell .e{font-size:10px; text-transform:uppercase; letter-spacing:.5px; font-weight:700; color:var(--text-dim);}
+  .ag-cell .i{font-family:'JetBrains Mono',monospace; font-weight:800; font-size:13.5px;}
+  .ag-cell .c{font-size:10.5px; color:var(--text-dim); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:190px;}
+  .ag-cell .nt{font-size:10.5px; font-style:italic; color:var(--text-dim); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:190px;}
+  .ag-cell .w{position:absolute; top:4px; right:6px; font-size:13px;}
+  .ag-cell.libre-pick{border-color:var(--green); border-style:solid;}
+  .ag-side{background:var(--surface-2); border:1px solid var(--border); border-radius:10px; padding:10px; max-height:560px; overflow:auto;}
+  .ag-pend{display:grid; grid-template-columns:62px 1fr; gap:2px 8px; padding:6px; border-radius:7px; cursor:pointer; font-size:12px; border:1px solid transparent;}
+  .ag-pend:hover{background:var(--surface-3);}
+  .ag-pend.sel{border-color:var(--green); background:rgba(51,211,145,.12);}
+  .ag-pend .i{font-family:'JetBrains Mono',monospace; font-weight:800; grid-row:span 2;}
+  .ag-pend .s{color:var(--text-dim); font-size:11px;}
+  .ag-alert{border:1px solid var(--red); border-left:4px solid var(--red); border-radius:10px; padding:8px 12px; background:rgba(255,92,77,0.06); margin-top:12px; font-size:12.5px;}
+  .ag-alert li{margin:3px 0 3px 16px;}
+  .ag-modal{background:var(--surface); color:var(--text); border:1px solid var(--border); border-radius:12px; padding:18px; width:min(520px, 92vw); box-shadow:var(--shadow);}
+  .ag-lbl{display:block; font-size:12.5px; color:var(--text-dim); margin-top:8px;}
+  .ag-lbl input, .ag-lbl textarea{display:block; width:100%; margin-top:4px; padding:8px; background:var(--surface-2); color:var(--text); border:1px solid var(--border); border-radius:6px; font:inherit; font-size:13px;}
+  .ag-primary{background:var(--green) !important; color:#06281a !important; border-color:transparent !important; font-weight:700;}
+  #agModalEstado button.active{font-weight:700;}
+  .ag-info{font-size:12px; padding:7px 9px; border-radius:7px; margin-top:4px; border:1px solid var(--border); background:var(--surface-2);}
+  .ag-info.ok{border-color:rgba(51,211,145,.6);} .ag-info.bad{border-color:rgba(255,92,77,.6);} .ag-info.warn{border-color:rgba(255,176,32,.6);}
 </style>
 </head>
 <body data-theme="dark">
@@ -1051,6 +1098,7 @@
     <div class="tab-content" id="tabEntregas">
       <div class="subtab-nav" id="entregasSubNav">
         <button class="subtab-btn active" data-subtab="patentados" type="button">✅ Patentados</button>
+        <button class="subtab-btn" data-subtab="agenda" type="button">📅 Agenda de turnos</button>
         <button class="subtab-btn" data-subtab="averias" type="button">⚠️ Averías</button>
         <button class="subtab-btn" data-subtab="fueradq" type="button">📍 No en DQ</button>
         <button class="subtab-btn" data-subtab="accesorios" type="button">🎒 Accesorios</button>
@@ -1186,6 +1234,40 @@
         <div class="hint" id="patTableHint" style="margin-top:10px;">Mostrando 0 de 0 registros</div>
       </div>
     </div><!-- /tabPatentados -->
+
+    <div class="subtab-content" id="tabAgenda">
+      <div class="panel">
+        <div class="panel-head">
+          <h3>📅 Agenda de turnos de entrega</h3>
+          <div class="hint">Reemplaza la planilla de Drive. Clic en un casillero para dar, reservar, ofrecer o bloquear un turno. Al cargar un interno se valida contra la base si está OK para entregar. El historial queda guardado: navegá a cualquier fecha para consultarlo.</div>
+        </div>
+        <div class="ag-toolbar">
+          <button type="button" class="page-btn" id="agPrev" title="Día anterior">‹</button>
+          <input type="date" id="agFecha" class="obs-date">
+          <button type="button" class="page-btn" id="agNext" title="Día siguiente">›</button>
+          <button type="button" class="page-btn" id="agHoy">Hoy</button>
+          <div class="ag-dia" id="agDiaLabel"></div>
+          <div style="flex:1"></div>
+          <div class="table-search" style="margin:0;"><input type="text" id="agBuscar" placeholder="🔎 Buscar interno en la agenda…" autocomplete="off"></div>
+          <button type="button" class="page-btn" id="agConfigBtn" style="display:none;">⚙️ Horarios y entregadores</button>
+        </div>
+        <div id="agBuscarRes"></div>
+        <div class="ag-semana" id="agSemana"></div>
+        <div class="an-kpis" id="agKpis" style="margin-top:12px;"></div>
+        <div id="agAlertas"></div>
+        <div class="ag-layout">
+          <div>
+            <div class="table-scroll" style="max-height:none;"><table class="ag-grid" id="agGrid"></table></div>
+            <div class="hint" id="agEstado" style="margin-top:8px; font-size:11.5px;"></div>
+          </div>
+          <div class="ag-side">
+            <div class="an-sub">✅ OK para entregar, sin turno en la agenda</div>
+            <div class="hint" style="margin-bottom:6px; font-size:11px;">Clic en uno para elegirlo y después clic en un casillero libre.</div>
+            <div id="agPendientes"></div>
+          </div>
+        </div>
+      </div>
+    </div><!-- /tabAgenda -->
 
     <div class="subtab-content" id="tabAverias">
       <div class="panel">
@@ -2690,6 +2772,49 @@
     </div>
   </div>
 
+  <div class="modal-overlay" id="agModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.55); z-index:1000; align-items:center; justify-content:center;">
+    <div class="ag-modal">
+      <h3 id="agModalTitle" style="margin:0 0 4px;">Turno</h3>
+      <div class="hint" id="agModalSub" style="margin-bottom:12px;"></div>
+      <div class="segmented" id="agModalEstado" style="margin-bottom:12px; flex-wrap:wrap;">
+        <button type="button" data-estado="">⬜ Libre</button>
+        <button type="button" data-estado="turno">✅ Turno</button>
+        <button type="button" data-estado="reservado">🟣 Reservado</button>
+        <button type="button" data-estado="ofrecido">🟡 Ofrecido</button>
+        <button type="button" data-estado="bloqueado">⛔ Bloqueado</button>
+      </div>
+      <label class="ag-lbl" id="agModalInternoWrap">Interno(s) <span class="hint">— si son varios, separalos con guion o coma</span>
+        <input type="text" id="agModalInterno" list="agInternosList" autocomplete="off" placeholder="Ej.: 73238">
+      </label>
+      <datalist id="agInternosList"></datalist>
+      <div id="agModalInfo" style="margin:8px 0 10px;"></div>
+      <label class="ag-lbl">Nota <span class="hint" id="agModalNotaHint">— opcional (ej.: cliente de trámite, verificar información)</span>
+        <textarea id="agModalNota" rows="2"></textarea>
+      </label>
+      <div class="auth-error" id="agModalError" style="text-align:left; margin-top:6px;"></div>
+      <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:12px;">
+        <button type="button" class="page-btn" id="agModalCancel">Cancelar</button>
+        <button type="button" class="page-btn ag-primary" id="agModalSave">Guardar</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="agCfgModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.55); z-index:1000; align-items:center; justify-content:center;">
+    <div class="ag-modal">
+      <h3 style="margin:0 0 4px;">⚙️ Horarios y entregadores</h3>
+      <div class="hint" style="margin-bottom:12px;">Separados por coma. Aplica a todos los días; los turnos ya cargados en horarios o entregadores que saques se siguen viendo en su fecha.</div>
+      <label class="ag-lbl">Horarios lunes a viernes<input type="text" id="agCfgHorasLV"></label>
+      <label class="ag-lbl">Entregadores lunes a viernes<input type="text" id="agCfgEntLV"></label>
+      <label class="ag-lbl">Horarios sábado<input type="text" id="agCfgHorasSA"></label>
+      <label class="ag-lbl">Entregadores sábado<input type="text" id="agCfgEntSA"></label>
+      <div class="auth-error" id="agCfgError" style="text-align:left; margin-top:6px;"></div>
+      <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:12px;">
+        <button type="button" class="page-btn" id="agCfgCancel">Cancelar</button>
+        <button type="button" class="page-btn ag-primary" id="agCfgSave">Guardar</button>
+      </div>
+    </div>
+  </div>
+
   <footer>Gestión Integral Ventas · by Juan Romero</footer>
 </div>
 
@@ -3180,7 +3305,7 @@
 
   // ---------- Resumen ----------
   function goToTab(tabName){
-    const SUB_OF_ENTREGAS = ['patentados','averias','fueradq','accesorios','contactacion','clienteexterno'];
+    const SUB_OF_ENTREGAS = ['patentados','averias','fueradq','accesorios','contactacion','clienteexterno','agenda'];
     if (SUB_OF_ENTREGAS.includes(tabName)){
       const mainBtn = document.querySelector('.tab-btn[data-tab="entregas"]');
       if (mainBtn) mainBtn.click();
@@ -8386,13 +8511,14 @@
   });
 
   // ---------- Sub-pestañas de Entregas ----------
-  const SUBTAB_TARGETS = {patentados:'tabPatentados', averias:'tabAverias', fueradq:'tabFueraDQ', accesorios:'tabAccesorios', contactacion:'tabContactacion', clienteexterno:'tabClienteExterno'};
+  const SUBTAB_TARGETS = {patentados:'tabPatentados', averias:'tabAverias', fueradq:'tabFueraDQ', accesorios:'tabAccesorios', contactacion:'tabContactacion', clienteexterno:'tabClienteExterno', agenda:'tabAgenda'};
   document.querySelectorAll('#entregasSubNav .subtab-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       document.querySelectorAll('#entregasSubNav .subtab-btn').forEach(b => b.classList.toggle('active', b === btn));
       const target = SUBTAB_TARGETS[btn.dataset.subtab];
       document.querySelectorAll('#tabEntregas .subtab-content').forEach(c => c.classList.toggle('active', c.id === target));
       if (btn.dataset.subtab === 'clienteexterno' && typeof renderClienteExternoSection === 'function') renderClienteExternoSection();
+      if (btn.dataset.subtab === 'agenda' && typeof renderAgendaSection === 'function'){ try { renderAgendaSection(); } catch(e){ console.error('renderAgendaSection', e); } }
     });
   });
 
@@ -11778,6 +11904,352 @@
     $('anProvList').addEventListener('click', anPickProv);
     $('anPeriodoSelect').addEventListener('change', e => { AN.periodo = parseInt(e.target.value, 10) || 12; renderAnalisisSection(); });
     new MutationObserver(() => { try { renderAnalisisSection(); } catch(e){} }).observe(document.body, {attributes:true, attributeFilter:['data-theme']});
+  }
+
+  // =====================================================================
+  // ---------- Entregas › Agenda de turnos (v29) ----------
+  // Reemplaza la planilla de Drive. Datos en la hoja "Turnos" del backend: una fila
+  // por casillero ocupado. Se trae solo una ventana de fechas alrededor del día
+  // elegido (unos cientos de filas como mucho) y únicamente al abrir esta pestaña.
+  // =====================================================================
+  const AG_CFG_DEFAULT = {
+    lv: {horas:['9:00','10:00','11:00','12:00','14:00','15:00','16:00','17:00'], entregadores:['AVERO','DIAZ','ROA','JM']},
+    sa: {horas:['9:40','10:20','11:00','11:40','12:20'], entregadores:['AVERO','DIAZ','ROA']}
+  };
+  const AG_ESTADOS = {
+    turno:     {label:'Turno',     icon:'✅'},
+    reservado: {label:'Reservado', icon:'🟣'},
+    ofrecido:  {label:'Ofrecido',  icon:'🟡'},
+    bloqueado: {label:'Bloqueado', icon:'⛔'}
+  };
+  const AG = {fecha:null, cfg:null, data:new Map(), desde:null, hasta:null, loading:false, loadedOnce:false, pick:null, edit:null, editEstado:''};
+
+  const agKey = d => d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+  const agFromKey = k => { const [y,m,d] = k.split('-').map(Number); return new Date(y, m-1, d); };
+  const agSlot = (f, h, e) => f + '|' + h + '|' + e;
+  const agHoraMin = h => { const [a,b] = h.split(':').map(Number); return (a || 0) * 60 + (b || 0); };
+  function agCanEdit(){ return !!(CURRENT_SESSION && (CURRENT_SESSION.role === 'admin' || CURRENT_SESSION.role === 'entregas')); }
+  function agCfg(){ return AG.cfg || AG_CFG_DEFAULT; }
+  function agPlantilla(d){
+    const dow = d.getDay();
+    if (dow === 0) return {horas:[], entregadores:[]};
+    return dow === 6 ? agCfg().sa : agCfg().lv;
+  }
+  // Horarios/entregadores del día = plantilla + lo que ya esté cargado (el historial nunca se esconde)
+  function agDia(d){
+    const k = agKey(d), p = agPlantilla(d);
+    const horas = new Set(p.horas), ents = [...p.entregadores];
+    AG.data.forEach(t => { if (t.fecha === k){ horas.add(t.hora); if (!ents.includes(t.entregador)) ents.push(t.entregador); } });
+    return {horas:[...horas].sort((a,b) => agHoraMin(a) - agHoraMin(b)), entregadores:ents};
+  }
+  function agInternos(txt){ return ((txt || '').toString().match(/\d{3,}/g) || []); }
+  function agRowIndex(){
+    if (AG._idxRef === ALL_ROWS) return AG._idx;
+    const m = new Map();
+    ALL_ROWS.forEach(r => { const i = (r['Interno'] || '').toString().trim(); if (i) m.set(i, r); });
+    AG._idx = m; AG._idxRef = ALL_ROWS;
+    return m;
+  }
+  // Estado del interno según la base (mismos chequeos que Patentados)
+  function agEstadoInterno(interno){
+    const r = agRowIndex().get(interno);
+    if (!r) return {lvl:'warn', txt:'No está en la base cargada', r:null};
+    if (isEntregado(r)) return {lvl:'warn', txt:'Ya figura entregado', r};
+    const m = patMotivosNoOk(r).filter(k => k !== 'turno');
+    const labels = m.map(k => (PAT_MOTIVOS_NOOK.find(x => x.k === k) || {label:k}).label);
+    if (categorize(r) !== 'Patentado') labels.unshift('🏛️ Sin patentar');
+    return labels.length ? {lvl:'bad', txt:'No OK: ' + labels.join(' · '), r} : {lvl:'ok', txt:'✅ OK para entregar', r};
+  }
+  function agStats(d){
+    const k = agKey(d), dia = agDia(d);
+    const s = {total: dia.horas.length * dia.entregadores.length, turno:0, reservado:0, ofrecido:0, bloqueado:0};
+    AG.data.forEach(t => { if (t.fecha === k && s[t.estado] !== undefined) s[t.estado]++; });
+    s.ocupados = s.turno + s.reservado + s.ofrecido;
+    s.cap = Math.max(0, s.total - s.bloqueado);
+    s.libres = Math.max(0, s.cap - s.ocupados);
+    s.pct = s.cap ? Math.round(s.ocupados / s.cap * 100) : 0;
+    return s;
+  }
+
+  function agLoad(force){
+    if (!obsConfigured() || !currentToken()) return Promise.resolve();
+    const f = AG.fecha;
+    const dentro = AG.desde && agKey(f) >= AG.desde && agKey(f) <= AG.hasta;
+    if (!force && dentro) return Promise.resolve();
+    const desde = agKey(new Date(f.getFullYear(), f.getMonth() - 1, 1));
+    const hasta = agKey(new Date(f.getFullYear(), f.getMonth() + 3, 0));
+    AG.loading = true; agRenderEstado();
+    return jsonpGet({action:'turnos', token: currentToken(), desde, hasta}, 45000).then(payload => {
+      handleAuthResult(payload);
+      if (!payload || !payload.ok) throw new Error((payload && payload.error) || 'respuesta inválida');
+      const d = payload.data || {};
+      if (d.config && d.config.lv && d.config.sa) AG.cfg = d.config;
+      // reemplaza solo la ventana pedida (lo de afuera, si se cargó antes, se mantiene)
+      [...AG.data.keys()].forEach(k => { const fe = k.split('|')[0]; if (fe >= desde && fe <= hasta) AG.data.delete(k); });
+      (d.turnos || []).forEach(t => AG.data.set(agSlot(t.fecha, t.hora, t.entregador), t));
+      AG.desde = (!AG.desde || desde < AG.desde) ? desde : AG.desde;
+      AG.hasta = (!AG.hasta || hasta > AG.hasta) ? hasta : AG.hasta;
+      AG.loadedOnce = true; AG.lastLoad = new Date();
+    }).catch(err => {
+      AG.error = err.message;
+      console.error('Agenda de turnos:', err);
+    }).finally(() => { AG.loading = false; renderAgendaSection(); });
+  }
+
+  function agRenderEstado(){
+    const el = $('agEstado'); if (!el) return;
+    el.innerHTML = AG.loading ? '⏳ Cargando agenda…'
+      : (AG.error && !AG.loadedOnce ? `<span style="color:var(--red)">⚠️ No se pudo cargar la agenda (${escapeHtml(AG.error)}). ¿Está publicado el Code.gs v29?</span>`
+      : (AG.lastLoad ? `Actualizado ${AG.lastLoad.toLocaleTimeString('es-AR', {hour:'2-digit', minute:'2-digit'})} · se refresca solo cada minuto${agCanEdit() ? '' : ' · solo lectura (tu rol no edita la agenda)'}` : ''));
+  }
+
+  function renderAgendaSection(){
+    const tab = $('tabAgenda');
+    if (!tab || !tab.classList.contains('active')) return;
+    if (!AG.fecha){
+      const h = new Date(); h.setHours(0,0,0,0);
+      if (h.getDay() === 0) h.setDate(h.getDate() + 1);
+      AG.fecha = h;
+    }
+    if (!AG.loadedOnce && !AG.loading){ agLoad(true); }
+    else if (!AG.loading && !(agKey(AG.fecha) >= AG.desde && agKey(AG.fecha) <= AG.hasta)) { agLoad(false); }
+    const f = AG.fecha, k = agKey(f), edit = agCanEdit();
+    $('agFecha').value = k;
+    $('agConfigBtn').style.display = (CURRENT_SESSION && CURRENT_SESSION.role === 'admin') ? '' : 'none';
+    const fer = typeof esFeriadoSLA === 'function' && esFeriadoSLA(f);
+    $('agDiaLabel').innerHTML = escapeHtml(f.toLocaleDateString('es-AR', {weekday:'long', day:'2-digit', month:'2-digit', year:'numeric'})) +
+      (f.getDay() === 0 ? '<span class="ag-fer">domingo, sin turnos</span>' : '') + (fer ? '<span class="ag-fer">🎉 feriado</span>' : '');
+
+    // Semana (lunes a sábado)
+    const lun = new Date(f); lun.setDate(f.getDate() - ((f.getDay() + 6) % 7));
+    const hoyK = agKey(new Date());
+    $('agSemana').innerHTML = [0,1,2,3,4,5].map(i => {
+      const d = new Date(lun); d.setDate(lun.getDate() + i);
+      const s = agStats(d), dk = agKey(d);
+      const col = s.pct >= 90 ? 'var(--red)' : (s.pct >= 60 ? 'var(--amber)' : 'var(--green)');
+      return `<div class="ag-dchip ${dk === k ? 'sel' : ''}" data-fecha="${dk}" title="${s.ocupados} ocupados de ${s.cap} disponibles${s.bloqueado ? ' (' + s.bloqueado + ' bloqueados)' : ''}">
+        <div class="d">${escapeHtml(d.toLocaleDateString('es-AR', {weekday:'short', day:'2-digit', month:'2-digit'}))}${dk === hoyK ? ' · hoy' : ''}</div>
+        <div class="n">${s.ocupados}/${s.cap} <span style="font-size:12px; color:${col}">${s.pct}%</span></div>
+        <div class="b"><span style="width:${s.pct}%; background:${col}"></span></div></div>`;
+    }).join('');
+
+    // KPIs del día
+    const s = agStats(f);
+    const kpi = (l, v, sub, c) => `<div class="an-kpi" style="--kc:${c}"><div class="l">${l}</div><div class="v">${v}</div><div class="s">${sub}</div></div>`;
+    $('agKpis').innerHTML =
+      kpi('📊 Ocupación', s.pct + '%', `${s.ocupados} de ${s.cap} turnos posibles${s.bloqueado ? ` (${s.total} − ${s.bloqueado} bloqueados)` : ''}`, s.pct >= 90 ? 'var(--red)' : 'var(--blue)') +
+      kpi('✅ Turnos', s.turno, 'confirmados', 'var(--green)') +
+      kpi('🟣 Reservados', s.reservado, 'apartados sin confirmar', '#a78bfa') +
+      kpi('🟡 Ofrecidos', s.ofrecido, 'esperando respuesta del cliente', 'var(--amber)') +
+      kpi('⬜ Libres', s.libres, s.bloqueado ? `${s.bloqueado} casilleros bloqueados` : 'sin bloqueos', 'var(--gray)');
+
+    // Grilla
+    const dia = agDia(f);
+    if (!dia.horas.length || !dia.entregadores.length){
+      $('agGrid').innerHTML = `<tr><td class="table-empty">${f.getDay() === 0 ? 'Domingo: no se dan turnos.' : 'No hay horarios configurados para este día.'}</td></tr>`;
+    } else {
+      $('agGrid').innerHTML = `<thead><tr><th class="h">Hora</th>${dia.entregadores.map(e => `<th>${escapeHtml(e)}</th>`).join('')}</tr></thead><tbody>` +
+        dia.horas.map(h => `<tr><td class="h">${escapeHtml(h)}</td>${dia.entregadores.map(e => {
+          const t = AG.data.get(agSlot(k, h, e));
+          const attrs = `data-hora="${escapeHtml(h)}" data-ent="${escapeHtml(e)}"`;
+          if (!t) return `<td class="ag-cell ${edit ? 'edit' : ''} ${edit && AG.pick ? 'libre-pick' : ''}" ${attrs}></td>`;
+          const ints = agInternos(t.interno);
+          let warn = '', sub = '';
+          if (ints.length && t.estado !== 'bloqueado'){
+            const ests = ints.map(agEstadoInterno);
+            const bad = ests.filter(x => x.lvl !== 'ok');
+            if (bad.length) warn = `<span class="w" title="${escapeHtml(bad.map((x,i) => ints[ests.indexOf(x)] + ': ' + x.txt).join('\n'))}">⚠️</span>`;
+            const r0 = ests[0].r;
+            if (r0) sub = `${escapeHtml((r0['Cliente'] || '').toString())} · ${escapeHtml((r0['Modelo'] || '').toString())}`;
+          }
+          const es = AG_ESTADOS[t.estado] || {label:t.estado || 'Nota', icon:'📝'};
+          return `<td class="ag-cell ${escapeHtml(t.estado || '')} ${edit ? 'edit' : ''}" ${attrs} title="Cargado por ${escapeHtml(t.usuario || '?')} · ${escapeHtml(t.actualizado || '')}">
+            ${warn}<div class="e">${es.icon} ${es.label}</div>
+            ${t.interno ? `<div class="i">${escapeHtml(t.interno)}</div>` : ''}
+            ${sub ? `<div class="c">${sub}</div>` : ''}
+            ${t.nota ? `<div class="nt">${escapeHtml(t.nota)}</div>` : ''}</td>`;
+        }).join('')}</tr>`).join('') + '</tbody>';
+    }
+
+    // Alertas: turnos de hoy en adelante con internos No OK / duplicados
+    const futuros = [...AG.data.values()].filter(t => t.fecha >= hoyK && t.estado !== 'bloqueado' && agInternos(t.interno).length);
+    const cuenta = {};
+    futuros.forEach(t => agInternos(t.interno).forEach(i => { (cuenta[i] = cuenta[i] || []).push(t); }));
+    const alertas = [];
+    futuros.filter(t => t.fecha === k).forEach(t => agInternos(t.interno).forEach(i => {
+      const e = agEstadoInterno(i);
+      if (e.lvl !== 'ok') alertas.push(`<b>${escapeHtml(i)}</b> (${escapeHtml(t.hora)} · ${escapeHtml(t.entregador)}): ${escapeHtml(e.txt)}`);
+      if (cuenta[i].length > 1) alertas.push(`<b>${escapeHtml(i)}</b> tiene ${cuenta[i].length} turnos: ${cuenta[i].map(x => escapeHtml(entFmt(agFromKey(x.fecha)).slice(0,5) + ' ' + x.hora)).join(', ')}`);
+    }));
+    $('agAlertas').innerHTML = alertas.length ? `<div class="ag-alert"><b>⚠️ Revisar antes de entregar</b><ul>${[...new Set(alertas)].map(a => `<li>${a}</li>`).join('')}</ul></div>` : '';
+
+    // Pendientes OK sin turno en la agenda (de hoy en adelante)
+    const conTurno = new Set(Object.keys(cuenta));
+    const pend = ALL_ROWS.filter(r => CAR_BRANDS.includes((r['Marca'] || '').toString().trim().toUpperCase())
+        && categorize(r) === 'Patentado' && !isEntregado(r) && isOkParaTurno(r) && !conTurno.has((r['Interno'] || '').toString().trim()))
+      .sort((a,b) => (parseDateFlexible(a['Fecha Patentamiento']) || 0) - (parseDateFlexible(b['Fecha Patentamiento']) || 0));
+    $('agPendientes').innerHTML = !pend.length ? '<div class="hint">No hay autos OK para entregar sin turno 🎉</div>' :
+      pend.map(r => {
+        const i = (r['Interno'] || '').toString().trim();
+        const dias = diasDesdePatentamiento(r);
+        return `<div class="ag-pend ${AG.pick === i ? 'sel' : ''}" data-interno="${escapeHtml(i)}" title="${edit ? 'Clic para elegirlo y después clic en un casillero libre' : ''}">
+          <span class="i">${escapeHtml(i)}</span><span>${escapeHtml((r['Cliente'] || '').toString())}</span>
+          <span class="s">${escapeHtml((r['Modelo'] || '').toString())} · ${escapeHtml(PATENTADOS_BRAND_LABELS[(r['Marca'] || '').toString().trim().toUpperCase()] || '')}${dias !== null ? ` · ${dias} d desde patent.` : ''}</span></div>`;
+      }).join('');
+    $('agInternosList').innerHTML = pend.slice(0, 300).map(r => `<option value="${escapeHtml((r['Interno'] || '').toString().trim())}">${escapeHtml((r['Cliente'] || '').toString())}</option>`).join('');
+
+    agRenderBuscar();
+    agRenderEstado();
+  }
+
+  function agRenderBuscar(){
+    const q = ($('agBuscar').value || '').trim();
+    const box = $('agBuscarRes');
+    if (q.length < 3){ box.innerHTML = ''; return; }
+    const res = [...AG.data.values()].filter(t => (t.interno || '').includes(q)).sort((a,b) => (a.fecha + agHoraMin(a.hora)) < (b.fecha + agHoraMin(b.hora)) ? 1 : -1);
+    box.innerHTML = `<div class="ag-info" style="margin-top:8px;">${res.length ? `<b>${res.length} turno(s) con "${escapeHtml(q)}"</b> (en lo cargado: ${entFmt(agFromKey(AG.desde))} a ${entFmt(agFromKey(AG.hasta))}): ` +
+      res.map(t => `<a href="#" data-fecha="${t.fecha}" class="ag-go">${entFmt(agFromKey(t.fecha))} ${escapeHtml(t.hora)} · ${escapeHtml(t.entregador)} · ${(AG_ESTADOS[t.estado] || {label:t.estado}).label}</a>`).join(' | ')
+      : `Sin turnos para "${escapeHtml(q)}" entre ${entFmt(agFromKey(AG.desde || agKey(AG.fecha)))} y ${entFmt(agFromKey(AG.hasta || agKey(AG.fecha)))}. Para buscar más atrás, navegá a esa fecha.`}</div>`;
+  }
+
+  // ---------- Editor de casillero ----------
+  function agOpenEditor(hora, ent){
+    const k = agKey(AG.fecha);
+    const t = AG.data.get(agSlot(k, hora, ent));
+    AG.edit = {fecha:k, hora, ent};
+    $('agModalTitle').textContent = `${ent} · ${hora}`;
+    $('agModalSub').textContent = AG.fecha.toLocaleDateString('es-AR', {weekday:'long', day:'2-digit', month:'2-digit', year:'numeric'}) +
+      (t ? ` · último cambio: ${t.usuario || '?'} ${t.actualizado || ''}` : '');
+    $('agModalInterno').value = t ? (t.interno || '') : (AG.pick || '');
+    $('agModalNota').value = t ? (t.nota || '') : '';
+    agSetEstado(t ? t.estado : (AG.pick ? 'turno' : 'turno'));
+    $('agModalError').textContent = '';
+    $('agModal').style.display = 'flex';
+    setTimeout(() => $('agModalInterno').focus(), 30);
+  }
+  function agSetEstado(e){
+    AG.editEstado = e || '';
+    document.querySelectorAll('#agModalEstado button').forEach(b => b.classList.toggle('active', b.dataset.estado === AG.editEstado));
+    const sinInterno = AG.editEstado === 'bloqueado' || AG.editEstado === '';
+    $('agModalInternoWrap').style.display = sinInterno ? 'none' : '';
+    $('agModalNotaHint').textContent = AG.editEstado === 'bloqueado' ? '— motivo (ej.: curso, almuerzo, no disponible)' : '— opcional (ej.: cliente de trámite, verificar información)';
+    agRenderModalInfo();
+  }
+  function agRenderModalInfo(){
+    const box = $('agModalInfo');
+    if (AG.editEstado === 'bloqueado' || AG.editEstado === ''){ box.innerHTML = AG.editEstado === '' ? '<div class="hint">Guardar como libre borra el turno de este casillero.</div>' : ''; return; }
+    const ints = agInternos($('agModalInterno').value);
+    if (!ints.length){ box.innerHTML = ''; return; }
+    const hoyK = agKey(new Date());
+    box.innerHTML = ints.map(i => {
+      const e = agEstadoInterno(i);
+      const otros = [...AG.data.values()].filter(t => t.fecha >= hoyK && agInternos(t.interno).includes(i)
+        && !(AG.edit && t.fecha === AG.edit.fecha && t.hora === AG.edit.hora && t.entregador === AG.edit.ent));
+      const r = e.r;
+      return `<div class="ag-info ${e.lvl}"><b>${escapeHtml(i)}</b>${r ? ` · ${escapeHtml((r['Cliente'] || '').toString())} · ${escapeHtml((r['Modelo'] || '').toString())} ${escapeHtml((r['Color'] || '').toString())}` : ''}<br>${escapeHtml(e.txt)}` +
+        (r && tieneTurnoEntregaDado(r) ? `<br>📅 En el sistema ya figura turno el ${formatDateDisplay(r['Fecha Turno Entrega'])}` : '') +
+        (otros.length ? `<br><span style="color:var(--red)">⚠️ Ya tiene turno en la agenda: ${otros.map(t => entFmt(agFromKey(t.fecha)).slice(0,5) + ' ' + escapeHtml(t.hora) + ' (' + escapeHtml(t.entregador) + ')').join(', ')}</span>` : '') + '</div>';
+    }).join('');
+  }
+  function agSave(){
+    if (!AG.edit) return;
+    const estado = AG.editEstado;
+    const interno = (estado === 'bloqueado' || estado === '') ? '' : $('agModalInterno').value.trim();
+    const nota = estado === '' ? '' : $('agModalNota').value.trim();
+    if ((estado === 'turno' || estado === 'reservado') && !agInternos(interno).length){ $('agModalError').textContent = 'Ingresá el interno.'; return; }
+    const {fecha, hora, ent} = AG.edit;
+    const key = agSlot(fecha, hora, ent);
+    const prev = AG.data.get(key);
+    if (estado === '' && !nota) AG.data.delete(key);
+    else AG.data.set(key, {fecha, hora, entregador:ent, estado, interno, nota, usuario: (CURRENT_SESSION && CURRENT_SESSION.username) || '', actualizado: new Date().toLocaleString('es-AR')});
+    if (AG.pick && agInternos(interno).includes(AG.pick)) AG.pick = null;
+    $('agModal').style.display = 'none';
+    AG.edit = null;
+    renderAgendaSection();
+    apiPost({token: currentToken(), type:'turno', fecha, hora, entregador:ent, estado, interno, nota}).then(res => {
+      handleAuthResult(res);
+      if (!res || res.ok === false) throw new Error((res && res.error) || 'el servidor rechazó el guardado');
+      showToast(estado ? `✓ ${AG_ESTADOS[estado].label} guardado · ${ent} ${hora}` : `✓ Casillero liberado · ${ent} ${hora}`);
+    }).catch(err => {
+      if (err && err.isParseError){ showToast('⚠️ Se envió, pero el servidor respondió raro — revisá que se haya reflejado', false); return; }
+      if (prev) AG.data.set(key, prev); else AG.data.delete(key);
+      renderAgendaSection();
+      showToast('❌ No se guardó el turno: ' + err.message, true);
+    });
+  }
+
+  // ---------- Configuración (admin) ----------
+  function agOpenCfg(){
+    const c = agCfg();
+    $('agCfgHorasLV').value = c.lv.horas.join(', ');
+    $('agCfgEntLV').value = c.lv.entregadores.join(', ');
+    $('agCfgHorasSA').value = c.sa.horas.join(', ');
+    $('agCfgEntSA').value = c.sa.entregadores.join(', ');
+    $('agCfgError').textContent = '';
+    $('agCfgModal').style.display = 'flex';
+  }
+  function agSaveCfg(){
+    const lista = id => $(id).value.split(',').map(x => x.trim()).filter(Boolean);
+    const horas = id => lista(id).map(h => { const m = h.match(/^(\d{1,2})(?::(\d{2}))?$/); return m ? `${parseInt(m[1],10)}:${m[2] || '00'}` : null; });
+    const cfg = {lv:{horas:horas('agCfgHorasLV'), entregadores:lista('agCfgEntLV').map(x => x.toUpperCase())},
+                 sa:{horas:horas('agCfgHorasSA'), entregadores:lista('agCfgEntSA').map(x => x.toUpperCase())}};
+    if ([...cfg.lv.horas, ...cfg.sa.horas].some(h => !h)){ $('agCfgError').textContent = 'Revisá los horarios: formato 9:00, 10:20, etc.'; return; }
+    if (!cfg.lv.entregadores.length){ $('agCfgError').textContent = 'Cargá al menos un entregador de lunes a viernes.'; return; }
+    cfg.lv.horas.sort((a,b) => agHoraMin(a) - agHoraMin(b)); cfg.sa.horas.sort((a,b) => agHoraMin(a) - agHoraMin(b));
+    const prev = AG.cfg;
+    AG.cfg = cfg;
+    $('agCfgModal').style.display = 'none';
+    renderAgendaSection();
+    apiPost({token: currentToken(), type:'turno', fecha:'CONFIG', hora:'-', entregador:'-', estado:'', interno:'', nota: JSON.stringify(cfg)}).then(res => {
+      handleAuthResult(res);
+      if (!res || res.ok === false) throw new Error((res && res.error) || 'el servidor rechazó el guardado');
+      showToast('✓ Horarios y entregadores guardados');
+    }).catch(err => {
+      if (err && err.isParseError) return;
+      AG.cfg = prev; renderAgendaSection();
+      showToast('❌ No se guardó la configuración: ' + err.message, true);
+    });
+  }
+
+  if ($('tabAgenda')){
+    const mover = n => {
+      const d = new Date(AG.fecha); d.setDate(d.getDate() + n);
+      if (d.getDay() === 0) d.setDate(d.getDate() + n);
+      AG.fecha = d; renderAgendaSection();
+    };
+    $('agPrev').addEventListener('click', () => mover(-1));
+    $('agNext').addEventListener('click', () => mover(1));
+    $('agHoy').addEventListener('click', () => { const h = new Date(); h.setHours(0,0,0,0); if (h.getDay() === 0) h.setDate(h.getDate() + 1); AG.fecha = h; renderAgendaSection(); });
+    $('agFecha').addEventListener('change', e => { if (e.target.value){ AG.fecha = agFromKey(e.target.value); renderAgendaSection(); } });
+    $('agSemana').addEventListener('click', e => { const c = e.target.closest('[data-fecha]'); if (c){ AG.fecha = agFromKey(c.dataset.fecha); renderAgendaSection(); } });
+    $('agBuscar').addEventListener('input', agRenderBuscar);
+    $('agBuscarRes').addEventListener('click', e => { const a = e.target.closest('.ag-go'); if (a){ e.preventDefault(); AG.fecha = agFromKey(a.dataset.fecha); renderAgendaSection(); } });
+    $('agGrid').addEventListener('click', e => {
+      const c = e.target.closest('.ag-cell');
+      if (!c || !agCanEdit()) return;
+      agOpenEditor(c.dataset.hora, c.dataset.ent);
+    });
+    $('agPendientes').addEventListener('click', e => {
+      const p = e.target.closest('.ag-pend');
+      if (!p || !agCanEdit()) return;
+      AG.pick = AG.pick === p.dataset.interno ? null : p.dataset.interno;
+      renderAgendaSection();
+    });
+    $('agModalEstado').addEventListener('click', e => { const b = e.target.closest('button'); if (b) agSetEstado(b.dataset.estado); });
+    $('agModalInterno').addEventListener('input', agRenderModalInfo);
+    $('agModalCancel').addEventListener('click', () => { $('agModal').style.display = 'none'; AG.edit = null; });
+    $('agModalSave').addEventListener('click', agSave);
+    $('agModalInterno').addEventListener('keydown', e => { if (e.key === 'Enter') agSave(); });
+    $('agConfigBtn').addEventListener('click', agOpenCfg);
+    $('agCfgCancel').addEventListener('click', () => { $('agCfgModal').style.display = 'none'; });
+    $('agCfgSave').addEventListener('click', agSaveCfg);
+    // Refresco automático cada minuto mientras la agenda está a la vista y sin editar
+    setInterval(() => {
+      const tab = $('tabAgenda');
+      if (!tab || !tab.classList.contains('active') || document.hidden) return;
+      if ($('agModal').style.display === 'flex' || $('agCfgModal').style.display === 'flex' || AG.loading) return;
+      agLoad(true);
+    }, 60000);
   }
 
   // ========== Modal Marcar Entregado ==========
