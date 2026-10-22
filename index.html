@@ -1248,6 +1248,7 @@
           <input type="date" id="agFecha" class="obs-date">
           <button type="button" class="page-btn" id="agNext" title="Día siguiente">›</button>
           <button type="button" class="page-btn" id="agHoy">Hoy</button>
+          <button type="button" class="page-btn" id="agRefresh" title="Traer los últimos cambios">🔄 Actualizar</button>
           <div class="ag-dia" id="agDiaLabel"></div>
           <div style="flex:1"></div>
           <div class="table-search" style="margin:0;"><input type="text" id="agBuscar" placeholder="🔎 Buscar interno en la agenda…" autocomplete="off"></div>
@@ -11971,7 +11972,12 @@
   function agEstadoInterno(interno){
     const r = agRowIndex().get(interno);
     if (!r) return {lvl:'warn', txt:'No está en la base cargada', r:null};
-    if (isEntregado(r)) return {lvl:'warn', txt:'Ya figura entregado', r};
+    // Entregado de verdad (fecha de entrega / movimiento / marcado a mano). NO se usa
+    // isEntregado() porque ese toma el turno de hoy como entregado — y en la agenda el
+    // turno de hoy es justamente lo que estamos mirando.
+    const motivo = (r['Motivo Cambio Ubicacion'] || '').toString().trim().toUpperCase();
+    if (entregadoManual(r) || (r['Fecha Entrega Unidad'] || '').toString().trim() || ENTREGA_MOTIVOS.includes(motivo))
+      return {lvl:'ok', txt:'✅ Entregado', entregado:true, falta:[], r};
     const m = patMotivosNoOk(r).filter(k => k !== 'turno');
     const labels = m.map(k => (PAT_MOTIVOS_NOOK.find(x => x.k === k) || {label:k}).label);
     if (categorize(r) !== 'Patentado') labels.unshift('🏛️ Sin patentar');
@@ -12008,17 +12014,19 @@
       AG.desde = (!AG.desde || desde < AG.desde) ? desde : AG.desde;
       AG.hasta = (!AG.hasta || hasta > AG.hasta) ? hasta : AG.hasta;
       AG.loadedOnce = true; AG.lastLoad = new Date();
+      AG.error = null;
     }).catch(err => {
-      AG.error = err.message;
+      AG.error = err.message; AG.errorAt = new Date();
       console.error('Agenda de turnos:', err);
     }).finally(() => { AG.loading = false; renderAgendaSection(); });
   }
 
   function agRenderEstado(){
     const el = $('agEstado'); if (!el) return;
-    el.innerHTML = AG.loading ? '⏳ Cargando agenda…'
+    el.innerHTML = AG.loading ? '⏳ Actualizando agenda…'
       : (AG.error && !AG.loadedOnce ? `<span style="color:var(--red)">⚠️ No se pudo cargar la agenda (${escapeHtml(AG.error)}). ¿Está publicado el Code.gs v29?</span>`
-      : (AG.lastLoad ? `Actualizado ${AG.lastLoad.toLocaleTimeString('es-AR', {hour:'2-digit', minute:'2-digit'})} · se refresca solo cada minuto${agCanEdit() ? '' : ' · solo lectura (tu rol no edita la agenda)'}` : ''));
+      : AG.error ? `<span style="color:var(--red)">⚠️ No se pudo actualizar (${escapeHtml(AG.error)}) · último dato bueno: ${AG.lastLoad ? AG.lastLoad.toLocaleTimeString('es-AR', {hour:'2-digit', minute:'2-digit'}) : '—'} · se reintenta solo</span>`
+      : (AG.lastLoad ? `Actualizado ${AG.lastLoad.toLocaleTimeString('es-AR', {hour:'2-digit', minute:'2-digit'})} · se refresca solo cada 30 s${agCanEdit() ? '' : ' · solo lectura (tu rol no edita la agenda)'}` : ''));
   }
 
   function renderAgendaSection(){
@@ -12084,6 +12092,7 @@
           if (ints.length && t.estado !== 'bloqueado'){
             const ests = ints.map(agEstadoInterno);
             const bad = ests.filter(x => x.lvl !== 'ok');
+            if (ests.every(x => x.entregado)) falta = `<div class="f" style="color:var(--green)">✅ Entregado</div>`;
             if (bad.length){
               warn = `<span class="w" title="${escapeHtml(bad.map(x => ints[ests.indexOf(x)] + ': ' + x.txt).join('\n'))}">⚠️</span>`;
               const fl = [...new Set([].concat(...bad.map(x => x.falta && x.falta.length ? x.falta : [x.txt])))];
@@ -12292,13 +12301,18 @@
     $('agConfigBtn').addEventListener('click', agOpenCfg);
     $('agCfgCancel').addEventListener('click', () => { $('agCfgModal').style.display = 'none'; });
     $('agCfgSave').addEventListener('click', agSaveCfg);
-    // Refresco automático cada minuto mientras la agenda está a la vista y sin editar
-    setInterval(() => {
+    // Refresco automático cada 30 s mientras la agenda está a la vista y sin editar,
+    // y apenas se vuelve a la pestaña/ventana (los navegadores frenan los timers en 2do plano).
+    const agAutoRefresh = () => {
       const tab = $('tabAgenda');
       if (!tab || !tab.classList.contains('active') || document.hidden) return;
       if ($('agModal').style.display === 'flex' || $('agCfgModal').style.display === 'flex' || AG.loading) return;
       agLoad(true);
-    }, 60000);
+    };
+    setInterval(agAutoRefresh, 30000);
+    document.addEventListener('visibilitychange', () => { if (!document.hidden && AG.lastLoad && (Date.now() - AG.lastLoad) > 15000) agAutoRefresh(); });
+    window.addEventListener('focus', () => { if (AG.lastLoad && (Date.now() - AG.lastLoad) > 15000) agAutoRefresh(); });
+    $('agRefresh').addEventListener('click', () => { if (!AG.loading) agLoad(true); });
   }
 
   // ========== Modal Marcar Entregado ==========
