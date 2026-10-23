@@ -2179,7 +2179,13 @@
             </div>
           </div>
           <div class="an-kpis" id="accDatKpis"></div>
-          <div class="an-sub" style="margin-top:14px;">Ventas por modelo y proyección a 3 meses</div>
+          <div style="display:flex; align-items:center; gap:10px; margin-top:14px; flex-wrap:wrap;">
+            <div class="an-sub" style="margin:0;">Ventas y proyección a 3 meses</div>
+            <div class="segmented" id="accDatAgrupar">
+              <button type="button" class="active" data-v="modelo">Por modelo</button>
+              <button type="button" data-v="catalogo">Por modelo + catálogo (equipamiento)</button>
+            </div>
+          </div>
           <div class="hint" id="accDatProyHint" style="margin-bottom:6px; font-size:11.5px;"></div>
           <div class="table-scroll" style="max-height:460px;"><table class="data-table an-table" id="accDatModelos"></table></div>
         </div>
@@ -12754,7 +12760,7 @@
   }
 
   // ---------- Aceleración › Accesorios: datos para el área (v30) ----------
-  const ACC_DAT = {periodo:3, sinAcc:[]};
+  const ACC_DAT = {periodo:3, sinAcc:[], agrupar:'modelo'};
   function accModelo(r){ return (r['Modelo'] || '').toString().toUpperCase().replace(/[\s.]+$/,'').replace(/\s+/g,' ').trim() || '(sin modelo)'; }
   function accTieneAcc(r){ return (r['Accesorios'] || '').toString().trim().toUpperCase() === 'SI'; }
   function renderAccesoriosDatos(){
@@ -12792,7 +12798,8 @@
     autos.forEach(r => {
       const d = parseDateFlexible(r['Fecha Venta']); if (!d) return;
       const k = mk(d); if (!meses.includes(k)) return;
-      const m = accModelo(r);
+      const cat = (r['Catalogo'] || '').toString().trim().toUpperCase() || '(sin catálogo)';
+      const m = ACC_DAT.agrupar === 'catalogo' ? accModelo(r) + '|' + cat : accModelo(r);
       const o = mod[m] = mod[m] || {n:{}, tot:0, acc:0};
       o.n[k] = (o.n[k] || 0) + 1; o.tot++; if (accTieneAcc(r)) o.acc++;
     });
@@ -12800,19 +12807,29 @@
       const prom = base3.reduce((s, k) => s + (o.n[k] || 0), 0) / 3;
       const pctAcc = o.tot ? o.acc / o.tot : 0;
       return {m, o, prom, proy3: Math.round(prom * 3), accEsp: Math.round(prom * 3 * pctAcc), pctAcc};
-    }).sort((a,b) => b.proy3 - a.proy3 || b.o.tot - a.o.tot);
+    });
+    if (ACC_DAT.agrupar === 'catalogo'){
+      const totMod = {}; filas.forEach(x => { const mo = x.m.split('|')[0]; totMod[mo] = (totMod[mo] || 0) + x.proy3 + x.o.tot / 1000; });
+      filas.sort((a,b) => { const ma = a.m.split('|')[0], mb = b.m.split('|')[0]; return (totMod[mb] - totMod[ma]) || ma.localeCompare(mb) || (b.proy3 - a.proy3) || (b.o.tot - a.o.tot); });
+    } else filas.sort((a,b) => b.proy3 - a.proy3 || b.o.tot - a.o.tot);
     const prox = [1,2,3].map(i => lbl(mk(new Date(hoy.getFullYear(), hoy.getMonth() + i, 1))));
     $('accDatProyHint').textContent = `Proyección = promedio mensual de ${base3.map(lbl).join(', ')} (meses completos) × 3 (${prox.join(', ')}). "Accesorios esperados" = proyección × % de ventas del modelo que llevó accesorios en estos 7 meses.`;
     const maxC = Math.max(1, ...filas.map(x => Math.max(...meses.map(k => x.o.n[k] || 0))));
     const tot = {proy:0, acc:0};
     filas.forEach(x => { tot.proy += x.proy3; tot.acc += x.accEsp; });
     $('accDatModelos').innerHTML = !filas.length ? '<tr><td class="table-empty">Sin ventas en el período</td></tr>' :
-      `<thead><tr><th>Modelo</th>${meses.map(k => `<th class="num">${lbl(k)}${k === mesActual ? ' (en curso)' : ''}</th>`).join('')}<th class="num">% c/ accesorios</th><th class="num">Prom. mensual</th><th class="num">Proyección 3 meses</th><th class="num">Accesorios esperados</th></tr></thead><tbody>` +
-      filas.map(x => `<tr><td><b>${escapeHtml(x.m)}</b></td>${meses.map(k => { const c = x.o.n[k] || 0; return `<td class="heat" style="background:rgba(76,141,255,${c ? (0.08 + 0.5 * c / maxC).toFixed(2) : 0})">${c || '<span style="color:var(--text-faint)">·</span>'}</td>`; }).join('')}
+      `<thead><tr><th>${ACC_DAT.agrupar === 'catalogo' ? 'Modelo · catálogo' : 'Modelo'}</th>${meses.map(k => `<th class="num">${lbl(k)}${k === mesActual ? ' (en curso)' : ''}</th>`).join('')}<th class="num">% c/ accesorios</th><th class="num">Prom. mensual</th><th class="num">Proyección 3 meses</th><th class="num">Accesorios esperados</th></tr></thead><tbody>` +
+      filas.map(x => `<tr><td style="white-space:normal; min-width:280px; max-width:420px; overflow:visible;">${x.m.includes('|') ? `<b>${escapeHtml(x.m.split('|')[0])}</b> <span class="hint">· ${escapeHtml(x.m.split('|')[1])}</span>` : `<b>${escapeHtml(x.m)}</b>`}</td>${meses.map(k => { const c = x.o.n[k] || 0; return `<td class="heat" style="background:rgba(76,141,255,${c ? (0.08 + 0.5 * c / maxC).toFixed(2) : 0})">${c || '<span style="color:var(--text-faint)">·</span>'}</td>`; }).join('')}
         <td class="num">${Math.round(x.pctAcc * 100)}%</td><td class="num">${x.prom.toFixed(1)}</td><td class="num"><b>${x.proy3}</b></td><td class="num" style="color:var(--green); font-weight:700;">${x.accEsp}</td></tr>`).join('') +
       `<tr><td><b>TOTAL</b></td>${meses.map(k => `<td class="num"><b>${filas.reduce((s, x) => s + (x.o.n[k] || 0), 0)}</b></td>`).join('')}<td></td><td></td><td class="num"><b>${tot.proy}</b></td><td class="num" style="color:var(--green);"><b>${tot.acc}</b></td></tr></tbody>`;
   }
   if ($('accDatPeriodo')){
+    $('accDatAgrupar').addEventListener('click', e => {
+      const b = e.target.closest('button'); if (!b) return;
+      ACC_DAT.agrupar = b.dataset.v;
+      document.querySelectorAll('#accDatAgrupar button').forEach(x => x.classList.toggle('active', x === b));
+      renderAccesoriosDatos();
+    });
     $('accDatPeriodo').addEventListener('change', e => { ACC_DAT.periodo = parseInt(e.target.value, 10) || 3; renderAccesoriosDatos(); });
     $('accDatExportBtn').addEventListener('click', () => {
       const rows = ACC_DAT.sinAcc.slice().sort((a,b) => (fechaEntregaEfectiva(b) || 0) - (fechaEntregaEfectiva(a) || 0));
