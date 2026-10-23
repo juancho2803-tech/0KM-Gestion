@@ -788,6 +788,32 @@
   .ag-lbl input, .ag-lbl textarea{display:block; width:100%; margin-top:4px; padding:8px; background:var(--surface-2); color:var(--text); border:1px solid var(--border); border-radius:6px; font:inherit; font-size:13px;}
   .ag-primary{background:var(--green) !important; color:#06281a !important; border-color:transparent !important; font-weight:700;}
   #agModalEstado button.active{font-weight:700;}
+  .acc-chart-wrap{background:var(--surface-2); border:1px solid var(--border); border-radius:12px; padding:12px 14px; margin-top:14px;}
+  .acc-leyenda{font-size:11.5px; color:var(--text-dim); margin:6px 0 8px;}
+  .acc-tabla{border-collapse:separate; border-spacing:0 4px; width:100%; min-width:980px;}
+  .acc-tabla th{font-family:'Barlow Condensed',sans-serif; text-transform:uppercase; letter-spacing:.6px; font-size:12px; color:var(--text-dim); font-weight:600; padding:4px 8px; text-align:center; position:sticky; top:0; background:var(--surface); z-index:1;}
+  .acc-tabla th.l{text-align:left;}
+  .acc-tabla td{background:var(--surface-2); padding:7px 8px; vertical-align:middle;}
+  .acc-tabla td:first-child{border-radius:10px 0 0 10px;} .acc-tabla td:last-child{border-radius:0 10px 10px 0;}
+  .acc-tabla tr.mod{cursor:pointer;}
+  .acc-tabla tr.mod:hover td{background:var(--surface-3);}
+  .acc-tabla tr.cat td{background:transparent; border-bottom:1px dashed var(--border); border-radius:0 !important; padding:5px 8px;}
+  .acc-name{font-weight:800; font-size:13px; white-space:nowrap;}
+  .acc-name .car{display:inline-block; width:14px; color:var(--text-dim); transition:transform .15s;}
+  .acc-name.open .car{transform:rotate(90deg);}
+  .acc-cat{font-size:11.5px; color:var(--text-dim); padding-left:20px; max-width:300px;}
+  .acc-c{text-align:center; min-width:76px;}
+  .acc-c .t{font-family:'JetBrains Mono',monospace; font-weight:800; font-size:15px; line-height:1;}
+  .acc-tabla tr.cat .acc-c .t{font-size:12.5px; font-weight:700;}
+  .acc-c .b{height:6px; background:var(--surface-3); border-radius:3px; overflow:hidden; margin:5px auto 3px; max-width:62px;}
+  .acc-c .b span{display:block; height:100%; background:var(--green); border-radius:3px;}
+  .acc-c .a{font-size:10.5px; color:var(--green); font-weight:700; white-space:nowrap;}
+  .acc-c.cur{background:rgba(255,176,32,.07) !important;}
+  .acc-c .z{color:var(--text-faint);}
+  .acc-tot{text-align:center; min-width:96px; border-left:2px solid var(--border);}
+  .acc-proy{text-align:center; min-width:120px; background:rgba(51,211,145,.08) !important;}
+  .acc-proy .t{font-family:'JetBrains Mono',monospace; font-weight:800; font-size:18px; color:var(--text);}
+  .acc-proy .a{font-size:11px; color:var(--green); font-weight:700;}
   .fi-search{margin-left:auto; display:flex; gap:6px; align-items:center; padding-bottom:4px;}
   .fi-search input{background:var(--surface-2); color:var(--text); border:1px solid var(--border); border-radius:8px; padding:6px 10px; font-size:12.5px; width:260px;}
   .fi-search input:focus{outline:none; border-color:var(--amber);}
@@ -2179,15 +2205,18 @@
             </div>
           </div>
           <div class="an-kpis" id="accDatKpis"></div>
-          <div style="display:flex; align-items:center; gap:10px; margin-top:14px; flex-wrap:wrap;">
-            <div class="an-sub" style="margin:0;">Ventas y proyección a 3 meses</div>
-            <div class="segmented" id="accDatAgrupar">
-              <button type="button" class="active" data-v="modelo">Por modelo</button>
-              <button type="button" data-v="catalogo">Por modelo + catálogo (equipamiento)</button>
-            </div>
+          <div class="acc-chart-wrap">
+            <div class="an-sub">Ventas por mes: cuántas se vendieron con accesorios</div>
+            <div style="position:relative; height:220px;"><canvas id="accDatChart"></canvas></div>
           </div>
-          <div class="hint" id="accDatProyHint" style="margin-bottom:6px; font-size:11.5px;"></div>
-          <div class="table-scroll" style="max-height:460px;"><table class="data-table an-table" id="accDatModelos"></table></div>
+          <div style="display:flex; align-items:center; gap:10px; margin-top:16px; flex-wrap:wrap;">
+            <div class="an-sub" style="margin:0;">Por modelo · clic en un modelo para ver sus versiones (catálogo)</div>
+            <button type="button" class="pill-action" id="accDatExpand">Abrir todos</button>
+            <button type="button" class="pill-action" id="accDatCollapse">Cerrar todos</button>
+          </div>
+          <div class="acc-leyenda">Cada mes: <b>vendidas</b> · barra verde = parte <b>vendida con accesorios</b> · <span style="color:var(--green); font-weight:700;">🎒 N (%)</span> = cuántas llevaron accesorios</div>
+          <div class="table-scroll" style="max-height:620px;"><table class="acc-tabla" id="accDatModelos"></table></div>
+          <div class="hint" id="accDatProyHint" style="margin-top:6px; font-size:11.5px;"></div>
         </div>
       </div><!-- /sub Accesorios -->
 
@@ -12787,49 +12816,80 @@
       kpi('🎒 Con accesorios', `${con.length.toLocaleString('es-AR')} · ${pct(con.length, entregados.length)}`, detMarca ? '% por marca: ' + detMarca : '', 'var(--green)') +
       kpi('⬜ Sin accesorios', `${sin.length.toLocaleString('es-AR')} · ${pct(sin.length, entregados.length)}`, 'oportunidad de venta post-entrega · bajalos en Excel', 'var(--amber)');
 
-    // Ventas por modelo: últimos 6 meses completos + mes en curso, % con accesorios y proyección
+    // ---- Ventas por modelo (y por catálogo): vendidas y con accesorios, mes a mes + proyección ----
     const mk = d => d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0');
     const meses = []; for (let i = 6; i >= 0; i--) meses.push(mk(new Date(hoy.getFullYear(), hoy.getMonth() - i, 1)));
     const mesActual = meses[meses.length - 1];
     const base3 = meses.slice(-4, -1); // últimos 3 meses completos
     const MES = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
     const lbl = k => MES[parseInt(k.slice(5), 10) - 1] + ' ' + k.slice(2, 4);
-    const mod = {};
+    const nuevo = () => ({n:{}, a:{}, tot:0, acc:0});
+    const sumar = (o, k, conAcc) => { o.n[k] = (o.n[k] || 0) + 1; o.tot++; if (conAcc){ o.a[k] = (o.a[k] || 0) + 1; o.acc++; } };
+    const mod = {}, total = nuevo();
     autos.forEach(r => {
       const d = parseDateFlexible(r['Fecha Venta']); if (!d) return;
       const k = mk(d); if (!meses.includes(k)) return;
-      const cat = (r['Catalogo'] || '').toString().trim().toUpperCase() || '(sin catálogo)';
-      const m = ACC_DAT.agrupar === 'catalogo' ? accModelo(r) + '|' + cat : accModelo(r);
-      const o = mod[m] = mod[m] || {n:{}, tot:0, acc:0};
-      o.n[k] = (o.n[k] || 0) + 1; o.tot++; if (accTieneAcc(r)) o.acc++;
+      const m = accModelo(r), cat = (r['Catalogo'] || '').toString().toUpperCase().replace(/\s+/g, ' ').replace(/[\s.]+$/, '').trim() || '(sin catálogo)';
+      const ca = accTieneAcc(r);
+      const o = mod[m] = mod[m] || Object.assign(nuevo(), {cats:{}});
+      sumar(o, k, ca); sumar(o.cats[cat] = o.cats[cat] || nuevo(), k, ca); sumar(total, k, ca);
     });
-    const filas = Object.entries(mod).map(([m, o]) => {
+    const proy = o => {
       const prom = base3.reduce((s, k) => s + (o.n[k] || 0), 0) / 3;
       const pctAcc = o.tot ? o.acc / o.tot : 0;
-      return {m, o, prom, proy3: Math.round(prom * 3), accEsp: Math.round(prom * 3 * pctAcc), pctAcc};
-    });
-    if (ACC_DAT.agrupar === 'catalogo'){
-      const totMod = {}; filas.forEach(x => { const mo = x.m.split('|')[0]; totMod[mo] = (totMod[mo] || 0) + x.proy3 + x.o.tot / 1000; });
-      filas.sort((a,b) => { const ma = a.m.split('|')[0], mb = b.m.split('|')[0]; return (totMod[mb] - totMod[ma]) || ma.localeCompare(mb) || (b.proy3 - a.proy3) || (b.o.tot - a.o.tot); });
-    } else filas.sort((a,b) => b.proy3 - a.proy3 || b.o.tot - a.o.tot);
+      return {p: Math.round(prom * 3), pa: Math.round(prom * 3 * pctAcc), pct: pctAcc};
+    };
     const prox = [1,2,3].map(i => lbl(mk(new Date(hoy.getFullYear(), hoy.getMonth() + i, 1))));
-    $('accDatProyHint').textContent = `Proyección = promedio mensual de ${base3.map(lbl).join(', ')} (meses completos) × 3 (${prox.join(', ')}). "Accesorios esperados" = proyección × % de ventas del modelo que llevó accesorios en estos 7 meses.`;
-    const maxC = Math.max(1, ...filas.map(x => Math.max(...meses.map(k => x.o.n[k] || 0))));
-    const tot = {proy:0, acc:0};
-    filas.forEach(x => { tot.proy += x.proy3; tot.acc += x.accEsp; });
+    $('accDatProyHint').textContent = `Proyección ${prox.join(' – ')} = promedio mensual de ${base3.map(lbl).join(', ')} (meses completos) × 3. "Con accesorios" proyectado = esa cifra × el % que llevó accesorios en los 7 meses. "Con accesorios" = la venta incluyó accesorios (columna Accesorios = SI).`;
+
+    const celda = (o, k) => {
+      const n = o.n[k] || 0, a = o.a[k] || 0;
+      if (!n) return `<td class="acc-c ${k === mesActual ? 'cur' : ''}"><span class="z">—</span></td>`;
+      const p = Math.round(a / n * 100);
+      return `<td class="acc-c ${k === mesActual ? 'cur' : ''}" title="${lbl(k)}: ${n} vendidas · ${a} con accesorios (${p}%)"><div class="t">${n}</div><div class="b"><span style="width:${p}%"></span></div><div class="a">🎒 ${a} · ${p}%</div></td>`;
+    };
+    const resumen = o => { const x = proy(o); return `<td class="acc-tot" title="Total 7 meses"><div class="acc-c" style="min-width:0;"><div class="t">${o.tot}</div><div class="b"><span style="width:${Math.round(x.pct * 100)}%"></span></div><div class="a">🎒 ${o.acc} · ${Math.round(x.pct * 100)}%</div></div></td>
+      <td class="acc-proy"><div class="t">${x.p}</div><div class="a">≈ ${x.pa} con accesorios</div></td>`; };
+    const filas = Object.entries(mod).sort((a,b) => proy(b[1]).p - proy(a[1]).p || b[1].tot - a[1].tot);
+    ACC_DAT.open = ACC_DAT.open || new Set();
     $('accDatModelos').innerHTML = !filas.length ? '<tr><td class="table-empty">Sin ventas en el período</td></tr>' :
-      `<thead><tr><th>${ACC_DAT.agrupar === 'catalogo' ? 'Modelo · catálogo' : 'Modelo'}</th>${meses.map(k => `<th class="num">${lbl(k)}${k === mesActual ? ' (en curso)' : ''}</th>`).join('')}<th class="num">% c/ accesorios</th><th class="num">Prom. mensual</th><th class="num">Proyección 3 meses</th><th class="num">Accesorios esperados</th></tr></thead><tbody>` +
-      filas.map(x => `<tr><td style="white-space:normal; min-width:280px; max-width:420px; overflow:visible;">${x.m.includes('|') ? `<b>${escapeHtml(x.m.split('|')[0])}</b> <span class="hint">· ${escapeHtml(x.m.split('|')[1])}</span>` : `<b>${escapeHtml(x.m)}</b>`}</td>${meses.map(k => { const c = x.o.n[k] || 0; return `<td class="heat" style="background:rgba(76,141,255,${c ? (0.08 + 0.5 * c / maxC).toFixed(2) : 0})">${c || '<span style="color:var(--text-faint)">·</span>'}</td>`; }).join('')}
-        <td class="num">${Math.round(x.pctAcc * 100)}%</td><td class="num">${x.prom.toFixed(1)}</td><td class="num"><b>${x.proy3}</b></td><td class="num" style="color:var(--green); font-weight:700;">${x.accEsp}</td></tr>`).join('') +
-      `<tr><td><b>TOTAL</b></td>${meses.map(k => `<td class="num"><b>${filas.reduce((s, x) => s + (x.o.n[k] || 0), 0)}</b></td>`).join('')}<td></td><td></td><td class="num"><b>${tot.proy}</b></td><td class="num" style="color:var(--green);"><b>${tot.acc}</b></td></tr></tbody>`;
+      `<thead><tr><th class="l">Modelo</th>${meses.map(k => `<th>${lbl(k)}${k === mesActual ? '<br><span style="color:var(--amber)">en curso</span>' : ''}</th>`).join('')}<th>Total 7 meses</th><th>Proyección<br>${prox[0]} – ${prox[2]}</th></tr></thead><tbody>` +
+      filas.map(([m, o]) => {
+        const ab = ACC_DAT.open.has(m);
+        const cats = ab ? Object.entries(o.cats).sort((a,b) => proy(b[1]).p - proy(a[1]).p || b[1].tot - a[1].tot)
+          .map(([c, oc]) => `<tr class="cat"><td><div class="acc-cat">${escapeHtml(c)}</div></td>${meses.map(k => celda(oc, k)).join('')}${resumen(oc)}</tr>`).join('') : '';
+        return `<tr class="mod" data-m="${escapeHtml(m)}"><td><div class="acc-name ${ab ? 'open' : ''}"><span class="car">▸</span>${escapeHtml(m)} <span class="hint" style="font-weight:400;">(${Object.keys(o.cats).length} versiones)</span></div></td>${meses.map(k => celda(o, k)).join('')}${resumen(o)}</tr>` + cats;
+      }).join('') +
+      `<tr class="mod" style="cursor:default;"><td><div class="acc-name">TOTAL</div></td>${meses.map(k => celda(total, k)).join('')}${resumen(total)}</tr></tbody>`;
+
+    // Gráfico: vendidas con y sin accesorios por mes
+    if (window.Chart && $('accDatChart')){
+      const css = getComputedStyle(document.body);
+      const cText = css.getPropertyValue('--text-dim').trim() || '#8b95a3', cGrid = css.getPropertyValue('--border').trim() || '#262c37';
+      const verde = css.getPropertyValue('--green').trim() || '#33d391', gris = css.getPropertyValue('--surface-3').trim() || '#20262f';
+      if (ACC_DAT.chart) ACC_DAT.chart.destroy();
+      ACC_DAT.chart = new Chart($('accDatChart'), {
+        type:'bar',
+        data:{labels: meses.map(k => lbl(k) + (k === mesActual ? ' (en curso)' : '')), datasets:[
+          {label:'Con accesorios', data: meses.map(k => total.a[k] || 0), backgroundColor: verde, borderRadius:4, stack:'s'},
+          {label:'Sin accesorios', data: meses.map(k => (total.n[k] || 0) - (total.a[k] || 0)), backgroundColor: gris, borderColor: cText, borderWidth:1, borderRadius:4, stack:'s'}
+        ]},
+        options:{responsive:true, maintainAspectRatio:false,
+          plugins:{legend:{labels:{color:cText, boxWidth:12}}, tooltip:{callbacks:{footer: items => { const k = meses[items[0].dataIndex]; const n = total.n[k] || 0; return n ? `Total ${n} · ${Math.round((total.a[k] || 0) / n * 100)}% con accesorios` : ''; }}}},
+          scales:{x:{stacked:true, ticks:{color:cText}, grid:{display:false}}, y:{stacked:true, beginAtZero:true, ticks:{color:cText}, grid:{color:cGrid}}}}
+      });
+    }
   }
   if ($('accDatPeriodo')){
-    $('accDatAgrupar').addEventListener('click', e => {
-      const b = e.target.closest('button'); if (!b) return;
-      ACC_DAT.agrupar = b.dataset.v;
-      document.querySelectorAll('#accDatAgrupar button').forEach(x => x.classList.toggle('active', x === b));
+    $('accDatModelos').addEventListener('click', e => {
+      const tr = e.target.closest('tr.mod[data-m]'); if (!tr) return;
+      ACC_DAT.open = ACC_DAT.open || new Set();
+      const m = tr.dataset.m;
+      if (ACC_DAT.open.has(m)) ACC_DAT.open.delete(m); else ACC_DAT.open.add(m);
       renderAccesoriosDatos();
     });
+    $('accDatExpand').addEventListener('click', () => { ACC_DAT.open = new Set([...document.querySelectorAll('#accDatModelos tr.mod[data-m]')].map(t => t.dataset.m)); renderAccesoriosDatos(); });
+    $('accDatCollapse').addEventListener('click', () => { ACC_DAT.open = new Set(); renderAccesoriosDatos(); });
     $('accDatPeriodo').addEventListener('change', e => { ACC_DAT.periodo = parseInt(e.target.value, 10) || 3; renderAccesoriosDatos(); });
     $('accDatExportBtn').addEventListener('click', () => {
       const rows = ACC_DAT.sinAcc.slice().sort((a,b) => (fechaEntregaEfectiva(b) || 0) - (fechaEntregaEfectiva(a) || 0));
