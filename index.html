@@ -2854,7 +2854,7 @@
       <div class="an-sub" style="margin-top:12px;" id="agPickSlotsTitle">Horarios libres</div>
       <div class="ag-pick-slots" id="agPickSlots"></div>
       <label style="display:flex; align-items:center; gap:6px; font-size:12px; color:var(--text-dim); margin-top:8px;">
-        <input type="checkbox" id="agPickExc"> Excepción: mostrar también horarios fuera de regla (mismo día después del corte / entregador de otra marca)
+        <input type="checkbox" id="agPickExc"> Excepción: mostrar también horarios fuera de regla (mismo día después del corte, entregador de otra marca o entregador de excepción)
       </label>
       <div class="segmented" id="agPickEstado" style="margin-top:12px;">
         <button type="button" class="active" data-estado="turno">✅ Turno (confirmado)</button>
@@ -2882,6 +2882,8 @@
         <label class="ag-lbl" style="flex:1;">Turno para el mismo día: pedido antes de<input type="text" id="agCfgCorte" placeholder="10:00"></label>
         <label class="ag-lbl" style="flex:1;">…y solo desde las<input type="text" id="agCfgDesde" placeholder="15:00"></label>
       </div>
+      <label class="ag-lbl">Entregadores de excepción <span class="hint">— no suman a la capacidad ni al %, y no se sugieren solos (separados por coma)</span>
+        <input type="text" id="agCfgExc" placeholder="JM"></label>
       <label class="ag-lbl">Marcas por entregador <span class="hint">— una línea por entregador; los que no figuran entregan todas</span>
         <textarea id="agCfgMarcas" rows="2" placeholder="DIAZ: FORD"></textarea></label>
       <div class="auth-error" id="agCfgError" style="text-align:left; margin-top:6px;"></div>
@@ -12002,9 +12004,11 @@
     sa: {horas:['9:40','10:20','11:00','11:40','12:20'], entregadores:['AVERO','DIAZ','ROA']},
     // Turno para el mismo día: solo si se pide antes de "corte" y para horarios desde "desde".
     // marcas: entregadores que solo entregan ciertas marcas (vacío = todas).
-    reglas: {corte:'10:00', desde:'15:00', marcas:{DIAZ:['FORD']}}
+    // excepcion: entregadores sin asesor (no suman a la capacidad ni se ofrecen solos)
+    reglas: {corte:'10:00', desde:'15:00', marcas:{DIAZ:['FORD']}, excepcion:['JM']}
   };
   function agReglas(){ return Object.assign({}, AG_CFG_DEFAULT.reglas, (AG.cfg && AG.cfg.reglas) || {}); }
+  function agEsExcepcion(ent){ return (agReglas().excepcion || []).includes(ent); }
   function agMarcaPermitida(ent, marca){
     const m = (agReglas().marcas || {})[ent];
     return !m || !m.length || !marca || m.includes(marca);
@@ -12026,8 +12030,9 @@
     dia.horas.forEach(h => dia.entregadores.forEach(e => {
       if (AG.data.has(agSlot(fk, h, e))) return;
       if (fk < hoyK || (fk === hoyK && agHoraMin(h) <= minAhora)) return; // ya pasó
-      if (!excepcion && !agSlotPermitido(fk, h, e, marca)) return;
-      out.push({hora:h, ent:e, regla: agSlotPermitido(fk, h, e, marca)});
+      const ok = agSlotPermitido(fk, h, e, marca) && !agEsExcepcion(e);
+      if (!excepcion && !ok) return;
+      out.push({hora:h, ent:e, regla: ok});
     }));
     return out;
   }
@@ -12084,8 +12089,14 @@
   }
   function agStats(d){
     const k = agKey(d), dia = agDia(d);
-    const s = {total: dia.horas.length * dia.entregadores.length, turno:0, reservado:0, ofrecido:0, bloqueado:0};
-    AG.data.forEach(t => { if (t.fecha === k && s[t.estado] !== undefined) s[t.estado]++; });
+    // Los entregadores de excepción (ej. JM, sin asesor) no suman a la capacidad ni al %
+    const ents = dia.entregadores.filter(e => !agEsExcepcion(e));
+    const s = {total: dia.horas.length * ents.length, turno:0, reservado:0, ofrecido:0, bloqueado:0, exc:0};
+    AG.data.forEach(t => {
+      if (t.fecha !== k || s[t.estado] === undefined) return;
+      if (agEsExcepcion(t.entregador)){ if (t.estado !== 'bloqueado') s.exc++; return; }
+      s[t.estado]++;
+    });
     s.ocupados = s.turno + s.reservado + s.ofrecido;
     s.cap = Math.max(0, s.total - s.bloqueado);
     s.libres = Math.max(0, s.cap - s.ocupados);
@@ -12169,7 +12180,7 @@
     const s = agStats(f);
     const kpi = (l, v, sub, c) => `<div class="an-kpi" style="--kc:${c}"><div class="l">${l}</div><div class="v">${v}</div><div class="s">${sub}</div></div>`;
     $('agKpis').innerHTML =
-      kpi('📊 Ocupación', s.pct + '%', `${s.ocupados} de ${s.cap} turnos posibles${s.bloqueado ? ` (${s.total} − ${s.bloqueado} bloqueados)` : ''}`, s.pct >= 90 ? 'var(--red)' : 'var(--blue)') +
+      kpi('📊 Ocupación', s.pct + '%', `${s.ocupados} de ${s.cap} turnos posibles${s.bloqueado ? ` (${s.total} − ${s.bloqueado} bloqueados)` : ''}${s.exc ? ` · +${s.exc} de excepción (${(agReglas().excepcion || []).join(', ')}), no cuentan` : ''}`, s.pct >= 90 ? 'var(--red)' : 'var(--blue)') +
       kpi('✅ Turnos', s.turno, 'confirmados', 'var(--green)') +
       kpi('🟣 Reservados', s.reservado, 'apartados sin confirmar', '#a78bfa') +
       kpi('🟡 Ofrecidos', s.ofrecido, 'esperando respuesta del cliente', 'var(--amber)') +
@@ -12364,6 +12375,7 @@
     $('agCfgEntSA').value = c.sa.entregadores.join(', ');
     const R = agReglas();
     $('agCfgCorte').value = R.corte; $('agCfgDesde').value = R.desde;
+    $('agCfgExc').value = (R.excepcion || []).join(', ');
     $('agCfgMarcas').value = Object.entries(R.marcas || {}).map(([e, m]) => `${e}: ${m.join(', ')}`).join('\n');
     $('agCfgError').textContent = '';
     $('agCfgModal').style.display = 'flex';
@@ -12379,7 +12391,8 @@
     const hh = v => { const m = (v || '').trim().match(/^(\d{1,2})(?::(\d{2}))?$/); return m ? `${parseInt(m[1],10)}:${m[2] || '00'}` : null; };
     const marcas = {};
     $('agCfgMarcas').value.split('\n').forEach(l => { const m = l.split(':'); if (m.length >= 2 && m[0].trim()) marcas[m[0].trim().toUpperCase()] = m.slice(1).join(':').split(',').map(x => x.trim().toUpperCase()).filter(Boolean); });
-    cfg.reglas = {corte: hh($('agCfgCorte').value) || '10:00', desde: hh($('agCfgDesde').value) || '15:00', marcas};
+    cfg.reglas = {corte: hh($('agCfgCorte').value) || '10:00', desde: hh($('agCfgDesde').value) || '15:00', marcas,
+      excepcion: $('agCfgExc').value.split(',').map(x => x.trim().toUpperCase()).filter(Boolean)};
     const prev = AG.cfg;
     AG.cfg = cfg;
     $('agCfgModal').style.display = 'none';
