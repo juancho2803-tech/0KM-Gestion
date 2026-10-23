@@ -2156,7 +2156,7 @@
           </div>
           <div class="table-scroll" style="max-height:420px;">
             <table class="data-table" id="acelAccesoriosTable">
-              <thead><tr><th class="col-marca">Marca</th><th>Interno</th><th>Accesorios</th><th>Fecha venta</th><th>Fecha arribo</th><th>Fecha alistaje</th><th>Fecha patentamiento</th><th>Fecha envío accesorios</th><th>Fecha regreso</th><th>Estado</th><th>Días</th></tr></thead>
+              <thead><tr><th class="col-marca">Marca</th><th>Interno</th><th>Modelo</th><th>Ubicación</th><th>Accesorios</th><th>Fecha venta</th><th>Fecha arribo</th><th>Fecha alistaje</th><th>Fecha patentamiento</th><th>Fecha envío accesorios</th><th>Fecha regreso</th><th>Estado</th><th>Días</th></tr></thead>
               <tbody id="acelAccesoriosTableBody"></tbody>
             </table>
           </div>
@@ -5865,6 +5865,13 @@
   const ACEL_COLS_ACCESORIOS = [
     {get:c => escapeHtml(c.row['Marca']), cls:'col-marca'},
     {get:c => escapeHtml(c.row['Interno'])},
+    {get:c => escapeHtml((c.row['Modelo'] || '').toString())},
+    {get:c => {
+      const u = (c.row['Ubicacion'] || '').toString().trim();
+      const ua = (c.row['Ubicacion de Accesorios'] || '').toString().trim();
+      const enviado = (c.row['Enviado a Accesorios'] || '').toString().trim().toUpperCase() === 'SI' && !(c.row['Fecha Regreso de Accesorios'] || '').toString().trim();
+      return (escapeHtml(u) || '<span style="color:var(--text-faint)">Sin arribo</span>') + (enviado && ua && ua !== u ? `<br><span class="hint" style="font-size:10.5px;">en accesorios: ${escapeHtml(ua)}</span>` : '');
+    }},
     {get:c => (c.row['Accesorios'] || '').toString().trim().toUpperCase() === 'SI' ? '✅ SI' : '❌'},
     {get:acelFechaCell('Fecha Venta'), cls:'col-fecha'},
     {get:acelFechaCell('Fecha Arribo Unidad'), cls:'col-fecha'},
