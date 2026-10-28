@@ -766,6 +766,10 @@
   .ag-cell.reservado{background:rgba(167,139,250,.16); border:1px solid rgba(167,139,250,.6);}
   .ag-cell.ofrecido{background:rgba(255,176,32,.16); border:1px solid rgba(255,176,32,.6);}
   .ag-cell.bloqueado{background:repeating-linear-gradient(45deg, rgba(255,92,77,.16), rgba(255,92,77,.16) 6px, rgba(255,92,77,.07) 6px, rgba(255,92,77,.07) 12px); border:1px solid rgba(255,92,77,.5);}
+  /* Turno con nota: rosa flúor para que se revise */
+  .ag-cell.connota{background:rgba(255,20,190,.22) !important; border:2px solid #ff14be !important; box-shadow:0 0 10px rgba(255,20,190,.45);}
+  .ag-cell.connota .nt{color:#ff14be; font-style:normal; font-weight:700; white-space:normal;}
+  [data-theme="light"] .ag-cell.connota .nt{color:#c4008f;}
   .ag-cell .e{font-size:10px; text-transform:uppercase; letter-spacing:.5px; font-weight:700; color:var(--text-dim);}
   .ag-cell .i{font-family:'JetBrains Mono',monospace; font-weight:800; font-size:13.5px;}
   .ag-cell .c{font-size:10.5px; color:var(--text-dim); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:190px;}
@@ -12321,11 +12325,12 @@
           const es = AG_ESTADOS[t.estado] || {label:t.estado || 'Nota', icon:'📝'};
           const rMarca = ints.length ? agRowIndex().get(ints[0]) : null;
           const fuera = !todasMarcas && rMarca && !agMarcaOk(rMarca);
-          return `<td class="ag-cell ${escapeHtml(t.estado || '')} ${edit ? 'edit' : ''}" ${attrs} style="${fuera ? 'opacity:.3;' : ''}" title="Cargado por ${escapeHtml(t.usuario || '?')} · ${escapeHtml(t.actualizado || '')}">
+          const conNota = t.nota && t.estado !== 'bloqueado';
+          return `<td class="ag-cell ${escapeHtml(t.estado || '')} ${conNota ? 'connota' : ''} ${edit ? 'edit' : ''}" ${attrs} style="${fuera ? 'opacity:.3;' : ''}" title="Cargado por ${escapeHtml(t.usuario || '?')} · ${escapeHtml(t.actualizado || '')}">
             ${warn}<div class="e">${es.icon} ${es.label}</div>
             ${t.interno ? `<div class="i">${escapeHtml(t.interno)}</div>` : ''}
             ${sub ? `<div class="c">${sub}</div>` : ''}${falta}
-            ${t.nota ? `<div class="nt">${escapeHtml(t.nota)}</div>` : ''}</td>`;
+            ${t.nota ? `<div class="nt">${conNota ? '📌 ' : ''}${escapeHtml(t.nota)}</div>` : ''}</td>`;
         }).join('')}</tr>`).join('') + '</tbody>';
     }
 
