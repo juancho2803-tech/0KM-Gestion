@@ -1309,6 +1309,7 @@
           <div class="ag-dia" id="agDiaLabel"></div>
           <div style="flex:1"></div>
           <div class="table-search" style="margin:0;"><input type="text" id="agBuscar" placeholder="🔎 Buscar interno en la agenda…" autocomplete="off"></div>
+          <button type="button" class="page-btn" id="agDiaBloqBtn" style="display:none;"></button>
           <button type="button" class="page-btn" id="agConfigBtn" style="display:none;">⚙️ Horarios y entregadores</button>
         </div>
         <div class="pill-group" style="margin-top:10px;">
@@ -2974,6 +2975,8 @@
         <input type="text" id="agCfgExc" placeholder="JM"></label>
       <label class="ag-lbl">Bloqueos fijos (todas las semanas) <span class="hint">— una línea por bloqueo: DÍA HORA ENTREGADOR: motivo. Días LU MA MI JU VI SA o LV; entregador * = todos</span>
         <textarea id="agCfgFijos" rows="3" placeholder="SA 10:20 *: Descanso&#10;SA 12:20 *: Cierre"></textarea></label>
+      <label class="ag-lbl">Días bloqueados completos <span class="hint">— una línea por día o rango: 09/11/2026: Feriado · 09/11/2026-10/11/2026: Feriado</span>
+        <textarea id="agCfgDias" rows="2" placeholder="09/11/2026-10/11/2026: Feriado"></textarea></label>
       <label class="ag-lbl">Marcas por entregador <span class="hint">— una línea por entregador; los que no figuran entregan todas</span>
         <textarea id="agCfgMarcas" rows="2" placeholder="DIAZ: FORD"></textarea></label>
       <div class="auth-error" id="agCfgError" style="text-align:left; margin-top:6px;"></div>
@@ -12140,9 +12143,14 @@
     return agFijos().find(f => f.dow === dow && f.hora === hora && (f.ent === '*' || f.ent === ent)) || null;
   }
   // Lo que "vale" en un casillero: lo cargado, o el bloqueo fijo, o nada (libre)
+  // ---- Días bloqueados completos (feriados, inventario, etc.): cfg.diasBloq = [{fecha:'2026-11-09', motivo}]
+  function agDiasBloq(){ return (AG.cfg && Array.isArray(AG.cfg.diasBloq)) ? AG.cfg.diasBloq : []; }
+  function agDiaBloq(fk){ return agDiasBloq().find(d => d.fecha === fk) || null; }
   function agEfectivo(fk, hora, ent){
     const t = AG.data.get(agSlot(fk, hora, ent));
     if (t) return (!t.estado && t.nota === AG_LIBRE_MARK) ? null : t;
+    const db = agDiaBloq(fk);
+    if (db) return {fecha:fk, hora, entregador:ent, estado:'bloqueado', interno:'', nota: db.motivo || 'Día bloqueado', fijo:true, dia:true};
     const f = agFijoDe(fk, hora, ent);
     return f ? {fecha:fk, hora, entregador:ent, estado:'bloqueado', interno:'', nota: f.motivo || 'Bloqueo fijo', fijo:true} : null;
   }
@@ -12298,9 +12306,13 @@
     const todasMarcas = AG.brands.size === CAR_BRANDS.length && AG.inv === 'todos';
     $('agFecha').value = k;
     $('agConfigBtn').style.display = (CURRENT_SESSION && CURRENT_SESSION.role === 'admin') ? '' : 'none';
+    const dbHoy = agDiaBloq(k);
+    $('agDiaBloqBtn').style.display = (CURRENT_SESSION && CURRENT_SESSION.role === 'admin' && f.getDay() !== 0) ? '' : 'none';
+    $('agDiaBloqBtn').textContent = dbHoy ? '✅ Desbloquear este día' : '⛔ Bloquear este día';
     const fer = typeof esFeriadoSLA === 'function' && esFeriadoSLA(f);
     $('agDiaLabel').innerHTML = escapeHtml(f.toLocaleDateString('es-AR', {weekday:'long', day:'2-digit', month:'2-digit', year:'numeric'})) +
-      (f.getDay() === 0 ? '<span class="ag-fer">domingo, sin turnos</span>' : '') + (fer ? '<span class="ag-fer">🎉 feriado</span>' : '');
+      (f.getDay() === 0 ? '<span class="ag-fer">domingo, sin turnos</span>' : '') + (fer ? '<span class="ag-fer">🎉 feriado</span>' : '') +
+      (dbHoy ? `<span class="ag-fer">⛔ día bloqueado: ${escapeHtml(dbHoy.motivo || '')}</span>` : '');
 
     // Semana (lunes a sábado)
     const lun = new Date(f); lun.setDate(f.getDate() - ((f.getDay() + 6) % 7));
@@ -12310,7 +12322,7 @@
       const s = agStats(d), dk = agKey(d);
       const col = s.pct >= 90 ? 'var(--red)' : (s.pct >= 60 ? 'var(--amber)' : 'var(--green)');
       return `<div class="ag-dchip ${dk === k ? 'sel' : ''}" data-fecha="${dk}" title="${s.ocupados} ocupados de ${s.cap} disponibles${s.bloqueado ? ' (' + s.bloqueado + ' bloqueados)' : ''}">
-        <div class="d">${escapeHtml(d.toLocaleDateString('es-AR', {weekday:'short', day:'2-digit', month:'2-digit'}))}${dk === hoyK ? ' · hoy' : ''}</div>
+        <div class="d">${escapeHtml(d.toLocaleDateString('es-AR', {weekday:'short', day:'2-digit', month:'2-digit'}))}${dk === hoyK ? ' · hoy' : ''}${agDiaBloq(dk) ? ' · ⛔' : ''}</div>
         <div class="n">${s.ocupados}/${s.cap} <span style="font-size:12px; color:${col}">${s.pct}%</span></div>
         <div class="b"><span style="width:${s.pct}%; background:${col}"></span></div></div>`;
     }).join('');
@@ -12361,7 +12373,7 @@
             ints.some(i => { const rr = agRowIndex().get(i); return rr && !(rr['Fecha Entrega Unidad'] || '').toString().trim(); });
           if (sinEntrega) falta += `<div class="se">⏳ Sin fecha de entrega en la base</div>`;
           return `<td class="ag-cell ${escapeHtml(t.estado || '')} ${sinEntrega ? 'sinentrega' : ''} ${conNota ? 'connota' : ''} ${edit ? 'edit' : ''}" ${attrs} style="${fuera ? 'opacity:.3;' : ''}" title="Cargado por ${escapeHtml(t.usuario || '?')} · ${escapeHtml(t.actualizado || '')}">
-            ${warn}<div class="e">${es.icon} ${es.label}${t.fijo ? ' · 🔁 fijo' : ''}</div>
+            ${warn}<div class="e">${es.icon} ${es.label}${t.dia ? ' · día' : (t.fijo ? ' · 🔁 fijo' : '')}</div>
             ${t.interno ? `<div class="i">${escapeHtml(t.interno)}</div>` : ''}
             ${sub ? `<div class="c">${sub}</div>` : ''}${falta}
             ${t.nota ? `<div class="nt">${conNota ? '📌 ' : ''}${escapeHtml(t.nota)}</div>` : ''}</td>`;
@@ -12423,10 +12435,10 @@
   function agOpenEditor(hora, ent){
     const k = agKey(AG.fecha);
     const t = agEfectivo(k, hora, ent);
-    AG.edit = {fecha:k, hora, ent, fijo: agFijoDe(k, hora, ent)};
+    AG.edit = {fecha:k, hora, ent, fijo: agDiaBloq(k) ? {dia:true} : agFijoDe(k, hora, ent)};
     $('agModalTitle').textContent = `${ent} · ${hora}`;
     $('agModalSub').textContent = AG.fecha.toLocaleDateString('es-AR', {weekday:'long', day:'2-digit', month:'2-digit', year:'numeric'}) +
-      (t && t.fijo ? ' · 🔁 bloqueo fijo (se repite todas las semanas)' : (t ? ` · último cambio: ${t.usuario || '?'} ${t.actualizado || ''}` : ''));
+      (t && t.dia ? ' · ⛔ día bloqueado' : t && t.fijo ? ' · 🔁 bloqueo fijo (se repite todas las semanas)' : (t ? ` · último cambio: ${t.usuario || '?'} ${t.actualizado || ''}` : ''));
     $('agModalInterno').value = t ? (t.interno || '') : (AG.pick || '');
     $('agModalNota').value = t ? ((t.nota === AG_LIBRE_MARK) ? '' : (t.nota || '')) : '';
     agSetEstado(t ? t.estado : (AG.pick ? 'turno' : 'turno'));
@@ -12449,6 +12461,8 @@
       let html = '';
       if (AG.editEstado === 'bloqueado' && !fijo && esAdmin)
         html = `<label><input type="checkbox" id="agModalFijoChk"> 🔁 Bloquear este horario <b>todos los ${dia}</b> (${escapeHtml(AG.edit.hora)} · ${escapeHtml(AG.edit.ent)})</label>`;
+      else if (fijo && fijo.dia && AG.editEstado !== 'bloqueado')
+        html = `<div class="hint">El día completo está bloqueado. Al guardar se habilita <b>solo este horario</b> (para desbloquear el día entero usá "✅ Desbloquear este día").</div>`;
       else if (fijo && AG.editEstado !== 'bloqueado')
         html = `<div class="hint" style="margin-bottom:4px;">Este horario tiene un bloqueo fijo de los ${dia}. Al guardar se habilita <b>solo este día</b>.</div>` +
           (esAdmin ? `<label><input type="checkbox" id="agModalFijoChk"> Quitar el bloqueo fijo para <b>todas</b> las semanas</label>` : '');
@@ -12498,7 +12512,7 @@
     }
     // Liberar un horario con bloqueo fijo
     if (estado === '' && fijo){
-      if (chk){
+      if (chk && !fijo.dia){
         agPersistCfg(Object.assign({}, agCfg(), {fijos: agFijos().filter(f => !(f.dow === fijo.dow && f.hora === fijo.hora && f.ent === fijo.ent))}), '✓ Bloqueo fijo quitado');
         if (tieneExplicito) agGuardar(fecha, hora, ent, '', '', '', true);
       } else {
@@ -12557,6 +12571,7 @@
     const R = agReglas();
     $('agCfgCorte').value = R.corte; $('agCfgDesde').value = R.desde;
     $('agCfgExc').value = (R.excepcion || []).join(', ');
+    $('agCfgDias').value = agDiasBloq().slice().sort((a,b) => a.fecha < b.fecha ? -1 : 1).map(d => `${entFmt(agFromKey(d.fecha))}${d.motivo ? ': ' + d.motivo : ''}`).join('\n');
     $('agCfgFijos').value = agFijos().map(f => `${AG_DOW[f.dow]} ${f.hora} ${f.ent}${f.motivo ? ': ' + f.motivo : ''}`).join('\n');
     $('agCfgMarcas').value = Object.entries(R.marcas || {}).map(([e, m]) => `${e}: ${m.join(', ')}`).join('\n');
     $('agCfgError').textContent = '';
@@ -12585,6 +12600,17 @@
     });
     if (fijosErr){ $('agCfgError').textContent = 'No entiendo este bloqueo fijo: "' + fijosErr + '" (formato: SA 10:20 *: Descanso)'; return; }
     cfg.fijos = fijos;
+    const diasBloq = []; let diasErr = '';
+    const pf = t => { const m = (t || '').trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/); return m ? new Date(+m[3], +m[2] - 1, +m[1]) : null; };
+    $('agCfgDias').value.split('\n').map(l => l.trim()).filter(Boolean).forEach(l => {
+      const [rango, ...mot] = l.split(':');
+      const [a, b] = rango.split('-').map(pf);
+      if (!a || (rango.includes('-') && !b)){ diasErr = l; return; }
+      const fin = b || a;
+      for (let d = new Date(a); d <= fin && diasBloq.length < 400; d.setDate(d.getDate() + 1)) diasBloq.push({fecha: agKey(d), motivo: mot.join(':').trim()});
+    });
+    if (diasErr){ $('agCfgError').textContent = 'No entiendo este día bloqueado: "' + diasErr + '" (formato: 09/11/2026: Feriado)'; return; }
+    cfg.diasBloq = diasBloq;
     cfg.reglas = {corte: hh($('agCfgCorte').value) || '10:00', desde: hh($('agCfgDesde').value) || '15:00', marcas,
       excepcion: $('agCfgExc').value.split(',').map(x => x.trim().toUpperCase()).filter(Boolean)};
     $('agCfgModal').style.display = 'none';
@@ -12644,6 +12670,16 @@
     $('agModalSave').addEventListener('click', agSave);
     $('agModalInterno').addEventListener('keydown', e => { if (e.key === 'Enter') agSave(); });
     $('agConfigBtn').addEventListener('click', agOpenCfg);
+    $('agDiaBloqBtn').addEventListener('click', () => {
+      const k = agKey(AG.fecha), db = agDiaBloq(k);
+      if (db){
+        agPersistCfg(Object.assign({}, agCfg(), {diasBloq: agDiasBloq().filter(d => d.fecha !== k)}), '✓ Día desbloqueado');
+        return;
+      }
+      const motivo = window.prompt('Motivo del bloqueo del ' + entFmt(AG.fecha) + ' (ej.: Feriado, Inventario):', 'Feriado');
+      if (motivo === null) return;
+      agPersistCfg(Object.assign({}, agCfg(), {diasBloq: agDiasBloq().concat([{fecha:k, motivo: motivo.trim() || 'Día bloqueado'}])}), '⛔ Día bloqueado');
+    });
     $('agCfgCancel').addEventListener('click', () => { $('agCfgModal').style.display = 'none'; });
     $('agCfgSave').addEventListener('click', agSaveCfg);
     // Refresco automático cada 30 s mientras la agenda está a la vista y sin editar,
