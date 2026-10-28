@@ -814,6 +814,8 @@
   .acc-proy{text-align:center; min-width:120px; background:rgba(51,211,145,.08) !important;}
   .acc-proy .t{font-family:'JetBrains Mono',monospace; font-weight:800; font-size:18px; color:var(--text);}
   .acc-proy .a{font-size:11px; color:var(--green); font-weight:700;}
+  .pat-exc-btn{padding:4px 8px; margin-left:4px; background:var(--surface-2); color:var(--text-dim); border:1px dashed var(--border); border-radius:4px; cursor:pointer; font-size:12px;}
+  .pat-exc-btn.on{background:rgba(167,139,250,.18); color:var(--text); border:1px solid rgba(167,139,250,.7); font-weight:700;}
   .fi-search{margin-left:auto; display:flex; gap:6px; align-items:center; padding-bottom:4px;}
   .fi-search input{background:var(--surface-2); color:var(--text); border:1px solid var(--border); border-radius:8px; padding:6px 10px; font-size:12.5px; width:260px;}
   .fi-search input:focus{outline:none; border-color:var(--amber);}
@@ -2894,6 +2896,24 @@
     </div>
   </div>
 
+  <div class="modal-overlay" id="patExcModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.55); z-index:1000; align-items:center; justify-content:center;">
+    <div class="ag-modal">
+      <h3 style="margin:0 0 4px;">⚙️ Excepción</h3>
+      <div class="hint" id="patExcSub" style="margin-bottom:10px;"></div>
+      <div id="patExcInfo"></div>
+      <div class="an-sub" style="margin-top:10px;">Tildá lo que ya está resuelto aunque la base no lo refleje</div>
+      <div id="patExcList"></div>
+      <label class="ag-lbl">Nota (obligatoria) <span class="hint">— qué pasó, quién lo confirmó</span>
+        <textarea id="patExcNota" rows="2" placeholder="Ej.: accesorios instalados el 27/10, falta el cambio de ubicación en el sistema"></textarea></label>
+      <div class="auth-error" id="patExcError" style="text-align:left; margin-top:6px;"></div>
+      <div style="display:flex; gap:8px; justify-content:space-between; margin-top:12px;">
+        <button type="button" class="page-btn" id="patExcQuitar">Quitar excepción</button>
+        <span style="display:flex; gap:8px;"><button type="button" class="page-btn" id="patExcCancel">Cancelar</button>
+        <button type="button" class="page-btn ag-primary" id="patExcSave">Guardar</button></span>
+      </div>
+    </div>
+  </div>
+
   <div class="modal-overlay" id="fiModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.55); z-index:1000; align-items:center; justify-content:center;">
     <div class="ag-modal" style="width:min(860px, 96vw); max-height:92vh; overflow:auto; position:relative;">
       <button type="button" class="page-btn" id="fiClose" style="position:sticky; top:0; float:right; z-index:2;">✕ Cerrar</button>
@@ -3303,7 +3323,7 @@
     // El rol "entregas" solo puede editar la sección Contactación — el backend ya lo
     // rechaza igual, pero lo cortamos acá antes para no generar un guardado optimista
     // que después haya que revertir, y para avisar al toque por qué no se guardó.
-    if (CURRENT_SESSION && CURRENT_SESSION.role === 'entregas' && seccion !== 'contactacion' && seccion !== 'contactacionfinalizado' && seccion !== 'bloqueosaldo' && seccion !== 'clienteexterno'){
+    if (CURRENT_SESSION && CURRENT_SESSION.role === 'entregas' && seccion !== 'contactacion' && seccion !== 'contactacionfinalizado' && seccion !== 'bloqueosaldo' && seccion !== 'clienteexterno' && seccion !== 'excepcion'){
       showToast('⚠️ Tu rol (entregas) solo puede editar Contactación.', true);
       return Promise.reject(new Error('Rol sin permiso de edición para esta sección'));
     }
@@ -7869,15 +7889,39 @@
     return !!rec && !bloqueoLiberacion(rec);
   }
 
+  // ---- Excepciones manuales (Patentados): el dato de la base no refleja la realidad
+  // (ej.: accesorios instalados pero sin el cambio de ubicación). Observación seccion
+  // 'excepcion': estadoAveria = motivos exceptuados separados por coma, observacion = nota.
+  const PAT_EXCEPCIONES = [
+    {k:'accesorios', label:'🎒 Accesorios instalados (aunque la base no tenga el regreso / cambio de ubicación)'},
+    {k:'ubicacion',  label:'📍 Está en Pre-entrega DQ (aunque la base figure en otra ubicación)'},
+    {k:'alistaje',   label:'🧹 Está alistado (aunque falte la fecha de alistaje)'},
+    {k:'averia',     label:'⚠️ Avería resuelta (aunque falte la fecha de cierre)'},
+    {k:'geac',       label:'📋 Carpeta en GEAC (aunque falte la fecha)'},
+    {k:'credito',    label:'💳 Crédito liquidado (aunque falte la fecha)'}
+  ];
+  function patExcRec(row){
+    const i = (row && row['Interno'] !== undefined ? row['Interno'] : row || '').toString().trim();
+    const rec = OBSERVATIONS.get(obsKey(i, 'excepcion'));
+    return rec && (rec.estadoAveria || '').toString().trim() ? rec : null;
+  }
+  function patExc(row){
+    const rec = patExcRec(row);
+    return new Set(rec ? rec.estadoAveria.toString().split(',').map(x => x.trim()).filter(Boolean) : []);
+  }
+
   function isOkParaTurno(row){
     if (bloqueoActivo(row)) return false;
+    const exc = patExc(row);
     const ubicacion = (row['Ubicacion'] || '').toString().trim().toUpperCase();
-    if (ubicacion !== 'PRE-ENTREGA D.QUIROS') return false;
-    if (hasAveria(row)) return false;
+    // Con excepción de accesorios, figurar todavía en el taller de accesorios no frena
+    const ubicOkPorAcc = exc.has('accesorios') && ubicacion.startsWith('TALLER');
+    if (ubicacion !== 'PRE-ENTREGA D.QUIROS' && !exc.has('ubicacion') && !ubicOkPorAcc) return false;
+    if (hasAveria(row) && !exc.has('averia')) return false;
     const dominio = (row['Dominio'] || '').toString().trim();
     if (dominio === '') return false;
     const patenta = (row['Patenta?'] || '').toString().trim().toUpperCase();
-    if (patenta === 'MAIPU'){
+    if (patenta === 'MAIPU' && !exc.has('geac')){
       const geac = (row['Fecha Entrega Tramite a GEAC'] || '').toString().trim();
       if (geac === '') return false;
     }
@@ -7885,9 +7929,9 @@
     if (fEntrega !== '') return false;
     const fTurno = (row['Fecha Turno Entrega'] || '').toString().trim();
     if (fTurno !== '') return false;
-    if (!isAlistado(row)) return false;
-    if (tieneAccesorios(row) && !accesoriosListos(row)) return false;
-    if (tieneCreditoSinLiquidar(row)) return false;
+    if (!isAlistado(row) && !exc.has('alistaje')) return false;
+    if (tieneAccesorios(row) && !accesoriosListos(row) && !exc.has('accesorios')) return false;
+    if (tieneCreditoSinLiquidar(row) && !exc.has('credito')) return false;
     return true;
   }
 
@@ -7932,7 +7976,10 @@
     }
     if (up('Dominio') === '') m.push('dominio');
     if (up('Fecha Turno Entrega') !== '') m.push('turno');
-    return m;
+    const exc = patExc(row);
+    if (!exc.size) return m;
+    const ubicTaller = up('Ubicacion').startsWith('TALLER');
+    return m.filter(k => !exc.has(k) && !(k === 'ubicacion' && exc.has('accesorios') && ubicTaller));
   }
   let patMotivoFilter = null;
 
@@ -10011,7 +10058,9 @@
           <td style="white-space:nowrap;">${sinTurnoNiEntrega ? bloqueoCheck : '<span class="badge-entrega" title="No aplica">—</span>'}</td>
           <td>${turnoEntregaCell}</td>
           <td>${obsCell}</td>
-          <td>${isEntregado(r) ? '' : `<button type="button" class="btn-mark-delivered" data-interno="${escapeHtml(interno)}" style="padding:4px 8px; background:#10b981; color:white; border:none; border-radius:4px; cursor:pointer; font-size:12px;">✕ Entregado</button>`}</td>
+          <td style="white-space:nowrap;">${isEntregado(r) ? '' : `<button type="button" class="btn-mark-delivered" data-interno="${escapeHtml(interno)}" style="padding:4px 8px; background:#10b981; color:white; border:none; border-radius:4px; cursor:pointer; font-size:12px;">✕ Entregado</button>`}
+            ${isEntregado(r) ? '' : (() => { const xr = patExcRec(r); const ks = [...patExc(r)];
+              return `<button type="button" class="pat-exc-btn ${xr ? 'on' : ''}" data-interno="${escapeHtml(interno)}" title="${xr ? escapeHtml('Excepción: ' + ks.join(', ') + ' · ' + (xr.observacion || '') + ' · ' + (xr.fechaSolucion || '')) : 'Marcar una excepción: el dato de la base no refleja la realidad'}">⚙️ ${xr ? 'Excepción (' + ks.length + ')' : 'Excepción'}</button>`; })()}</td>
         </tr>
       `;
       }).join('');
@@ -12681,6 +12730,8 @@
     if (fiTxt(r, 'Patenta?').toUpperCase() === 'MAIPU' && fp && !fiTxt(r, 'Fecha Entrega Tramite a GEAC')) a.push([entregado ? 'bad' : 'warn', 'Patenta Maipú y no tiene carpeta entregada a GEAC']);
     if (tieneCreditoSinLiquidar(r)) a.push([entregado ? 'bad' : 'warn', 'Crédito sin liquidar']);
     if (bloqueoActivo(r)) a.push(['warn', 'Bloqueo de saldo / pago activo (marcado en la app)']);
+    const xr = patExcRec(r);
+    if (xr) a.push(['info', `Excepción manual: ${[...patExc(r)].join(', ')} — ${xr.observacion || ''} (${xr.fechaSolucion || ''})`]);
     if (fiTxt(r, 'Fecha Observacion Tramite') && !fiTxt(r, 'Fecha Arreglo Observacion')) a.push(['warn', 'Trámite de gestoría observado sin arreglar']);
     return a;
   }
@@ -12907,6 +12958,51 @@
       XLSX.utils.book_append_sheet(wb, ws, 'Sin accesorios');
       XLSX.writeFile(wb, `entregados_sin_accesorios_${todayStamp()}.xlsx`);
     });
+  }
+
+  // ---------- Patentados: excepciones manuales ----------
+  let patExcInterno = null;
+  function patAbrirExc(interno){
+    const r = ALL_ROWS.find(x => (x['Interno'] || '').toString().trim() === interno);
+    if (!r) return;
+    patExcInterno = interno;
+    const rec = patExcRec(r), act = patExc(r);
+    // motivos actuales SIN aplicar excepciones (para mostrar qué lo frena según la base)
+    const saved = OBSERVATIONS.get(obsKey(interno, 'excepcion'));
+    if (saved) OBSERVATIONS.delete(obsKey(interno, 'excepcion'));
+    const motivos = patMotivosNoOk(r).filter(k => k !== 'turno');
+    if (saved) OBSERVATIONS.set(obsKey(interno, 'excepcion'), saved);
+    $('patExcSub').textContent = `${interno} · ${(r['Marca'] || '').toString().trim()} ${(r['Modelo'] || '').toString().trim()} · ${(r['Cliente'] || '').toString().trim()}`;
+    $('patExcInfo').innerHTML = `<div class="ag-info ${motivos.length ? 'bad' : 'ok'}">Según la base: ${motivos.length ? escapeHtml(motivos.map(k => (PAT_MOTIVOS_NOOK.find(x => x.k === k) || {label:k}).label).join(' · ')) : 'no le falta nada'}<br>
+      <span class="hint">Ubicación: ${escapeHtml((r['Ubicacion'] || '').toString().trim() || 'sin dato')} · Accesorios: ${escapeHtml((r['Accesorios'] || '').toString().trim() || '—')}${(r['Ubicacion de Regresos de Accesorios'] || '').toString().trim() ? ' · regreso: ' + escapeHtml(r['Ubicacion de Regresos de Accesorios'].toString().trim()) : ''}</span></div>`;
+    $('patExcList').innerHTML = PAT_EXCEPCIONES.map(e => {
+      const sugerida = motivos.includes(e.k) || (e.k === 'accesorios' && motivos.includes('ubicacion') && (r['Ubicacion'] || '').toString().toUpperCase().startsWith('TALLER'));
+      return `<label style="display:flex; gap:8px; align-items:flex-start; font-size:12.5px; margin:5px 0; ${sugerida ? '' : 'opacity:.6;'}"><input type="checkbox" value="${e.k}" ${act.has(e.k) ? 'checked' : ''}> <span>${e.label}${sugerida ? ' <b style="color:var(--amber)">· lo frena hoy</b>' : ''}</span></label>`;
+    }).join('');
+    $('patExcNota').value = rec ? (rec.observacion || '') : '';
+    $('patExcError').textContent = '';
+    $('patExcQuitar').style.display = rec ? '' : 'none';
+    $('patExcModal').style.display = 'flex';
+  }
+  function patGuardarExc(quitar){
+    const ks = quitar ? [] : [...document.querySelectorAll('#patExcList input:checked')].map(x => x.value);
+    const nota = $('patExcNota').value.trim();
+    if (!quitar && !ks.length){ $('patExcError').textContent = 'Tildá al menos una excepción.'; return; }
+    if (!quitar && !nota){ $('patExcError').textContent = 'La nota es obligatoria.'; return; }
+    const quien = (CURRENT_SESSION && CURRENT_SESSION.username) || '';
+    saveObservation(patExcInterno, 'excepcion', quitar ? {estadoAveria:'', observacion:'', fechaSolucion:''}
+      : {estadoAveria: ks.join(','), observacion: nota + (quien ? ` (${quien})` : ''), fechaSolucion: new Date().toLocaleDateString('es-AR')})
+      .then(() => showToast(quitar ? '✓ Excepción quitada' : '✓ Excepción guardada')).catch(() => {});
+    $('patExcModal').style.display = 'none';
+    try { renderPatentadosSection(); } catch(e){}
+    try { renderContactacionSection(); } catch(e){}
+    try { renderAgendaSection(); } catch(e){}
+  }
+  if ($('patExcModal')){
+    document.addEventListener('click', e => { const b = e.target.closest('.pat-exc-btn'); if (b) patAbrirExc(b.dataset.interno); });
+    $('patExcSave').addEventListener('click', () => patGuardarExc(false));
+    $('patExcQuitar').addEventListener('click', () => patGuardarExc(true));
+    $('patExcCancel').addEventListener('click', () => { $('patExcModal').style.display = 'none'; });
   }
 
   // ========== Modal Marcar Entregado ==========
