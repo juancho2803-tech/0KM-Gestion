@@ -1305,6 +1305,7 @@
           <button type="button" class="page-btn" id="agNext" title="Día siguiente">›</button>
           <button type="button" class="page-btn" id="agHoy">Hoy</button>
           <button type="button" class="page-btn" id="agRefresh" title="Traer los últimos cambios">🔄 Actualizar</button>
+          <button type="button" class="page-btn" id="agSinEntregaBtn" title="Turnos de días pasados cuyo auto todavía no tiene Fecha Entrega Unidad en la base (casos en amarillo)">⬇️ Sin entrega confirmada</button>
           <div class="ag-dia" id="agDiaLabel"></div>
           <div style="flex:1"></div>
           <div class="table-search" style="margin:0;"><input type="text" id="agBuscar" placeholder="🔎 Buscar interno en la agenda…" autocomplete="off"></div>
@@ -12383,6 +12384,7 @@
 
     agRenderBuscar();
     agRenderEstado();
+    try { agActualizarBtnSinEntrega(); } catch(e){}
   }
 
   function agRenderBuscar(){
@@ -13019,6 +13021,44 @@
     $('patExcSave').addEventListener('click', () => patGuardarExc(false));
     $('patExcQuitar').addEventListener('click', () => patGuardarExc(true));
     $('patExcCancel').addEventListener('click', () => { $('patExcModal').style.display = 'none'; });
+  }
+
+  // ---------- Agenda: Excel de turnos sin fecha de entrega confirmada (casos en amarillo) ----------
+  function agSinEntregaRows(){
+    const hoyK = agKey(new Date()), out = [];
+    [...AG.data.values()].filter(t => t.estado === 'turno' && t.fecha < hoyK).forEach(t => {
+      agInternos(t.interno).forEach(i => {
+        const r = agRowIndex().get(i);
+        if (!r || (r['Fecha Entrega Unidad'] || '').toString().trim()) return;
+        out.push({t, i, r});
+      });
+    });
+    return out.sort((a,b) => (a.t.fecha + String(agHoraMin(a.t.hora)).padStart(4,'0')) < (b.t.fecha + String(agHoraMin(b.t.hora)).padStart(4,'0')) ? -1 : 1);
+  }
+  function agActualizarBtnSinEntrega(){
+    const b = $('agSinEntregaBtn'); if (!b) return;
+    const n = AG.loadedOnce ? agSinEntregaRows().length : 0;
+    b.textContent = `⬇️ Sin entrega confirmada${n ? ` (${n})` : ''}`;
+    b.style.borderColor = n ? '#ffd600' : '';
+  }
+  if ($('agSinEntregaBtn')){
+    $('agSinEntregaBtn').addEventListener('click', () => {
+      const rows = agSinEntregaRows();
+      if (!rows.length){ showToast('No hay turnos pasados sin fecha de entrega en lo cargado de la agenda'); return; }
+      const t = (r, c) => (r[c] || '').toString().trim();
+      const hoy = new Date(); hoy.setHours(0,0,0,0);
+      const data = rows.map(({t: tu, i, r}) => ({
+        'Fecha turno (agenda)': entFmt(agFromKey(tu.fecha)), 'Hora': tu.hora, 'Entregador': tu.entregador,
+        'Dias desde el turno': Math.round((hoy - agFromKey(tu.fecha)) / 86400000),
+        'Interno': i, 'Marca': t(r,'Marca'), 'Modelo': t(r,'Modelo'), 'Dominio': t(r,'Dominio'), 'Cliente': t(r,'Cliente'),
+        'Fecha Turno Entrega (sistema)': formatDateDisplay(r['Fecha Turno Entrega']) || '', 'Ubicacion': t(r,'Ubicacion'),
+        'Motivo Cambio Ubicacion': t(r,'Motivo Cambio Ubicacion'), 'Nota agenda': tu.nota || '', 'Cargado por': tu.usuario || ''
+      }));
+      const ws = XLSX.utils.json_to_sheet(data);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Sin entrega confirmada');
+      XLSX.writeFile(wb, `turnos_sin_entrega_confirmada_${todayStamp()}.xlsx`);
+    });
   }
 
   // ========== Modal Marcar Entregado ==========
