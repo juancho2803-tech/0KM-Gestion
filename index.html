@@ -2898,6 +2898,7 @@
       <label class="ag-lbl">Nota <span class="hint" id="agModalNotaHint">— opcional (ej.: cliente de trámite, verificar información)</span>
         <textarea id="agModalNota" rows="2"></textarea>
       </label>
+      <div id="agModalFijo" class="ag-info" style="display:none; margin-top:8px; font-size:12.5px;"></div>
       <div class="auth-error" id="agModalError" style="text-align:left; margin-top:6px;"></div>
       <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:12px;">
         <button type="button" class="page-btn" id="agModalCancel">Cancelar</button>
@@ -2971,6 +2972,8 @@
       </div>
       <label class="ag-lbl">Entregadores de excepción <span class="hint">— no suman a la capacidad ni al %, y no se sugieren solos (separados por coma)</span>
         <input type="text" id="agCfgExc" placeholder="JM"></label>
+      <label class="ag-lbl">Bloqueos fijos (todas las semanas) <span class="hint">— una línea por bloqueo: DÍA HORA ENTREGADOR: motivo. Días LU MA MI JU VI SA o LV; entregador * = todos</span>
+        <textarea id="agCfgFijos" rows="3" placeholder="SA 10:20 *: Descanso&#10;SA 12:20 *: Cierre"></textarea></label>
       <label class="ag-lbl">Marcas por entregador <span class="hint">— una línea por entregador; los que no figuran entregan todas</span>
         <textarea id="agCfgMarcas" rows="2" placeholder="DIAZ: FORD"></textarea></label>
       <div class="auth-error" id="agCfgError" style="text-align:left; margin-top:6px;"></div>
@@ -12125,6 +12128,24 @@
     reglas: {corte:'10:00', desde:'15:00', marcas:{DIAZ:['FORD']}, excepcion:['JM']}
   };
   function agReglas(){ return Object.assign({}, AG_CFG_DEFAULT.reglas, (AG.cfg && AG.cfg.reglas) || {}); }
+  // ---- Bloqueos fijos (se repiten todas las semanas) ----
+  // cfg.fijos = [{dow:6, hora:'10:20', ent:'*'|'ROA', motivo:'Descanso'}]. Un casillero
+  // puntual guardado en la agenda siempre manda sobre el fijo; para desbloquear un fijo
+  // solo un día se guarda una marca "libre" (estado vacío + nota __LIBRE__).
+  const AG_LIBRE_MARK = '__LIBRE__';
+  const AG_DOW = ['DO','LU','MA','MI','JU','VI','SA'];
+  function agFijos(){ return (AG.cfg && Array.isArray(AG.cfg.fijos)) ? AG.cfg.fijos : []; }
+  function agFijoDe(fk, hora, ent){
+    const dow = agFromKey(fk).getDay();
+    return agFijos().find(f => f.dow === dow && f.hora === hora && (f.ent === '*' || f.ent === ent)) || null;
+  }
+  // Lo que "vale" en un casillero: lo cargado, o el bloqueo fijo, o nada (libre)
+  function agEfectivo(fk, hora, ent){
+    const t = AG.data.get(agSlot(fk, hora, ent));
+    if (t) return (!t.estado && t.nota === AG_LIBRE_MARK) ? null : t;
+    const f = agFijoDe(fk, hora, ent);
+    return f ? {fecha:fk, hora, entregador:ent, estado:'bloqueado', interno:'', nota: f.motivo || 'Bloqueo fijo', fijo:true} : null;
+  }
   function agEsExcepcion(ent){ return (agReglas().excepcion || []).includes(ent); }
   function agMarcaPermitida(ent, marca){
     const m = (agReglas().marcas || {})[ent];
@@ -12145,7 +12166,7 @@
     const fk = agKey(d), dia = agDia(d), out = [];
     const ahora = new Date(), hoyK = agKey(ahora), minAhora = ahora.getHours() * 60 + ahora.getMinutes();
     dia.horas.forEach(h => dia.entregadores.forEach(e => {
-      if (AG.data.has(agSlot(fk, h, e))) return;
+      if (agEfectivo(fk, h, e)) return;
       if (fk < hoyK || (fk === hoyK && agHoraMin(h) <= minAhora)) return; // ya pasó
       const ok = agSlotPermitido(fk, h, e, marca) && !agEsExcepcion(e);
       if (!excepcion && !ok) return;
@@ -12209,11 +12230,12 @@
     // Los entregadores de excepción (ej. JM, sin asesor) no suman a la capacidad ni al %
     const ents = dia.entregadores.filter(e => !agEsExcepcion(e));
     const s = {total: dia.horas.length * ents.length, turno:0, reservado:0, ofrecido:0, bloqueado:0, exc:0};
-    AG.data.forEach(t => {
-      if (t.fecha !== k || s[t.estado] === undefined) return;
-      if (agEsExcepcion(t.entregador)){ if (t.estado !== 'bloqueado') s.exc++; return; }
+    dia.horas.forEach(h => dia.entregadores.forEach(e => {
+      const t = agEfectivo(k, h, e);
+      if (!t || s[t.estado] === undefined) return;
+      if (agEsExcepcion(e)){ if (t.estado !== 'bloqueado') s.exc++; return; }
       s[t.estado]++;
-    });
+    }));
     s.ocupados = s.turno + s.reservado + s.ofrecido;
     s.cap = Math.max(0, s.total - s.bloqueado);
     s.libres = Math.max(0, s.cap - s.ocupados);
@@ -12310,7 +12332,7 @@
     } else {
       $('agGrid').innerHTML = `<thead><tr><th class="h">Hora</th>${dia.entregadores.map(e => `<th>${escapeHtml(e)}</th>`).join('')}</tr></thead><tbody>` +
         dia.horas.map(h => `<tr><td class="h">${escapeHtml(h)}</td>${dia.entregadores.map(e => {
-          const t = AG.data.get(agSlot(k, h, e));
+          const t = agEfectivo(k, h, e);
           const attrs = `data-hora="${escapeHtml(h)}" data-ent="${escapeHtml(e)}"`;
           if (!t) return `<td class="ag-cell ${edit ? 'edit' : ''} ${edit && AG.pick ? 'libre-pick' : ''}" ${attrs}></td>`;
           const ints = agInternos(t.interno);
@@ -12339,7 +12361,7 @@
             ints.some(i => { const rr = agRowIndex().get(i); return rr && !(rr['Fecha Entrega Unidad'] || '').toString().trim(); });
           if (sinEntrega) falta += `<div class="se">⏳ Sin fecha de entrega en la base</div>`;
           return `<td class="ag-cell ${escapeHtml(t.estado || '')} ${sinEntrega ? 'sinentrega' : ''} ${conNota ? 'connota' : ''} ${edit ? 'edit' : ''}" ${attrs} style="${fuera ? 'opacity:.3;' : ''}" title="Cargado por ${escapeHtml(t.usuario || '?')} · ${escapeHtml(t.actualizado || '')}">
-            ${warn}<div class="e">${es.icon} ${es.label}</div>
+            ${warn}<div class="e">${es.icon} ${es.label}${t.fijo ? ' · 🔁 fijo' : ''}</div>
             ${t.interno ? `<div class="i">${escapeHtml(t.interno)}</div>` : ''}
             ${sub ? `<div class="c">${sub}</div>` : ''}${falta}
             ${t.nota ? `<div class="nt">${conNota ? '📌 ' : ''}${escapeHtml(t.nota)}</div>` : ''}</td>`;
@@ -12400,13 +12422,13 @@
   // ---------- Editor de casillero ----------
   function agOpenEditor(hora, ent){
     const k = agKey(AG.fecha);
-    const t = AG.data.get(agSlot(k, hora, ent));
-    AG.edit = {fecha:k, hora, ent};
+    const t = agEfectivo(k, hora, ent);
+    AG.edit = {fecha:k, hora, ent, fijo: agFijoDe(k, hora, ent)};
     $('agModalTitle').textContent = `${ent} · ${hora}`;
     $('agModalSub').textContent = AG.fecha.toLocaleDateString('es-AR', {weekday:'long', day:'2-digit', month:'2-digit', year:'numeric'}) +
-      (t ? ` · último cambio: ${t.usuario || '?'} ${t.actualizado || ''}` : '');
+      (t && t.fijo ? ' · 🔁 bloqueo fijo (se repite todas las semanas)' : (t ? ` · último cambio: ${t.usuario || '?'} ${t.actualizado || ''}` : ''));
     $('agModalInterno').value = t ? (t.interno || '') : (AG.pick || '');
-    $('agModalNota').value = t ? (t.nota || '') : '';
+    $('agModalNota').value = t ? ((t.nota === AG_LIBRE_MARK) ? '' : (t.nota || '')) : '';
     agSetEstado(t ? t.estado : (AG.pick ? 'turno' : 'turno'));
     $('agModalError').textContent = '';
     $('agModal').style.display = 'flex';
@@ -12418,6 +12440,21 @@
     const sinInterno = AG.editEstado === 'bloqueado' || AG.editEstado === '';
     $('agModalInternoWrap').style.display = sinInterno ? 'none' : '';
     $('agModalNotaHint').textContent = AG.editEstado === 'bloqueado' ? '— motivo (ej.: curso, almuerzo, no disponible)' : '— opcional (ej.: cliente de trámite, verificar información)';
+    // Opciones de bloqueo fijo (solo admin: cambia la configuración)
+    const fw = $('agModalFijo');
+    if (fw){
+      const esAdmin = !!(CURRENT_SESSION && CURRENT_SESSION.role === 'admin');
+      const fijo = AG.edit && AG.edit.fijo;
+      const dia = AG.edit ? agFromKey(AG.edit.fecha).toLocaleDateString('es-AR', {weekday:'long'}) : '';
+      let html = '';
+      if (AG.editEstado === 'bloqueado' && !fijo && esAdmin)
+        html = `<label><input type="checkbox" id="agModalFijoChk"> 🔁 Bloquear este horario <b>todos los ${dia}</b> (${escapeHtml(AG.edit.hora)} · ${escapeHtml(AG.edit.ent)})</label>`;
+      else if (fijo && AG.editEstado !== 'bloqueado')
+        html = `<div class="hint" style="margin-bottom:4px;">Este horario tiene un bloqueo fijo de los ${dia}. Al guardar se habilita <b>solo este día</b>.</div>` +
+          (esAdmin ? `<label><input type="checkbox" id="agModalFijoChk"> Quitar el bloqueo fijo para <b>todas</b> las semanas</label>` : '');
+      fw.innerHTML = html;
+      fw.style.display = html ? '' : 'none';
+    }
     agRenderModalInfo();
   }
   function agRenderModalInfo(){
@@ -12446,10 +12483,29 @@
     const interno = (estado === 'bloqueado' || estado === '') ? '' : $('agModalInterno').value.trim();
     const nota = estado === '' ? '' : $('agModalNota').value.trim();
     if ((estado === 'turno' || estado === 'reservado') && !agInternos(interno).length){ $('agModalError').textContent = 'Ingresá el interno.'; return; }
-    const {fecha, hora, ent} = AG.edit;
+    const {fecha, hora, ent, fijo} = AG.edit;
+    const chk = !!($('agModalFijoChk') && $('agModalFijoChk').checked);
+    const tieneExplicito = AG.data.has(agSlot(fecha, hora, ent));
     if (AG.pick && agInternos(interno).includes(AG.pick)) AG.pick = null;
     $('agModal').style.display = 'none';
     AG.edit = null;
+    // Nuevo bloqueo fijo: se guarda en la configuración y se borra el casillero puntual
+    if (estado === 'bloqueado' && chk && !fijo){
+      const dow = agFromKey(fecha).getDay();
+      agPersistCfg(Object.assign({}, agCfg(), {fijos: agFijos().concat([{dow, hora, ent, motivo: nota || 'Bloqueo fijo'}])}), '🔁 Bloqueo fijo guardado');
+      if (tieneExplicito) agGuardar(fecha, hora, ent, '', '', '', true);
+      return;
+    }
+    // Liberar un horario con bloqueo fijo
+    if (estado === '' && fijo){
+      if (chk){
+        agPersistCfg(Object.assign({}, agCfg(), {fijos: agFijos().filter(f => !(f.dow === fijo.dow && f.hora === fijo.hora && f.ent === fijo.ent))}), '✓ Bloqueo fijo quitado');
+        if (tieneExplicito) agGuardar(fecha, hora, ent, '', '', '', true);
+      } else {
+        agGuardar(fecha, hora, ent, '', '', AG_LIBRE_MARK); // solo este día
+      }
+      return;
+    }
     if (estado && estado !== 'bloqueado') agLiberarOtros(agInternos(interno), fecha, hora, ent);
     agGuardar(fecha, hora, ent, estado, interno, nota);
   }
@@ -12501,6 +12557,7 @@
     const R = agReglas();
     $('agCfgCorte').value = R.corte; $('agCfgDesde').value = R.desde;
     $('agCfgExc').value = (R.excepcion || []).join(', ');
+    $('agCfgFijos').value = agFijos().map(f => `${AG_DOW[f.dow]} ${f.hora} ${f.ent}${f.motivo ? ': ' + f.motivo : ''}`).join('\n');
     $('agCfgMarcas').value = Object.entries(R.marcas || {}).map(([e, m]) => `${e}: ${m.join(', ')}`).join('\n');
     $('agCfgError').textContent = '';
     $('agCfgModal').style.display = 'flex';
@@ -12516,19 +12573,34 @@
     const hh = v => { const m = (v || '').trim().match(/^(\d{1,2})(?::(\d{2}))?$/); return m ? `${parseInt(m[1],10)}:${m[2] || '00'}` : null; };
     const marcas = {};
     $('agCfgMarcas').value.split('\n').forEach(l => { const m = l.split(':'); if (m.length >= 2 && m[0].trim()) marcas[m[0].trim().toUpperCase()] = m.slice(1).join(':').split(',').map(x => x.trim().toUpperCase()).filter(Boolean); });
+    const fijos = [];
+    let fijosErr = '';
+    $('agCfgFijos').value.split('\n').map(l => l.trim()).filter(Boolean).forEach(l => {
+      const m = l.match(/^([A-Za-z]{2})\s+(\d{1,2}(?::\d{2})?)\s+([^:]+?)\s*(?::\s*(.*))?$/);
+      if (!m){ fijosErr = l; return; }
+      const d = m[1].toUpperCase(), h = hh(m[2]), e = m[3].trim().toUpperCase(), mot = (m[4] || '').trim();
+      const dows = d === 'LV' ? [1,2,3,4,5] : (AG_DOW.indexOf(d) > 0 ? [AG_DOW.indexOf(d)] : null);
+      if (!dows || !h){ fijosErr = l; return; }
+      dows.forEach(dow => fijos.push({dow, hora:h, ent:e, motivo:mot}));
+    });
+    if (fijosErr){ $('agCfgError').textContent = 'No entiendo este bloqueo fijo: "' + fijosErr + '" (formato: SA 10:20 *: Descanso)'; return; }
+    cfg.fijos = fijos;
     cfg.reglas = {corte: hh($('agCfgCorte').value) || '10:00', desde: hh($('agCfgDesde').value) || '15:00', marcas,
       excepcion: $('agCfgExc').value.split(',').map(x => x.trim().toUpperCase()).filter(Boolean)};
+    $('agCfgModal').style.display = 'none';
+    agPersistCfg(cfg, '✓ Horarios y entregadores guardados');
+  }
+  function agPersistCfg(cfg, okMsg){
     const prev = AG.cfg;
     AG.cfg = cfg;
-    $('agCfgModal').style.display = 'none';
-    renderAgendaSection();
+    agRefrescarVistas();
     apiPost({token: currentToken(), type:'turno', fecha:'CONFIG', hora:'-', entregador:'-', estado:'', interno:'', nota: JSON.stringify(cfg)}).then(res => {
       handleAuthResult(res);
       if (!res || res.ok === false) throw new Error((res && res.error) || 'el servidor rechazó el guardado');
-      showToast('✓ Horarios y entregadores guardados');
+      showToast(okMsg || '✓ Configuración guardada');
     }).catch(err => {
       if (err && err.isParseError) return;
-      AG.cfg = prev; renderAgendaSection();
+      AG.cfg = prev; agRefrescarVistas();
       showToast('❌ No se guardó la configuración: ' + err.message, true);
     });
   }
@@ -12659,7 +12731,7 @@
     $('agPickSave').disabled = true; $('agPickSave').textContent = 'Verificando que siga libre…';
     // Antes de guardar, traemos lo último: si alguien lo tomó recién, no lo pisamos
     agLoad(true).then(() => {
-      if (AG.data.has(agSlot(fk, hora, ent))){
+      if (agEfectivo(fk, hora, ent)){
         $('agPickError').textContent = `Ese horario (${hora} · ${ent}) se acaba de ocupar. Elegí otro.`;
         AGP.slot = null; agRenderPicker(); return;
       }
