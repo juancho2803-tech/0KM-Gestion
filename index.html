@@ -766,6 +766,11 @@
   .ag-cell.reservado{background:rgba(167,139,250,.16); border:1px solid rgba(167,139,250,.6);}
   .ag-cell.ofrecido{background:rgba(255,176,32,.16); border:1px solid rgba(255,176,32,.6);}
   .ag-cell.bloqueado{background:repeating-linear-gradient(45deg, rgba(255,92,77,.16), rgba(255,92,77,.16) 6px, rgba(255,92,77,.07) 6px, rgba(255,92,77,.07) 12px); border:1px solid rgba(255,92,77,.5);}
+  /* Turno de día pasado sin fecha de entrega en la base: amarillo */
+  .ag-cell.sinentrega{background:rgba(255,214,0,.22) !important; border:2px solid #ffd600 !important;}
+  .ag-cell.sinentrega.connota{background:rgba(255,214,0,.22) !important; border:2px solid #ff14be !important;}
+  .ag-cell .se{font-size:10.5px; font-weight:700; color:#e0b800; margin-top:2px;}
+  [data-theme="light"] .ag-cell .se{color:#9a7b00;}
   /* Turno con nota: rosa flúor para que se revise */
   .ag-cell.connota{background:rgba(255,20,190,.22) !important; border:2px solid #ff14be !important; box-shadow:0 0 10px rgba(255,20,190,.45);}
   .ag-cell.connota .nt{color:#ff14be; font-style:normal; font-weight:700; white-space:normal;}
@@ -12325,8 +12330,14 @@
           const es = AG_ESTADOS[t.estado] || {label:t.estado || 'Nota', icon:'📝'};
           const rMarca = ints.length ? agRowIndex().get(ints[0]) : null;
           const fuera = !todasMarcas && rMarca && !agMarcaOk(rMarca);
-          const conNota = t.nota && t.estado !== 'bloqueado';
-          return `<td class="ag-cell ${escapeHtml(t.estado || '')} ${conNota ? 'connota' : ''} ${edit ? 'edit' : ''}" ${attrs} style="${fuera ? 'opacity:.3;' : ''}" title="Cargado por ${escapeHtml(t.usuario || '?')} · ${escapeHtml(t.actualizado || '')}">
+          // Notas que son solo "TC" / "LV" (en cualquier combinación) no se resaltan
+          const notaTrivial = /^\s*(TC|LV)(\s*[-\/\s]\s*(TC|LV))*\s*$/i.test(t.nota || '');
+          const conNota = t.nota && t.estado !== 'bloqueado' && !notaTrivial;
+          // Turno de un día ya pasado y la base todavía sin Fecha Entrega Unidad (col. BS) → amarillo
+          const sinEntrega = t.estado === 'turno' && k < agKey(new Date()) && ints.length &&
+            ints.some(i => { const rr = agRowIndex().get(i); return rr && !(rr['Fecha Entrega Unidad'] || '').toString().trim(); });
+          if (sinEntrega) falta += `<div class="se">⏳ Sin fecha de entrega en la base</div>`;
+          return `<td class="ag-cell ${escapeHtml(t.estado || '')} ${sinEntrega ? 'sinentrega' : ''} ${conNota ? 'connota' : ''} ${edit ? 'edit' : ''}" ${attrs} style="${fuera ? 'opacity:.3;' : ''}" title="Cargado por ${escapeHtml(t.usuario || '?')} · ${escapeHtml(t.actualizado || '')}">
             ${warn}<div class="e">${es.icon} ${es.label}</div>
             ${t.interno ? `<div class="i">${escapeHtml(t.interno)}</div>` : ''}
             ${sub ? `<div class="c">${sub}</div>` : ''}${falta}
