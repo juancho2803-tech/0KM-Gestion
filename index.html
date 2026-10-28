@@ -2896,6 +2896,15 @@
       </label>
       <datalist id="agInternosList"></datalist>
       <div id="agModalInfo" style="margin:8px 0 10px;"></div>
+<label class="ag-lbl" id="agModalMotivoWrap">¿Por qué esta fecha? <span class="hint">— para medir si la demora es nuestra o del cliente</span>
+        <select id="agModalMotivo" class="month-select" style="display:block; width:100%; margin-top:4px;">
+          <option value="">(automático: según si había un turno libre antes)</option>
+          <option>Primer turno disponible</option>
+          <option>Cliente pidió una fecha posterior</option>
+          <option>Cliente no responde / reprograma</option>
+          <option>Esperando documentación / pago del cliente</option>
+          <option>Otro</option>
+        </select></label>
       <label class="ag-lbl">Nota <span class="hint" id="agModalNotaHint">— opcional (ej.: cliente de trámite, verificar información)</span>
         <textarea id="agModalNota" rows="2"></textarea>
       </label>
@@ -2950,6 +2959,15 @@
         <button type="button" data-estado="ofrecido">🟡 Ofrecido</button>
         <button type="button" data-estado="reservado">🟣 Reservado</button>
       </div>
+<label class="ag-lbl" id="agPickMotivoWrap">¿Por qué esta fecha? <span class="hint">— para medir si la demora es nuestra o del cliente</span>
+        <select id="agPickMotivo" class="month-select" style="display:block; width:100%; margin-top:4px;">
+          <option value="">(automático: según si había un turno libre antes)</option>
+          <option>Primer turno disponible</option>
+          <option>Cliente pidió una fecha posterior</option>
+          <option>Cliente no responde / reprograma</option>
+          <option>Esperando documentación / pago del cliente</option>
+          <option>Otro</option>
+        </select></label>
       <label class="ag-lbl">Nota <span class="hint">— opcional</span><textarea id="agPickNota" rows="2"></textarea></label>
       <div class="auth-error" id="agPickError" style="text-align:left; margin-top:6px;"></div>
       <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:12px;">
@@ -3339,7 +3357,7 @@
     // El rol "entregas" solo puede editar la sección Contactación — el backend ya lo
     // rechaza igual, pero lo cortamos acá antes para no generar un guardado optimista
     // que después haya que revertir, y para avisar al toque por qué no se guardó.
-    if (CURRENT_SESSION && CURRENT_SESSION.role === 'entregas' && seccion !== 'contactacion' && seccion !== 'contactacionfinalizado' && seccion !== 'bloqueosaldo' && seccion !== 'clienteexterno' && seccion !== 'excepcion'){
+    if (CURRENT_SESSION && CURRENT_SESSION.role === 'entregas' && seccion !== 'contactacion' && seccion !== 'contactacionfinalizado' && seccion !== 'bloqueosaldo' && seccion !== 'clienteexterno' && seccion !== 'excepcion' && seccion !== 'turnoinfo'){
       showToast('⚠️ Tu rol (entregas) solo puede editar Contactación.', true);
       return Promise.reject(new Error('Rol sin permiso de edición para esta sección'));
     }
@@ -7907,6 +7925,15 @@
     const rec = i ? OBSERVATIONS.get(obsKey(i, 'contactacion')) : null;
     return rec && rec.fechaSolucion ? parseDateFlexible(rec.fechaSolucion) : null;
   }
+  // Datos de la asignación del turno (se guardan al confirmar un turno en la Agenda):
+  // seccion 'turnoinfo' · estadoAveria = día en que se asignó · fechaSolucion = primer
+  // turno libre que había en ese momento · observacion = motivo de la fecha elegida.
+  function turnoInfo(row){
+    const i = (row && row['Interno'] !== undefined ? row['Interno'] : '').toString().trim();
+    const rec = i ? OBSERVATIONS.get(obsKey(i, 'turnoinfo')) : null;
+    if (!rec || !rec.estadoAveria) return null;
+    return {asignado: parseDateFlexible(rec.estadoAveria), primerLibre: parseDateFlexible(rec.fechaSolucion), motivo: (rec.observacion || '').toString()};
+  }
   function bloqueoActivo(row){
     const rec = bloqueoRec(row);
     return !!rec && !bloqueoLiberacion(rec);
@@ -8748,6 +8775,7 @@
   // =====================================================================
   const ENT_AREAS = {
     turno:      {label:'Entregas (turno / cliente)', icon:'📅', color:'#8b5cf6', track:'turno'},
+    clienteturno:{label:'Cliente pidió una fecha posterior', icon:'🙋‍♂️', color:'#c084fc', track:'turno'},
     geac:       {label:'Carpeta GEAC',                            icon:'📋', color:'#4c8dff', track:'documental'},
     averia:     {label:'Averías',                                   icon:'⚠️', color:'#ff5c4d', track:'fisico'},
     accesorios: {label:'Accesorios (instalación)',                  icon:'🎒', color:'#ff8a3d', track:'fisico'},
@@ -8956,8 +8984,17 @@
         etapas.forEach(e => { if (e.aporte > 0) aporte[e.area] = (aporte[e.area] || 0) + e.aporte; });
         const desdeT = limT > D ? limT : D;
         const post = E > desdeT ? (diasHabilesSLA(desdeT, E) || 0) : 0;
-        if (post > 0) aporte.turno = post;
-        frena = Object.keys(aporte).some(k => k !== 'turno') ? circ : 'turno';
+        if (post > 0){
+          // Si al dar el turno había uno libre antes y el cliente eligió una fecha posterior,
+          // esos días son del cliente, no de Entregas.
+          const ti = turnoInfo(r);
+          const pl = ti && ti.primerLibre ? entMid(ti.primerLibre) : null;
+          const espCli = pl && E > pl ? (diasHabilesSLA(pl > desdeT ? pl : desdeT, E) || 0) : 0;
+          const cli = Math.min(post, espCli);
+          if (cli > 0) aporte.clienteturno = cli;
+          if (post - cli > 0) aporte.turno = post - cli;
+        }
+        frena = Object.keys(aporte).some(k => k !== 'turno' && k !== 'clienteturno') ? circ : 'turno';
       } else {
         frena = 'turno';
         aporte.turno = atraso;
@@ -8989,6 +9026,9 @@
     const dListo = OKd ? (diasHabilesSLA(OKd, E) || 0) : null;
     const fCont = entMid(fechaContactacion(r));
     const dCont = fCont && fCont <= E ? (diasHabilesSLA(fCont, E) || 0) : null;
+    const tInf = turnoInfo(r);
+    if (tInf && tInf.asignado) tl.push({k:'📅 Turno asignado en la agenda', d:entMid(tInf.asignado), cls:'ref',
+      n: (tInf.primerLibre ? `primer libre: ${entFmt(entMid(tInf.primerLibre))}` : '') + (tInf.motivo ? ` · ${tInf.motivo}` : '')});
     if (fCont) tl.push({k:'📞 Contactación (marcado OK p/ turno)', d:fCont, cls:'ref', n: (OKd ? `${diasHabilesSLA(OKd, fCont) || 0} dh desde auto listo` : '') + (dCont !== null ? ` · ${dCont} dh hasta la entrega` : '')});
     tl.push({k:'Entrega (turno)', d:E, cls: tarde ? 'late' : 'ok', n: (tarde ? `+${atraso} dh vs plazo` : 'en plazo') + (dListo !== null ? ` · ${dListo} dh desde auto listo` : '')});
     const fAviso = dt('Fecha Entrega Unidad');
@@ -9001,7 +9041,7 @@
       canal:(r['Canal'] || '').toString().trim() || '(sin canal)',
       zona, fv, dPat, D, E, atraso: tarde ? atraso : 0, tarde, causa,
       factores:[...factores], aporte, tl, mes: entMonthKey(E), frena, etapas, OKd, limTurno: limTurnoOut, finFisico, finDoc,
-      fCont, dCont, dListoCont: (fCont && OKd && fCont >= OKd) ? (diasHabilesSLA(OKd, fCont) || 0) : null
+      tInf, fCont, dCont, dListoCont: (fCont && OKd && fCont >= OKd) ? (diasHabilesSLA(OKd, fCont) || 0) : null
     };
   }
 
@@ -9121,12 +9161,23 @@
           tarde.length ? `físico ${c('fisico')} · documental ${c('documental')} · ambos ${c('ambos')} · el resto (${c('turno')}) estuvo listo a tiempo` : '', 'var(--blue)');
       })() +
       (() => {
+        const ti = base.filter(u => u.tInf && u.tInf.asignado);
+        let kTurno = '';
+        if (ti.length){
+          const pr = arr => arr.length ? (arr.reduce((s,x) => s + x, 0) / arr.length).toFixed(1) : '—';
+          const nuestra = ti.filter(u => u.fCont).map(u => diasHabilesSLA(entMid(u.fCont), entMid(u.tInf.asignado)) || 0);
+          const agenda = ti.filter(u => u.tInf.primerLibre).map(u => diasHabilesSLA(entMid(u.tInf.asignado), entMid(u.tInf.primerLibre)) || 0);
+          const cliente = ti.filter(u => u.tInf.primerLibre).map(u => u.E > entMid(u.tInf.primerLibre) ? (diasHabilesSLA(entMid(u.tInf.primerLibre), u.E) || 0) : 0);
+          const nCli = cliente.filter(x => x > 0).length;
+          kTurno = kpi('⏱️ ¿Quién demoró el turno?', `<span style="font-size:15px;">📞 ${pr(nuestra)} · 📅 ${pr(agenda)} · 🙋 ${pr(cliente)} dh</span>`,
+            `📞 contacto → turno asignado · 📅 asignado → primer libre (agenda) · 🙋 primer libre → fecha elegida (cliente) · en ${nCli} de ${cliente.length} autos el cliente eligió una fecha posterior`, '#c084fc');
+        }
         const cc = base.filter(u => u.dCont !== null && u.dCont !== undefined);
-        if (!cc.length) return kpi('📞 Contactación → entrega', '—', 'se mide desde que se marca "Ok para entregar" en Patentados (sin datos todavía en este período)', 'var(--gray)');
+        if (!cc.length) return kTurno + kpi('📞 Contactación → entrega', '—', 'se mide desde que se marca "Ok para entregar" en Patentados (sin datos todavía en este período)', 'var(--gray)');
         const promC = cc.reduce((s,u) => s + u.dCont, 0) / cc.length;
         const ll = cc.filter(u => u.dListoCont !== null);
         const promL = ll.length ? ll.reduce((s,u) => s + u.dListoCont, 0) / ll.length : null;
-        return kpi('📞 Contactación → entrega', promC.toFixed(1) + ' dh', `promedio de ${cc.length} autos con fecha de contactación${promL !== null ? ` · auto listo → contactación: ${promL.toFixed(1)} dh` : ''}`, 'var(--blue)');
+        return kTurno + kpi('📞 Contactación → entrega', promC.toFixed(1) + ' dh', `promedio de ${cc.length} autos con fecha de contactación${promL !== null ? ` · auto listo → contactación: ${promL.toFixed(1)} dh` : ''}`, 'var(--blue)');
       })();
 
     // ---- Ranking ----
@@ -12460,6 +12511,7 @@
       (t && t.dia ? ' · ⛔ día bloqueado' : t && t.fijo ? ' · 🔁 bloqueo fijo (se repite todas las semanas)' : (t ? ` · último cambio: ${t.usuario || '?'} ${t.actualizado || ''}` : ''));
     $('agModalInterno').value = t ? (t.interno || '') : (AG.pick || '');
     $('agModalNota').value = t ? ((t.nota === AG_LIBRE_MARK) ? '' : (t.nota || '')) : '';
+    if ($('agModalMotivo')) $('agModalMotivo').value = '';
     agSetEstado(t ? t.estado : (AG.pick ? 'turno' : 'turno'));
     $('agModalError').textContent = '';
     $('agModal').style.display = 'flex';
@@ -12470,6 +12522,7 @@
     document.querySelectorAll('#agModalEstado button').forEach(b => b.classList.toggle('active', b.dataset.estado === AG.editEstado));
     const sinInterno = AG.editEstado === 'bloqueado' || AG.editEstado === '';
     $('agModalInternoWrap').style.display = sinInterno ? 'none' : '';
+    if ($('agModalMotivoWrap')) $('agModalMotivoWrap').style.display = AG.editEstado === 'turno' ? '' : 'none';
     $('agModalNotaHint').textContent = AG.editEstado === 'bloqueado' ? '— motivo (ej.: curso, almuerzo, no disponible)' : '— opcional (ej.: cliente de trámite, verificar información)';
     // Opciones de bloqueo fijo (solo admin: cambia la configuración)
     const fw = $('agModalFijo');
@@ -12540,6 +12593,12 @@
       return;
     }
     if (estado && estado !== 'bloqueado') agLiberarOtros(agInternos(interno), fecha, hora, ent);
+    if (estado === 'turno'){
+      const ints = agInternos(interno), r0 = agRowIndex().get(ints[0]);
+      const pl = agPrimerLibre(r0 ? (r0['Marca'] || '').toString().trim().toUpperCase() : '');
+      const primer = pl ? pl.dia : null;
+      agRegistrarAsignacion(ints, fecha, primer, agMotivoFecha($('agModalMotivo'), primer, fecha));
+    }
     agGuardar(fecha, hora, ent, estado, interno, nota);
   }
   function agRefrescarVistas(){
@@ -12561,6 +12620,18 @@
       else agGuardar(t.fecha, t.hora, t.entregador, '', '', '', true);
     });
     if (movidos.length) showToast('🔁 Se liberó el turno anterior: ' + movidos.join('; '));
+  }
+  // Guarda cuándo se asignó el turno y cuál era el primer libre en ese momento
+  function agRegistrarAsignacion(internos, fecha, primerLibre, motivo){
+    const hoy = new Date().toLocaleDateString('es-AR');
+    internos.forEach(i => {
+      saveObservation(i, 'turnoinfo', {estadoAveria: hoy, fechaSolucion: primerLibre ? entFmt(primerLibre) : '', observacion: motivo || ''}).catch(() => {});
+    });
+  }
+  function agMotivoFecha(sel, primer, fk){
+    const v = sel ? sel.value : '';
+    if (v) return v;
+    return primer && agKey(primer) < fk ? 'Cliente pidió una fecha posterior' : 'Primer turno disponible';
   }
   function agGuardar(fecha, hora, ent, estado, interno, nota, silencioso){
     const key = agSlot(fecha, hora, ent);
@@ -12745,6 +12816,7 @@
       AGP.interno = interno; AGP.marca = r ? (r['Marca'] || '').toString().trim().toUpperCase() : '';
       AGP.slot = null; AGP.estado = 'turno';
       $('agPickExc').checked = false; $('agPickNota').value = ''; $('agPickError').textContent = '';
+      if ($('agPickMotivo')) $('agPickMotivo').value = '';
       const sug = agPrimerLibre(AGP.marca);
       AGP.dia = sug ? sug.dia : agProximosDias(1)[0];
       if (sug) AGP.slot = {hora:sug.hora, ent:sug.ent};
@@ -12777,6 +12849,12 @@
       : '<span class="hint">Sin horarios libres ese día.</span>') + `<div class="hint" style="width:100%; font-size:11px; margin-top:4px;">${escapeHtml(regla)}</div>`;
     if (AGP.slot && !libres.some(x => x.hora === AGP.slot.hora && x.ent === AGP.slot.ent)) AGP.slot = null;
     document.querySelectorAll('#agPickEstado button').forEach(b => b.classList.toggle('active', b.dataset.estado === AGP.estado));
+    if ($('agPickMotivoWrap')){
+      $('agPickMotivoWrap').style.display = AGP.estado === 'turno' ? '' : 'none';
+      const sg = agPrimerLibre(AGP.marca);
+      const posterior = sg && AGP.slot && AGP.dia && agKey(AGP.dia) > agKey(sg.dia);
+      $('agPickMotivo').options[0].textContent = posterior ? '(automático: Cliente pidió una fecha posterior — había lugar antes)' : '(automático: Primer turno disponible)';
+    }
     $('agPickSave').disabled = !AGP.slot;
     $('agPickSave').textContent = AGP.slot ? `Guardar · ${entFmt(AGP.dia).slice(0,5)} ${AGP.slot.hora} ${AGP.slot.ent}` : 'Elegí un horario';
   }
@@ -12791,6 +12869,10 @@
         AGP.slot = null; agRenderPicker(); return;
       }
       $('agPickModal').style.display = 'none';
+      if (AGP.estado === 'turno'){
+        const pl = agPrimerLibre(AGP.marca), primer = pl ? pl.dia : null;
+        agRegistrarAsignacion([AGP.interno], fk, primer, agMotivoFecha($('agPickMotivo'), primer, fk));
+      }
       agLiberarOtros([AGP.interno], fk, hora, ent);
       agGuardar(fk, hora, ent, AGP.estado, AGP.interno, $('agPickNota').value.trim());
     });
