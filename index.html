@@ -1611,7 +1611,7 @@
           <table class="data-table">
             <thead>
               <tr>
-                <th>Fecha carga</th>
+                <th title="Día en que se marcó Ok para entregar = día en que se contacta al cliente para el turno">Fecha contactación</th>
                 <th class="col-marca">Marca</th>
                 <th>Interno</th>
                 <th>Modelo</th>
@@ -7900,6 +7900,13 @@
     const m = rec ? (rec.observacion || '').toString().match(/(\d{1,2}\/\d{1,2}\/\d{4})/) : null;
     return m ? parseDateFlexible(m[1]) : null;
   }
+  // Fecha de contactación para turno = día en que se marcó "Ok para entregar" en
+  // Patentados (registro 'contactacion'). En ese momento se llama al cliente.
+  function fechaContactacion(row){
+    const i = (row && row['Interno'] !== undefined ? row['Interno'] : '').toString().trim();
+    const rec = i ? OBSERVATIONS.get(obsKey(i, 'contactacion')) : null;
+    return rec && rec.fechaSolucion ? parseDateFlexible(rec.fechaSolucion) : null;
+  }
   function bloqueoActivo(row){
     const rec = bloqueoRec(row);
     return !!rec && !bloqueoLiberacion(rec);
@@ -8980,6 +8987,9 @@
     tl.push({k:'Plazo patentam.', d:dPat, cls:'ref', n:slaPat + ' dh desde venta'});
     tl.push({k:'Plazo entrega', d:D, cls:'ref', n:`+${OBJ.plazoEntrega} dh desde patentam.`});
     const dListo = OKd ? (diasHabilesSLA(OKd, E) || 0) : null;
+    const fCont = entMid(fechaContactacion(r));
+    const dCont = fCont && fCont <= E ? (diasHabilesSLA(fCont, E) || 0) : null;
+    if (fCont) tl.push({k:'📞 Contactación (marcado OK p/ turno)', d:fCont, cls:'ref', n: (OKd ? `${diasHabilesSLA(OKd, fCont) || 0} dh desde auto listo` : '') + (dCont !== null ? ` · ${dCont} dh hasta la entrega` : '')});
     tl.push({k:'Entrega (turno)', d:E, cls: tarde ? 'late' : 'ok', n: (tarde ? `+${atraso} dh vs plazo` : 'en plazo') + (dListo !== null ? ` · ${dListo} dh desde auto listo` : '')});
     const fAviso = dt('Fecha Entrega Unidad');
     if (fAviso && fAviso.getTime() !== E.getTime()) tl.push({k:'Aviso de entrega', d:fAviso, cls:'ref', n:'no se usa para el plazo'});
@@ -8990,7 +9000,8 @@
       interno:(r['Interno'] || '').toString().trim(),
       canal:(r['Canal'] || '').toString().trim() || '(sin canal)',
       zona, fv, dPat, D, E, atraso: tarde ? atraso : 0, tarde, causa,
-      factores:[...factores], aporte, tl, mes: entMonthKey(E), frena, etapas, OKd, limTurno: limTurnoOut, finFisico, finDoc
+      factores:[...factores], aporte, tl, mes: entMonthKey(E), frena, etapas, OKd, limTurno: limTurnoOut, finFisico, finDoc,
+      fCont, dCont, dListoCont: (fCont && OKd && fCont >= OKd) ? (diasHabilesSLA(OKd, fCont) || 0) : null
     };
   }
 
@@ -9108,6 +9119,14 @@
         const p = k => tarde.length ? Math.round(c(k) / tarde.length * 100) : 0;
         return kpi('🚦 Qué circuito frenó', tarde.length ? `<span style="font-size:18px; white-space:nowrap;">🔧${p('fisico')}% 📄${p('documental')}% 🔧📄${p('ambos')}%</span>` : '—',
           tarde.length ? `físico ${c('fisico')} · documental ${c('documental')} · ambos ${c('ambos')} · el resto (${c('turno')}) estuvo listo a tiempo` : '', 'var(--blue)');
+      })() +
+      (() => {
+        const cc = base.filter(u => u.dCont !== null && u.dCont !== undefined);
+        if (!cc.length) return kpi('📞 Contactación → entrega', '—', 'se mide desde que se marca "Ok para entregar" en Patentados (sin datos todavía en este período)', 'var(--gray)');
+        const promC = cc.reduce((s,u) => s + u.dCont, 0) / cc.length;
+        const ll = cc.filter(u => u.dListoCont !== null);
+        const promL = ll.length ? ll.reduce((s,u) => s + u.dListoCont, 0) / ll.length : null;
+        return kpi('📞 Contactación → entrega', promC.toFixed(1) + ' dh', `promedio de ${cc.length} autos con fecha de contactación${promL !== null ? ` · auto listo → contactación: ${promL.toFixed(1)} dh` : ''}`, 'var(--blue)');
       })();
 
     // ---- Ranking ----
@@ -12885,9 +12904,10 @@
       ['Liquidación del crédito', 'Fecha Liquidacion Credito'],
       ['Inicio de trámite', 'Fecha Inicio Tramite'], ['Observación de trámite', 'Fecha Observacion Tramite'], ['Arreglo de observación', 'Fecha Arreglo Observacion'],
       ['Patentamiento', 'Fecha Patentamiento', () => fiTxt(r, 'Dominio')], ['Carpeta a GEAC', 'Fecha Entrega Tramite a GEAC'],
+      ['📞 Contactación para turno (marcado OK)', '__contacto'],
       ['Turno de entrega', 'Fecha Turno Entrega'], ['Entrega de la unidad', 'Fecha Entrega Unidad'],
       ['Último movimiento de ubicación', 'Fecha Ubicacion', () => [fiTxt(r, 'Ubicacion'), fiTxt(r, 'Motivo Cambio Ubicacion')].filter(Boolean).join(' · ')]
-    ].map(([l, c, extra]) => ({l, d: fiD(r, c), x: extra ? extra() : ''})).filter(e => e.d).sort((a,b) => a.d - b.d);
+    ].map(([l, c, extra]) => ({l, d: c === '__contacto' ? fechaContactacion(r) : fiD(r, c), x: extra ? extra() : ''})).filter(e => e.d).sort((a,b) => a.d - b.d);
     const fv = fiD(r, 'Fecha Venta');
     const tl = ev.map((e, k) => {
       const prev = k ? ev[k-1].d : null, dd = fiDias(prev, e.d);
