@@ -11963,7 +11963,16 @@
         <div class="l">${t.l}</div>
         <div class="v">${anN(act)}</div>
         <div class="s">${enCurso ? `vs ${anMkLabel(mesAnt)} al mismo día hábil: <b>${anN(antIgual)}</b> ${anDelta(act, antIgual)}<br>` : `vs ${anMkLabel(mesAnt)}: <b>${anN(antTot)}</b> ${anDelta(act, antTot)}<br>`}
-        ${enCurso ? `📐 Proyección de cierre: <b>${anN(proy)}</b> ${anDelta(proy, antTot)} vs ${anMkLabel(mesAnt)} completo (${anN(antTot)})` : ''}</div>
+        ${enCurso ? `📐 Proyección de cierre: <b>${anN(proy)}</b> ${anDelta(proy, antTot)} vs ${anMkLabel(mesAnt)} completo (${anN(antTot)})` : ''}
+        ${t.k === 'venta' ? (() => {
+          // Facturadas del mes: cuántas ya patentaron y cuántas siguen en el tubo
+          const fac = cuenta('venta', ini, hastaHoy);
+          const pat = fac.filter(x => x.e.patente).length, tubo = fac.length - pat;
+          const tuboTotal = ev.filter(x => x.e.venta && !x.e.patente && !isEntregado(x.r)).length;
+          return `<div style="margin-top:6px; padding-top:6px; border-top:1px dashed var(--border);">
+            🧾 <b>${anN(fac.length)}</b> facturadas en ${anMkLabel(mes)}: ✅ <b>${anN(pat)}</b> ya patentadas · 🏛️ <b style="color:var(--amber)">${anN(tubo)}</b> en tubo de patentamiento<br>
+            <span style="color:var(--text-faint)">En tubo hoy, todos los meses: <b>${anN(tuboTotal)}</b> facturadas sin patentar</span></div>`;
+        })() : ''}</div>
       </div>`;
     }).join('');
     const vMes = cuenta('venta', ini, hastaHoy), vAnt = cuenta('venta', iniAnt, corteAnt), vAntTot = cuenta('venta', iniAnt, finAnt);
