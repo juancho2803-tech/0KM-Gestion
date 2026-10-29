@@ -11964,6 +11964,22 @@
         <div class="v">${anN(act)}</div>
         <div class="s">${enCurso ? `vs ${anMkLabel(mesAnt)} al mismo día hábil: <b>${anN(antIgual)}</b> ${anDelta(act, antIgual)}<br>` : `vs ${anMkLabel(mesAnt)}: <b>${anN(antTot)}</b> ${anDelta(act, antTot)}<br>`}
         ${enCurso ? `📐 Proyección de cierre: <b>${anN(proy)}</b> ${anDelta(proy, antTot)} vs ${anMkLabel(mesAnt)} completo (${anN(antTot)})` : ''}
+        ${t.k === 'patente' ? (() => {
+          // Objetivo de patentamiento cargado en Aceleración (por marca y mes)
+          let obj = 0, hay = false;
+          AN.brands.forEach(m => { const v = OBJETIVOS.get(objKey(m, mes)); if (typeof v === 'number' && !isNaN(v)){ obj += v; hay = true; } });
+          if (!hay || !obj) return `<div style="margin-top:6px; padding-top:6px; border-top:1px dashed var(--border); color:var(--text-faint);">🎯 Sin objetivo cargado para ${anMkLabel(mes)} (se carga en Aceleración)</div>`;
+          const cumpl = Math.round(act / obj * 100);
+          const esperado = enCurso ? Math.round(obj * dhTrans / dhTot) : obj;
+          const restantes = enCurso ? Math.max(0, dhTot - dhTrans) : 0;
+          const falta = Math.max(0, obj - act);
+          const col = v => v >= 100 ? 'var(--green)' : (v >= 90 ? 'var(--amber)' : 'var(--red)');
+          const pProy = enCurso ? Math.round(proy / obj * 100) : cumpl;
+          return `<div style="margin-top:6px; padding-top:6px; border-top:1px dashed var(--border);">
+            🎯 Objetivo ${anMkLabel(mes)}: <b>${anN(obj)}</b> · cumplido <b style="color:${col(cumpl)}">${cumpl}%</b><br>
+            ${enCurso ? `A hoy debería llevar <b>${anN(esperado)}</b> (${act >= esperado ? '<span class="an-up">adelantado ' + (act - esperado) + '</span>' : '<span class="an-down">atrasado ' + (esperado - act) + '</span>'})<br>
+            📐 Proyección vs objetivo: <b style="color:${col(pProy)}">${pProy}%</b>${falta && restantes ? ` · necesita <b>${(falta / restantes).toFixed(1)}</b> por día hábil (${restantes} restantes)` : ''}` : (falta ? `Faltaron <b>${anN(falta)}</b>` : '<span class="an-up">✅ Objetivo cumplido</span>')}</div>`;
+        })() : ''}
         ${t.k === 'venta' ? (() => {
           // Facturadas del mes: cuántas ya patentaron y cuántas siguen en el tubo
           const fac = cuenta('venta', ini, hastaHoy);
