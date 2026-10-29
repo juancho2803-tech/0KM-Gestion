@@ -7430,7 +7430,7 @@
       ]
     });
 
-    const patAveriaRows = autos.filter(r => categorize(r) === 'Patentado' && hasAveria(r) && (r['Fecha Cierre Averia'] || '').toString().trim() === '')
+    const patAveriaRows = autos.filter(r => categorize(r) === 'Patentado' && hasAveria(r) && ((r['Fecha Cierre Averia'] || '').toString().trim() === '' || averiaParcial(r)))
       .sort((a,b) => (diasDesdeFecha(b['Fecha Averia']) || 0) - (diasDesdeFecha(a['Fecha Averia']) || 0));
     sections.push({
       icon:'⚠️', title:'Patentado con avería sin resolver', color:'var(--red)',
@@ -7542,7 +7542,7 @@
       ]
     });
 
-    const factAveriaRows = autos.filter(r => categorize(r) === 'Facturado' && hasAveria(r) && (r['Fecha Cierre Averia'] || '').toString().trim() === '')
+    const factAveriaRows = autos.filter(r => categorize(r) === 'Facturado' && hasAveria(r) && ((r['Fecha Cierre Averia'] || '').toString().trim() === '' || averiaParcial(r)))
       .sort((a,b) => (diasDesdeFecha(b['Fecha Averia']) || 0) - (diasDesdeFecha(a['Fecha Averia']) || 0));
     sections.push({
       icon:'⚠️', title:'Facturado con avería sin resolver', color:'var(--orange)',
@@ -7584,7 +7584,7 @@
     // ============ GRUPO 3: RESERVADOS Y OTROS ============
     sections.push({isHeader:true, label:'🟡 Reservados y otros'});
 
-    const resAveriaRows = autos.filter(r => categorize(r) === 'Reservado' && hasAveria(r) && (r['Fecha Cierre Averia'] || '').toString().trim() === '')
+    const resAveriaRows = autos.filter(r => categorize(r) === 'Reservado' && hasAveria(r) && ((r['Fecha Cierre Averia'] || '').toString().trim() === '' || averiaParcial(r)))
       .sort((a,b) => (diasDesdeFecha(b['Fecha Averia']) || 0) - (diasDesdeFecha(a['Fecha Averia']) || 0));
     sections.push({
       icon:'⚠️', title:'Reservado con avería sin resolver', color:'var(--amber)',
@@ -7892,8 +7892,19 @@
     return null;
   }
 
+  // La base informa solo la ÚLTIMA avería. Si un área reparó su parte y la cerró en el
+  // sistema pero queda otra avería, en la app se marca "Reparada parcial": el auto sigue
+  // figurando con avería pendiente hasta que alguien la pase a "Reparada" (total).
+  const AV_PARCIAL = 'Reparada parcial';
+  function averiaParcial(row){
+    try {
+      const i = (row['Interno'] || '').toString().trim();
+      const rec = i && typeof OBSERVATIONS !== 'undefined' ? OBSERVATIONS.get(obsKey(i, 'averias')) : null;
+      return !!(rec && (rec.estadoAveria || '').toString().trim() === AV_PARCIAL);
+    } catch(e){ return false; }
+  }
   function hasAveria(row){
-    return (row['Averia?'] || '').toString().trim().toUpperCase() === 'SI';
+    return (row['Averia?'] || '').toString().trim().toUpperCase() === 'SI' || averiaParcial(row);
   }
 
   // A diferencia de hasAveria() (que solo indica si HOY tiene una avería abierta —
@@ -10716,9 +10727,13 @@
         const obsVal = escapeHtml(obsRec.observacion || '');
         const estadoVal = obsRec.estadoAveria || '';
         const fechaSolVal = obsRec.fechaSolucion || '';
-        const estadoOptions = ['', 'Sin trabajar', 'En proceso', 'Reparada'].map(op =>
-          `<option value="${op}" ${estadoVal === op ? 'selected' : ''}>${op || '—'}</option>`
+        const AV_LBL = {'Reparada parcial':'Reparada parcial (queda otra avería)', 'Reparada':'Reparada (total)'};
+        const estadoOptions = ['', 'Sin trabajar', 'En proceso', 'Reparada parcial', 'Reparada'].map(op =>
+          `<option value="${op}" ${estadoVal === op ? 'selected' : ''}>${AV_LBL[op] || op || '—'}</option>`
         ).join('');
+        const baseCerrada = (r['Averia?'] || '').toString().trim().toUpperCase() !== 'SI';
+        const parcialTag = estadoVal === 'Reparada parcial'
+          ? `<div style="font-size:10.5px; font-weight:700; color:var(--amber); margin-top:3px;">🔁 Sigue pendiente${baseCerrada ? ' (en la base figura cerrada)' : ''} — anotá qué falta en Observación</div>` : '';
         return `
         <tr>
           <td>${prioridadBadge}</td>
@@ -10731,7 +10746,7 @@
           <td class="col-fecha">${formatDateDisplay(r['Fecha Averia'])}</td>
           <td class="col-fecha">${diasEstado === null ? '—' : `${diasEstado}d (${estadoActualLabel})`}</td>
           <td>${escapeHtml(desc)}</td>
-          <td><select class="obs-select obs-estado" data-interno="${escapeHtml(interno)}">${estadoOptions}</select></td>
+          <td><select class="obs-select obs-estado" data-interno="${escapeHtml(interno)}">${estadoOptions}</select>${parcialTag}</td>
           <td><input type="date" class="obs-date obs-fecha" data-interno="${escapeHtml(interno)}" value="${fechaSolVal}"></td>
           <td><textarea class="obs-input" data-interno="${escapeHtml(interno)}" rows="1" placeholder="Sin observaciones">${obsVal}</textarea><span class="obs-saved-tag">✓ guardado</span></td>
         </tr>
@@ -10850,6 +10865,8 @@
     if (!interno) return;
     if (e.target.classList.contains('obs-estado')){
       saveObservation(interno, 'averias', {estadoAveria: e.target.value}).then(() => showSavedTag(e.target)).catch(() => {});
+      // "Reparada parcial" / "Reparada" cambian si el auto sigue con avería pendiente
+      setTimeout(() => { try { renderAveriasSection(); renderPatentadosSection(); } catch(err){} }, 300);
     } else if (e.target.classList.contains('obs-fecha')){
       saveObservation(interno, 'averias', {fechaSolucion: e.target.value}).then(() => showSavedTag(e.target)).catch(() => {});
     }
