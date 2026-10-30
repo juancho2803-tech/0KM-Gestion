@@ -12468,7 +12468,7 @@
   // Estado del interno según la base (mismos chequeos que Patentados)
   function agEstadoInterno(interno){
     const r = agRowIndex().get(interno);
-    if (!r) return {lvl:'warn', txt:'No está en la base cargada', r:null};
+    if (!r) return {lvl:'warn', txt: ALL_ROWS.length ? 'No está en la base cargada' : '⏳ Cargando la base…', r:null};
     // Entregado de verdad (fecha de entrega / movimiento / marcado a mano). NO se usa
     // isEntregado() porque ese toma el turno de hoy como entregado — y en la agenda el
     // turno de hoy es justamente lo que estamos mirando.
