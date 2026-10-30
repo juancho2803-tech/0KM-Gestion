@@ -841,6 +841,12 @@
   .ag-contact-turno{font-size:11.5px; white-space:nowrap;}
   .ag-info{font-size:12px; padding:7px 9px; border-radius:7px; margin-top:4px; border:1px solid var(--border); background:var(--surface-2);}
   .ag-info.ok{border-color:rgba(51,211,145,.6);} .ag-info.bad{border-color:rgba(255,92,77,.6);} .ag-info.warn{border-color:rgba(255,176,32,.6);}
+  /* Rol "usados": solo ve la Agenda de turnos (sin editar) */
+  body.rol-usados #tabNav .tab-btn:not([data-tab="entregas"]),
+  body.rol-usados #tabNav .fi-search,
+  body.rol-usados #entregasSubNav .subtab-btn:not([data-subtab="agenda"]),
+  body.rol-usados #agSinEntregaBtn,
+  body.rol-usados #dropZoneLocked { display:none !important; }
 </style>
 </head>
 <body data-theme="dark">
@@ -2805,6 +2811,7 @@
           <select id="newUserRole">
             <option value="usuario">Usuario</option>
             <option value="entregas">Entregas</option>
+            <option value="usados">Usados (solo ve la agenda)</option>
             <option value="admin">Administrador</option>
           </select>
           <button type="submit" class="page-btn">Crear usuario</button>
@@ -2849,6 +2856,7 @@
         <select id="editUserRole" style="display:block; width:100%; margin-top:4px; padding:8px; border:1px solid #ddd; border-radius:4px;">
           <option value="usuario">Usuario</option>
           <option value="entregas">Entregas</option>
+          <option value="usados">Usados (solo ve la agenda)</option>
           <option value="admin">Administrador</option>
         </select>
       </label>
@@ -3365,6 +3373,7 @@
     // El rol "entregas" solo puede editar la sección Contactación — el backend ya lo
     // rechaza igual, pero lo cortamos acá antes para no generar un guardado optimista
     // que después haya que revertir, y para avisar al toque por qué no se guardó.
+    if (CURRENT_SESSION && CURRENT_SESSION.role === 'usados') return Promise.reject(new Error('Tu rol solo puede consultar la agenda.'));
     if (CURRENT_SESSION && CURRENT_SESSION.role === 'entregas' && seccion !== 'contactacion' && seccion !== 'contactacionfinalizado' && seccion !== 'bloqueosaldo' && seccion !== 'clienteexterno' && seccion !== 'excepcion' && seccion !== 'turnoinfo'){
       showToast('⚠️ Tu rol (entregas) solo puede editar Contactación.', true);
       return Promise.reject(new Error('Rol sin permiso de edición para esta sección'));
@@ -8818,6 +8827,7 @@
   const TAB_TARGETS = {general:'tabGeneral', lebomb:'tabLeBomb', ventas:'tabVentas', entregas:'tabEntregas', gestoria:'tabGestoria', aceleracion:'tabAceleracion', auditoria:'tabAuditoria', usuarios:'tabUsuarios', analisis:'tabAnalisis'};
   document.querySelectorAll('.tab-btn').forEach(btn => {
     btn.addEventListener('click', () => {
+      if (typeof esRolUsados === 'function' && esRolUsados() && btn.dataset.tab !== 'entregas') return;
       document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b === btn));
       const target = TAB_TARGETS[btn.dataset.tab] || 'tabGeneral';
       document.querySelectorAll('.tab-content').forEach(c => c.classList.toggle('active', c.id === target));
@@ -8832,6 +8842,7 @@
   const SUBTAB_TARGETS = {facturados:'tabPatentados', patentados:'tabPatentados', averias:'tabAverias', fueradq:'tabFueraDQ', accesorios:'tabAccesorios', contactacion:'tabContactacion', clienteexterno:'tabClienteExterno', agenda:'tabAgenda'};
   document.querySelectorAll('#entregasSubNav .subtab-btn').forEach(btn => {
     btn.addEventListener('click', () => {
+      if (typeof esRolUsados === 'function' && esRolUsados() && btn.dataset.subtab !== 'agenda') return;
       document.querySelectorAll('#entregasSubNav .subtab-btn').forEach(b => b.classList.toggle('active', b === btn));
       const target = SUBTAB_TARGETS[btn.dataset.subtab];
       document.querySelectorAll('#tabEntregas .subtab-content').forEach(c => c.classList.toggle('active', c.id === target));
@@ -9738,6 +9749,7 @@
 
     $('emptyState').style.display = 'none';
     $('dashboard').style.display = 'block';
+    try { aplicarVistaUsados(); } catch(e){}
     $('metaFecha').textContent = formatMetaFecha(meta.fecha);
     $('metaRegistros').textContent = ALL_ROWS.length.toLocaleString('es-AR');
     setEstado('Base cargada', 'var(--green)');
@@ -11575,6 +11587,19 @@
     }
     updateUploadAccess();
     updateContactacionAccess();
+    aplicarVistaUsados();
+  }
+
+  // Rol "usados": queda fijo en Entregas › Agenda de turnos, solo lectura
+  function esRolUsados(){ return !!(CURRENT_SESSION && CURRENT_SESSION.role === 'usados'); }
+  function aplicarVistaUsados(){
+    const on = esRolUsados();
+    document.body.classList.toggle('rol-usados', on);
+    if (!on) return;
+    const main = document.querySelector('.tab-btn[data-tab="entregas"]');
+    if (main && !main.classList.contains('active')) main.click();
+    const sub = document.querySelector('#entregasSubNav .subtab-btn[data-subtab="agenda"]');
+    if (sub && !sub.classList.contains('active')) sub.click();
   }
 
   // El rol "usuario" no debe ver la subpestaña Contactación (queda para admin/entregas).
@@ -12523,8 +12548,11 @@
       if (h.getDay() === 0) h.setDate(h.getDate() + 1);
       AG.fecha = h;
     }
-    if (!AG.loadedOnce && !AG.loading){ agLoad(true); }
-    else if (!AG.loading && !(agKey(AG.fecha) >= AG.desde && agKey(AG.fecha) <= AG.hasta)) { agLoad(false); }
+    // Tras un error no se reintenta en cada render (evita un bucle si el backend no responde);
+    // el refresco automático de 30 s vuelve a intentar.
+    const agEnfriando = AG.errorAt && (Date.now() - AG.errorAt) < 20000;
+    if (!AG.loadedOnce && !AG.loading && !agEnfriando){ agLoad(true); }
+    else if (!AG.loading && !agEnfriando && !(agKey(AG.fecha) >= AG.desde && agKey(AG.fecha) <= AG.hasta)) { agLoad(false); }
     const f = AG.fecha, k = agKey(f), edit = agCanEdit();
     if (!$('agBrandList').children.length){
       $('agBrandList').innerHTML = CAR_BRANDS.map(b => `<button type="button" data-v="${b}">${escapeHtml(PATENTADOS_BRAND_LABELS[b] || b)}</button>`).join('');
