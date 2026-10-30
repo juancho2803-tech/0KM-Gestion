@@ -1324,6 +1324,12 @@
           <button type="button" data-v="si">Sí</button>
           <button type="button" data-v="no">No</button>
         </div>
+        <div class="segmented" id="agUsadoSeg" style="margin-top:10px; margin-left:8px; display:inline-flex;">
+          <button type="button" class="active" data-v="todos">Usado: todos</button>
+          <button type="button" data-v="si">Sí</button>
+          <button type="button" data-v="no">No</button>
+        </div>
+        <div id="agUsadoLista"></div>
         <div id="agBuscarRes"></div>
         <div class="ag-semana" id="agSemana"></div>
         <div class="an-kpis" id="agKpis" style="margin-top:12px;"></div>
@@ -12400,7 +12406,7 @@
     ofrecido:  {label:'Ofrecido',  icon:'🟡'},
     bloqueado: {label:'Bloqueado', icon:'⛔'}
   };
-  const AG = {inv:'todos', brands:new Set(CAR_BRANDS), pendTab:'ok', fecha:null, cfg:null, data:new Map(), desde:null, hasta:null, loading:false, loadedOnce:false, pick:null, edit:null, editEstado:''};
+  const AG = {inv:'todos', usado:'todos', brands:new Set(CAR_BRANDS), pendTab:'ok', fecha:null, cfg:null, data:new Map(), desde:null, hasta:null, loading:false, loadedOnce:false, pick:null, edit:null, editEstado:''};
 
   const agKey = d => d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
   const agFromKey = k => { const [y,m,d] = k.split('-').map(Number); return new Date(y, m-1, d); };
@@ -12520,9 +12526,27 @@
     }
     $('agBrandList').querySelectorAll('button').forEach(b => b.classList.toggle('active', AG.brands.has(b.dataset.v)));
     document.querySelectorAll('#agInvSeg button').forEach(b => b.classList.toggle('active', b.dataset.v === AG.inv));
+    document.querySelectorAll('#agUsadoSeg button').forEach(b => b.classList.toggle('active', b.dataset.v === AG.usado));
     const agMarcaOk = r => AG.brands.has((r['Marca'] || '').toString().trim().toUpperCase())
-      && (AG.inv === 'todos' || (AG.inv === 'si') === isInvitado(r));
-    const todasMarcas = AG.brands.size === CAR_BRANDS.length && AG.inv === 'todos';
+      && (AG.inv === 'todos' || (AG.inv === 'si') === isInvitado(r))
+      && (AG.usado === 'todos' || (AG.usado === 'si') === esUsado(r));
+    const todasMarcas = AG.brands.size === CAR_BRANDS.length && AG.inv === 'todos' && AG.usado === 'todos';
+    // Con el filtro de usado activo: lista de los internos del día con su hora
+    if (AG.usado === 'todos') $('agUsadoLista').innerHTML = '';
+    else {
+      const dU = agDia(f), items = [];
+      dU.horas.forEach(h => dU.entregadores.forEach(e => {
+        const t = agEfectivo(k, h, e);
+        if (!t || t.estado === 'bloqueado') return;
+        agInternos(t.interno).forEach(i => { const r = agRowIndex().get(i); if (r && agMarcaOk(r)) items.push({h, e, i, r, t}); });
+      }));
+      items.sort((a,b) => agHoraMin(a.h) - agHoraMin(b.h));
+      const tit = AG.usado === 'si' ? `${agUsadoIcon(true)} Entregan usado` : '🚫 Sin usado';
+      $('agUsadoLista').innerHTML = `<div class="ag-alert" style="border-color:#f97316; margin-top:10px;"><b>${tit} — ${escapeHtml(f.toLocaleDateString('es-AR', {weekday:'long', day:'2-digit', month:'2-digit'}))}: ${items.length} interno${items.length === 1 ? '' : 's'}</b>` +
+        (items.length ? `<table class="data-table" style="margin-top:6px;"><thead><tr><th>Hora</th><th>Interno</th><th>Cliente</th><th>Modelo</th><th>Entregador</th><th>Estado</th></tr></thead><tbody>` +
+          items.map(x => `<tr><td><b>${escapeHtml(x.h)}</b></td><td class="ag-ul-int" data-hora="${escapeHtml(x.h)}" data-ent="${escapeHtml(x.e)}" style="cursor:pointer; font-weight:700;">${escapeHtml(x.i)}</td><td>${escapeHtml((x.r['Cliente'] || '').toString())}</td><td>${escapeHtml((x.r['Modelo'] || '').toString())}</td><td>${escapeHtml(x.e)}</td><td>${escapeHtml((AG_ESTADOS[x.t.estado] || {label:x.t.estado}).label)}</td></tr>`).join('') +
+          '</tbody></table>' : '<div class="hint" style="margin-top:4px;">No hay internos con este filtro en el día.</div>') + '</div>';
+    }
     $('agFecha').value = k;
     $('agConfigBtn').style.display = (CURRENT_SESSION && CURRENT_SESSION.role === 'admin') ? '' : 'none';
     const dbHoy = agDiaBloq(k);
@@ -12896,6 +12920,12 @@
       renderAgendaSection();
     });
     $('agInvSeg').addEventListener('click', e => { const b = e.target.closest('button'); if (b){ AG.inv = b.dataset.v; renderAgendaSection(); } });
+    $('agUsadoSeg').addEventListener('click', e => { const b = e.target.closest('button'); if (b){ AG.usado = b.dataset.v; renderAgendaSection(); } });
+    $('agUsadoLista').addEventListener('click', e => {
+      const td = e.target.closest('.ag-ul-int'); if (!td) return;
+      const cell = [...document.querySelectorAll('#agGrid .ag-cell')].find(c => c.dataset.hora === td.dataset.hora && c.dataset.ent === td.dataset.ent);
+      if (cell){ cell.scrollIntoView({behavior:'smooth', block:'center'}); cell.style.outline = '3px solid #f97316'; setTimeout(() => { cell.style.outline = ''; }, 2000); }
+    });
     $('agBrandAll').addEventListener('click', () => { AG.brands = new Set(CAR_BRANDS); renderAgendaSection(); });
     $('agBrandNone').addEventListener('click', () => { AG.brands = new Set(); renderAgendaSection(); });
     $('agPendTabs').addEventListener('click', e => { const b = e.target.closest('button'); if (b){ AG.pendTab = b.dataset.v; renderAgendaSection(); } });
