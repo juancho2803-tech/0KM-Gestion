@@ -1248,6 +1248,7 @@
               <tr>
                 <th class="sortable" data-sort="marca">Marca<span class="sort-arrow">↕</span></th>
                 <th class="sortable" data-sort="interno">Interno<span class="sort-arrow">↕</span></th>
+                <th class="sortable" data-sort="nroOp">Nro. operación<span class="sort-arrow">↕</span></th>
                 <th class="sortable" data-sort="modelo">Modelo<span class="sort-arrow">↕</span></th>
                 <th class="sortable" data-sort="color">Color<span class="sort-arrow">↕</span></th>
                 <th class="sortable" data-sort="cliente">Cliente<span class="sort-arrow">↕</span></th>
@@ -7701,6 +7702,7 @@
     return {
       marca: r => (r['Marca'] || '').toString(),
       interno: r => (r['Interno'] || '').toString(),
+      nroOp: r => (r['Nro. Operacion'] || '').toString(),
       modelo: r => (r['Modelo'] || '').toString(),
       color: r => (r['Color'] || '').toString(),
       cliente: r => (r['Cliente'] || '').toString(),
@@ -10173,7 +10175,7 @@
     const tbody = $('patentadosTableBody');
 
     if (!shown.length){
-      tbody.innerHTML = `<tr><td colspan="23" class="table-empty">No hay unidades para este filtro</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="24" class="table-empty">No hay unidades para este filtro</td></tr>`;
     } else {
       const badge = (ok, title) => ok
         ? `<span class="badge-entrega ok"${title ? ` title="${escapeHtml(title)}"` : ''}>✅</span>`
@@ -10229,6 +10231,7 @@
         <tr>
           <td class="col-marca">${escapeHtml(r['Marca'])}</td>
           <td>${escapeHtml(r['Interno'])}</td>
+          <td>${escapeHtml((r['Nro. Operacion'] || '').toString().trim() || '—')}</td>
           <td>${escapeHtml(r['Modelo'])}</td>
           <td>${escapeHtml(r['Color'])}</td>
           <td>${escapeHtml(r['Cliente'])}</td>
@@ -10558,6 +10561,7 @@
     return PAT_SORTED_ROWS.map(r => ({
       'Marca': r['Marca'] || '',
       'Interno': r['Interno'] || '',
+      'Nro. Operacion': r['Nro. Operacion'] || '',
       'Modelo': r['Modelo'] || '',
       'Color': r['Color'] || '',
       'Cliente': r['Cliente'] || '',
@@ -10621,6 +10625,7 @@
     return PAT_SORTED_ROWS.map(r => ({
       'Marca': r['Marca'] || '',
       'Interno': r['Interno'] || '',
+      'Nro. Operacion': r['Nro. Operacion'] || '',
       'Canal': r['Canal'] || '',
       'Modelo': r['Modelo'] || '',
       'Catalogo': r['Catalogo'] || '',
