@@ -8081,6 +8081,45 @@
   function esUsado(row){
     return (row['Tiene Pago Usado'] || '').toString().trim().toUpperCase() === 'SI';
   }
+  // Usado: se recibe el día de la entrega del 0km → fecha prevista = turno (agenda o base)
+  function usadoTurno(row){
+    const i = (row['Interno'] || '').toString().trim();
+    try {
+      if (typeof AG !== 'undefined' && AG.data && AG.data.size){
+        const t = agTurnosDe(i).find(x => x.estado === 'turno' || x.estado === 'reservado' || x.estado === 'ofrecido');
+        if (t) return {fecha: agFromKey(t.fecha), hora: t.hora, ent: t.entregador, estado: t.estado, origen: 'agenda'};
+      }
+    } catch(e){}
+    const f = parseDateFlexible(row['Fecha Turno Entrega']);
+    return f ? {fecha: f, origen: 'base'} : null;
+  }
+  function exportarUsadosExcel(){
+    const rows = ALL_ROWS.filter(r => CAR_BRANDS.includes((r['Marca'] || '').toString().trim().toUpperCase()) && esUsado(r));
+    const hoy = new Date(); hoy.setHours(0,0,0,0);
+    const data = rows.map(r => {
+      const entregado = isEntregado(r);
+      const t = usadoTurno(r);
+      const estadoUsado = entregado ? 'Recibido (0km entregado)' : (t ? 'Pendiente — con turno' : 'Pendiente — sin turno');
+      return {
+        'Estado usado': estadoUsado,
+        'Fecha prevista recepción': t && !entregado ? formatDateDisplay(t.fecha) : '',
+        'Hora / entregador': t && t.origen === 'agenda' ? `${t.hora} · ${t.ent}${t.estado !== 'turno' ? ' (' + t.estado + ')' : ''}` : '',
+        'Marca': r['Marca'] || '', 'Interno': r['Interno'] || '', 'Nro. Operacion': r['Nro. Operacion'] || '',
+        'Cliente': r['Cliente'] || '', 'Email': r['Email'] || '',
+        'Vendedor': r['Vendedor'] || '', 'Canal': r['Canal'] || '', 'Modelo': r['Modelo'] || '', 'Color': r['Color'] || '',
+        'Estado 0km': entregado ? 'Entregado' : categorize(r),
+        'Fecha Venta': formatDateDisplay(r['Fecha Venta']), 'Fecha Patentamiento': formatDateDisplay(r['Fecha Patentamiento']),
+        'Fecha Turno Entrega (base)': formatDateDisplay(r['Fecha Turno Entrega']), 'Fecha Entrega Unidad': formatDateDisplay(r['Fecha Entrega Unidad']),
+        _ord: (estadoUsado.startsWith('Pendiente') ? 0 : 1) * 1e13 + (t && t.fecha ? t.fecha.getTime() : 9e12)
+      };
+    }).sort((a,b) => a._ord - b._ord).map(x => { delete x._ord; return x; });
+    if (!data.length){ alert('No hay operaciones con usado en la base'); return; }
+    const ws = XLSX.utils.json_to_sheet(data);
+    ws['!cols'] = Object.keys(data[0]).map(k => ({wch: Math.max(12, k.length + 2)}));
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Operaciones con usado');
+    XLSX.writeFile(wb, `operaciones_con_usado_${todayStamp()}.xlsx`);
+  }
 
   function diasDesdePatentamiento(row){
     const d = parseDateFlexible(row['Fecha Patentamiento']);
@@ -10084,8 +10123,20 @@
           <div class="brand-breakdown">de ${rowsLoc.length.toLocaleString('es-AR')} pendientes · por fecha de ${FAC ? 'facturación' : 'patentamiento'}${k === 'anterior' && prevN ? ` · ${prevN} de meses anteriores` : ''}</div>
         </div>`;
         const pal = FAC ? 'Facturados' : 'Patentados';
+        // Usados pendientes de recibir: se reciben con la entrega del 0km (hasta la fecha de turno)
+        const usados = baseRowsConFiltros.filter(esUsado);
+        const hoy0 = new Date(); hoy0.setHours(0,0,0,0);
+        const finSem = new Date(hoy0); finSem.setDate(hoy0.getDate() + 7);
+        let conT = 0, semana = 0;
+        usados.forEach(r => { const t = usadoTurno(r); if (t){ conT++; if (t.fecha >= hoy0 && t.fecha < finSem) semana++; } });
+        const usadoCard = `<div class="pat-brand-card ${patUsadoFilter === 'SI' ? 'active' : ''}" data-usados="1" title="Clic para ver solo estos autos">
+          <div class="brand-name">${agUsadoIcon(true)} Usados pendientes de recibir</div>
+          <div class="brand-count" style="color:#f97316">${usados.length.toLocaleString('es-AR')}</div>
+          <div class="brand-breakdown">${conT} con turno (${semana} en los próximos 7 días) · ${usados.length - conT} sin turno</div>
+          <button type="button" class="page-btn" data-usados-xlsx="1" style="margin-top:8px; font-size:12px;">⬇️ Excel de todas las operaciones con usado</button>
+        </div>`;
         return card('actual', `🗓️ ${pal} en ${nom(h)}`, actN, 'var(--green)') +
-          card('anterior', `🗓️ ${pal} en ${nom(new Date(h.getFullYear(), h.getMonth() - 1, 1))}`, antN, 'var(--amber)');
+          card('anterior', `🗓️ ${pal} en ${nom(new Date(h.getFullYear(), h.getMonth() - 1, 1))}`, antN, 'var(--amber)') + usadoCard;
       })();
     })();
 
@@ -10288,8 +10339,16 @@
       renderPatentadosSection();
       return;
     }
+    if (e.target.closest('[data-usados-xlsx]')){ exportarUsadosExcel(); return; }
     const card = e.target.closest('.pat-brand-card');
     if (!card) return;
+    if (card.dataset.usados){
+      patUsadoFilter = patUsadoFilter === 'SI' ? 'todos' : 'SI';
+      setSelectValue('patUsadoSelect', patUsadoFilter);
+      patCurrentPage = 1;
+      renderPatentadosSection();
+      return;
+    }
     if (card.dataset.estado){
       const estado = card.dataset.estado;
       if (patEstadoEntregaFilter.has(estado)){
@@ -12398,6 +12457,13 @@
       s[t.estado]++;
     }));
     s.ocupados = s.turno + s.reservado + s.ofrecido;
+    // Usados que se recibirían ese día (turnos / reservados / ofrecidos, incluye excepciones)
+    const vistos = new Set(); s.usados = 0;
+    dia.horas.forEach(h => dia.entregadores.forEach(e => {
+      const t = agEfectivo(k, h, e);
+      if (!t || t.estado === 'bloqueado') return;
+      agInternos(t.interno).forEach(i => { if (vistos.has(i)) return; vistos.add(i); const r = agRowIndex().get(i); if (r && esUsado(r)) s.usados++; });
+    }));
     s.cap = Math.max(0, s.total - s.bloqueado);
     s.libres = Math.max(0, s.cap - s.ocupados);
     s.pct = s.cap ? Math.round(s.ocupados / s.cap * 100) : 0;
@@ -12477,6 +12543,7 @@
       return `<div class="ag-dchip ${dk === k ? 'sel' : ''}" data-fecha="${dk}" title="${s.ocupados} ocupados de ${s.cap} disponibles${s.bloqueado ? ' (' + s.bloqueado + ' bloqueados)' : ''}">
         <div class="d">${escapeHtml(d.toLocaleDateString('es-AR', {weekday:'short', day:'2-digit', month:'2-digit'}))}${dk === hoyK ? ' · hoy' : ''}${agDiaBloq(dk) ? ' · ⛔' : ''}</div>
         <div class="n">${s.ocupados}/${s.cap} <span style="font-size:12px; color:${col}">${s.pct}%</span></div>
+        ${s.usados ? `<div style="font-size:11.5px; font-weight:700; color:#f97316; margin-top:2px;" title="Usados que se recibirían ese día">${agUsadoIcon()} ${s.usados} usado${s.usados > 1 ? 's' : ''}</div>` : ''}
         <div class="b"><span style="width:${s.pct}%; background:${col}"></span></div></div>`;
     }).join('');
 
@@ -12484,7 +12551,7 @@
     const s = agStats(f);
     const kpi = (l, v, sub, c) => `<div class="an-kpi" style="--kc:${c}"><div class="l">${l}</div><div class="v">${v}</div><div class="s">${sub}</div></div>`;
     $('agKpis').innerHTML =
-      kpi('📊 Ocupación', s.pct + '%', `${s.ocupados} de ${s.cap} turnos posibles${s.bloqueado ? ` (${s.total} − ${s.bloqueado} bloqueados)` : ''}${s.exc ? ` · +${s.exc} de excepción (${(agReglas().excepcion || []).join(', ')}), no cuentan` : ''}`, s.pct >= 90 ? 'var(--red)' : 'var(--blue)') +
+      kpi('📊 Ocupación', s.pct + '%', `${s.usados ? `<b style="color:#f97316">${agUsadoIcon()} ${s.usados} usado${s.usados > 1 ? 's' : ''} a recibir</b> · ` : ''}${s.ocupados} de ${s.cap} turnos posibles${s.bloqueado ? ` (${s.total} − ${s.bloqueado} bloqueados)` : ''}${s.exc ? ` · +${s.exc} de excepción (${(agReglas().excepcion || []).join(', ')}), no cuentan` : ''}`, s.pct >= 90 ? 'var(--red)' : 'var(--blue)') +
       kpi('✅ Turnos', s.turno, 'confirmados', 'var(--green)') +
       kpi('🟣 Reservados', s.reservado, 'apartados sin confirmar', '#a78bfa') +
       kpi('🟡 Ofrecidos', s.ofrecido, 'esperando respuesta del cliente', 'var(--amber)') +
