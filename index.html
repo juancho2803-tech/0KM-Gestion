@@ -12527,7 +12527,7 @@
           if (sinEntrega) falta += `<div class="se">⏳ Sin fecha de entrega en la base</div>`;
           return `<td class="ag-cell ${escapeHtml(t.estado || '')} ${sinEntrega ? 'sinentrega' : ''} ${conNota ? 'connota' : ''} ${edit ? 'edit' : ''}" ${attrs} style="${fuera ? 'opacity:.3;' : ''}" title="Cargado por ${escapeHtml(t.usuario || '?')} · ${escapeHtml(t.actualizado || '')}">
             ${warn}<div class="e">${es.icon} ${es.label}${t.dia ? ' · día' : (t.fijo ? ' · 🔁 fijo' : '')}</div>
-            ${t.interno ? `<div class="i">${escapeHtml(t.interno)}</div>` : ''}
+            ${t.interno ? `<div class="i">${escapeHtml(t.interno)}${ints.some(i => { const rr = agRowIndex().get(i); return rr && esUsado(rr); }) ? ' ' + agUsadoIcon() : ''}</div>` : ''}
             ${sub ? `<div class="c">${sub}</div>` : ''}${falta}
             ${t.nota ? `<div class="nt">${conNota ? '📌 ' : ''}${escapeHtml(t.nota)}</div>` : ''}</td>`;
         }).join('')}</tr>`).join('') + '</tbody>';
@@ -12562,7 +12562,7 @@
         const i = (r['Interno'] || '').toString().trim();
         const dias = diasDesdePatentamiento(r);
         return `<div class="ag-pend ${AG.pick === i ? 'sel' : ''}" data-interno="${escapeHtml(i)}" title="${edit ? 'Clic para elegirlo y después clic en un casillero libre' : ''}">
-          <span class="i">${escapeHtml(i)}</span><span>${escapeHtml((r['Cliente'] || '').toString())}</span>
+          <span class="i">${escapeHtml(i)}${esUsado(r) ? ' ' + agUsadoIcon() : ''}</span><span>${escapeHtml((r['Cliente'] || '').toString())}</span>
           <span class="s">${escapeHtml((r['Modelo'] || '').toString())} · ${escapeHtml(PATENTADOS_BRAND_LABELS[(r['Marca'] || '').toString().trim().toUpperCase()] || '')}${dias !== null ? ` · ${dias} d desde patent.` : ''}</span>
           ${agPatentaCliente(r) ? '<span class="s" style="grid-column:2; color:var(--blue); font-weight:700;">🙋 Patenta cliente</span>' : ''}
           ${AG.pendTab === 'nook' ? `<span class="s" style="grid-column:2; color:var(--red);">Falta: ${escapeHtml((agEstadoInterno(i).falta || []).join(', '))}</span>` : ''}</div>`;
@@ -12642,6 +12642,7 @@
         ? `<br><span style="color:var(--red)">⚠️ ${escapeHtml(AG.edit.ent)} solo entrega ${escapeHtml((agReglas().marcas[AG.edit.ent] || []).join(', '))} (este es ${escapeHtml(mk)})</span>` : '';
       return `<div class="ag-info ${e.lvl}"><b>${escapeHtml(i)}</b>${r ? ` · ${escapeHtml((r['Cliente'] || '').toString())} · ${escapeHtml((r['Modelo'] || '').toString())} ${escapeHtml((r['Color'] || '').toString())}` : ''}<br>${escapeHtml(e.txt)}` +
         (r && agPatentaCliente(r) ? `<br><b style="color:var(--blue)">🙋 Patenta cliente — la documentación la trae el cliente</b>` : '') +
+        (r && esUsado(r) ? agUsadoTxt.replace('🔶', agUsadoIcon(true)) : '') +
         (r && tieneTurnoEntregaDado(r) ? `<br>📅 En el sistema ya figura turno el ${formatDateDisplay(r['Fecha Turno Entrega'])}` : '') +
         (otros.length ? `<br><span style="color:var(--amber)">🔁 Ya tiene turno en la agenda: ${otros.map(t => entFmt(agFromKey(t.fecha)).slice(0,5) + ' ' + escapeHtml(t.hora) + ' (' + escapeHtml(t.entregador) + ')').join(', ')} — al guardar se mueve a este casillero y el anterior queda libre</span>` : '') + marcaWarn + '</div>';
     }).join('');
@@ -12907,11 +12908,18 @@
       $('agPickModal').style.display = 'flex';
     });
   }
+  // Auto naranja: el cliente entrega un usado en la operación (Tiene Pago Usado = SI)
+  function agUsadoIcon(big){
+    const w = big ? 18 : 15;
+    return `<svg class="ag-usado" width="${w}" height="${w}" viewBox="0 0 24 24" style="vertical-align:-3px; flex:none;" aria-label="Entrega usado"><title>Entrega usado en la operación</title><path fill="#f97316" d="M5 11l1.6-4.4A2 2 0 0 1 8.5 5h7a2 2 0 0 1 1.9 1.6L19 11a2 2 0 0 1 2 2v4a1 1 0 0 1-1 1h-1a2 2 0 0 1-4 0H9a2 2 0 0 1-4 0H4a1 1 0 0 1-1-1v-4a2 2 0 0 1 2-2zm2.2 0h9.6l-1.2-3.3a.5.5 0 0 0-.5-.4H8.9a.5.5 0 0 0-.5.4L7.2 11zM7 15.5a1.2 1.2 0 1 0 0-2.4 1.2 1.2 0 0 0 0 2.4zm10 0a1.2 1.2 0 1 0 0-2.4 1.2 1.2 0 0 0 0 2.4z"/></svg>`;
+  }
+  const agUsadoTxt = '<br><b style="color:#f97316">' + '🔶 Entrega usado en la operación — coordinar la recepción del usado</b>';
   function agRenderPicker(){
     const i = AGP.interno, e = agEstadoInterno(i), r = e.r;
     const ya = agTurnosDe(i);
     $('agPickInfo').innerHTML = `<div class="ag-info ${e.lvl}"><b>${escapeHtml(i)}</b>${r ? ` · ${escapeHtml((r['Cliente'] || '').toString())} · ${escapeHtml((r['Modelo'] || '').toString())} · ${escapeHtml(PATENTADOS_BRAND_LABELS[AGP.marca] || AGP.marca)}` : ''}<br>${escapeHtml(e.txt)}` +
       (r && agPatentaCliente(r) ? `<br><b style="color:var(--blue)">🙋 Patenta cliente — la documentación la trae el cliente</b>` : '') +
+      (r && esUsado(r) ? agUsadoTxt.replace('🔶', agUsadoIcon(true)) : '') +
       (ya.length ? `<br><span style="color:var(--amber)">🔁 Ya tiene en la agenda: ${ya.map(t => `${entFmt(agFromKey(t.fecha)).slice(0,5)} ${escapeHtml(t.hora)} · ${escapeHtml(t.entregador)} (${(AG_ESTADOS[t.estado] || {label:t.estado}).label})`).join(', ')} — al guardar se reprograma y ese lugar queda libre</span>` : '') + '</div>';
     const R = agReglas();
     const sug = agPrimerLibre(AGP.marca);
