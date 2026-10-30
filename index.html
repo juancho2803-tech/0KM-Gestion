@@ -1155,6 +1155,7 @@
 
     <div class="tab-content" id="tabEntregas">
       <div class="subtab-nav" id="entregasSubNav">
+        <button class="subtab-btn" data-subtab="facturados" type="button">🧾 Facturados</button>
         <button class="subtab-btn active" data-subtab="patentados" type="button">✅ Patentados</button>
         <button class="subtab-btn" data-subtab="agenda" type="button">📅 Agenda de turnos</button>
         <button class="subtab-btn" data-subtab="averias" type="button">⚠️ Averías</button>
@@ -1167,8 +1168,8 @@
     <div class="subtab-content active" id="tabPatentados">
       <div class="panel">
         <div class="panel-head">
-          <h3>✅ Patentados</h3>
-          <div class="hint">Audi · Volkswagen · Ford · Chevrolet — solo pendientes de entregar (incluye turnos futuros)</div>
+          <h3 id="patTitulo">✅ Patentados</h3>
+          <div class="hint" id="patHint">Audi · Volkswagen · Ford · Chevrolet — solo pendientes de entregar (incluye turnos futuros)</div>
           <div class="export-group">
             <button class="page-btn" id="patExportCsvBtn" type="button">⬇️ CSV</button>
             <button class="page-btn" id="patExportXlsxBtn" type="button">⬇️ Excel</button>
@@ -1250,16 +1251,16 @@
                 <th class="sortable" data-sort="modelo">Modelo<span class="sort-arrow">↕</span></th>
                 <th class="sortable" data-sort="color">Color<span class="sort-arrow">↕</span></th>
                 <th class="sortable" data-sort="cliente">Cliente<span class="sort-arrow">↕</span></th>
-                <th class="sortable sort-active" data-sort="fechaPat">Fecha patentamiento<span class="sort-arrow">▼</span></th>
+                <th class="sortable sort-active" data-sort="fechaPat"><span id="patThFecha">Fecha patentamiento</span><span class="sort-arrow">▼</span></th>
                 <th class="sortable" data-sort="fechaArribo">Fecha arribo<span class="sort-arrow">↕</span></th>
                 <th class="sortable" data-sort="invitado">Invitado<span class="sort-arrow">↕</span></th>
                 <th class="sortable" data-sort="tipoCompra">Tipo compra stock<span class="sort-arrow">↕</span></th>
-                <th class="sortable" data-sort="dias">Días desde patentamiento<span class="sort-arrow">↕</span></th>
+                <th class="sortable" data-sort="dias"><span id="patThDias">Días desde patentamiento</span><span class="sort-arrow">↕</span></th>
                 <th class="sortable" data-sort="usado">Usado<span class="sort-arrow">↕</span></th>
                 <th class="sortable" data-sort="ubicacion">Ubicación actual<span class="sort-arrow">↕</span></th>
                 <th class="sortable" data-sort="enDQ">En DQ<span class="sort-arrow">↕</span></th>
                 <th class="sortable" data-sort="sinAveria">Sin avería<span class="sort-arrow">↕</span></th>
-                <th class="sortable" data-sort="conDominio">Con dominio<span class="sort-arrow">↕</span></th>
+                <th class="sortable" data-sort="conDominio"><span id="patThDominio">Con dominio</span><span class="sort-arrow">↕</span></th>
                 <th class="sortable" data-sort="alistado">Alistado<span class="sort-arrow">↕</span></th>
                 <th class="sortable" data-sort="geac">GEAC<span class="sort-arrow">↕</span></th>
                 <th class="sortable" data-sort="accesorios">Accesorios<span class="sort-arrow">↕</span></th>
@@ -7697,16 +7698,16 @@
       modelo: r => (r['Modelo'] || '').toString(),
       color: r => (r['Color'] || '').toString(),
       cliente: r => (r['Cliente'] || '').toString(),
-      fechaPat: r => { const d = parseDateFlexible(r['Fecha Patentamiento']); return d ? d.getTime() : -Infinity; },
+      fechaPat: r => { const d = parseDateFlexible(r[patFechaCampo()]); return d ? d.getTime() : -Infinity; },
       fechaArribo: r => { const d = parseDateFlexible(r['Fecha Arribo Unidad']); return d ? d.getTime() : -Infinity; },
       invitado: r => isInvitado(r) ? 1 : 0,
       tipoCompra: r => (r['Tipo Compra Stock'] || '').toString(),
-      dias: r => { const d = diasDesdePatentamiento(r); return d === null ? -Infinity : d; },
+      dias: r => { const d = patDiasDesde(r); return d === null ? -Infinity : d; },
       usado: r => esUsado(r) ? 1 : 0,
       ubicacion: r => (r['Ubicacion'] || '').toString(),
       enDQ: r => (r['Ubicacion'] || '').toString().trim().toUpperCase() === 'PRE-ENTREGA D.QUIROS' ? 1 : 0,
       sinAveria: r => hasAveria(r) ? 0 : 1,
-      conDominio: r => (r['Dominio'] || '').toString().trim() !== '' ? 1 : 0,
+      conDominio: r => { if (PAT_MODO === 'fac'){ const e = facPatEstimada(r); return e ? e.getTime() : -Infinity; } return (r['Dominio'] || '').toString().trim() !== '' ? 1 : 0; },
       alistado: r => isAlistado(r) ? 1 : 0,
       geac: r => {
         if ((r['Patenta?'] || '').toString().trim().toUpperCase() !== 'MAIPU') return -1;
@@ -7760,9 +7761,19 @@
   let patEstadoEntregaFilter = new Set(['okDentro','okFuera','noOk']);
   let patLocalidadFilter = new Set(['cordoba','otras']); // Córdoba (Capital) / Otras provincias
   let patMesPatFilter = null;
+  // Misma sección, dos modos: 'pat' = patentados pendientes de entregar,
+  // 'fac' = facturados sin patentar pendientes de entregar (en tubo de patentamiento).
+  let PAT_MODO = 'pat';
+  const patFechaCampo = () => PAT_MODO === 'fac' ? 'Fecha Venta' : 'Fecha Patentamiento';
+  function patDiasDesde(r){ return PAT_MODO === 'fac' ? diasDesdeFecha(r['Fecha Venta']) : diasDesdePatentamiento(r); }
+  // Facturados: fecha estimada de patentamiento según SLA (zona / crédito)
+  function facPatEstimada(r){
+    const fv = parseDateFlexible(r['Fecha Venta']);
+    return fv ? addBusinessDaysSLA(fv, getSLAFacPat(r)) : null;
+  }
   let patPatentaFilter = 'todos'; // Patenta? = MAIPU (sí) / otro (no) // null | 'actual' | 'anterior' — mes de patentamiento
   function patMesPatDe(r){
-    const d = parseDateFlexible(r['Fecha Patentamiento']);
+    const d = parseDateFlexible(r[patFechaCampo()]);
     if (!d) return null;
     const h = new Date();
     const ant = new Date(h.getFullYear(), h.getMonth() - 1, 1);
@@ -7779,6 +7790,14 @@
   }
 
   function patEstadoEntregaDeRow(row){
+    if (PAT_MODO === 'fac'){
+      // Facturado: "listo" = cumple todo menos el dominio; plazo = SLA de patentamiento
+      if (!isOkParaTurno(row, {sinDominio:true})) return 'noOk';
+      const est = facPatEstimada(row);
+      if (!est) return 'okDentro';
+      const hoy = new Date(); hoy.setHours(0,0,0,0);
+      return est < hoy ? 'okFuera' : 'okDentro';
+    }
     if (!isOkParaTurno(row)) return 'noOk';
     const cumple = patCumplePlazoPatentamiento(row);
     return cumple === false ? 'okFuera' : 'okDentro';
@@ -7971,7 +7990,7 @@
     return new Set(rec ? rec.estadoAveria.toString().split(',').map(x => x.trim()).filter(Boolean) : []);
   }
 
-  function isOkParaTurno(row){
+  function isOkParaTurno(row, opt){
     if (bloqueoActivo(row)) return false;
     const exc = patExc(row);
     const ubicacion = (row['Ubicacion'] || '').toString().trim().toUpperCase();
@@ -7980,7 +7999,7 @@
     if (ubicacion !== 'PRE-ENTREGA D.QUIROS' && !exc.has('ubicacion') && !ubicOkPorAcc) return false;
     if (hasAveria(row) && !exc.has('averia')) return false;
     const dominio = (row['Dominio'] || '').toString().trim();
-    if (dominio === '') return false;
+    if (dominio === '' && !(opt && opt.sinDominio)) return false;
     const patenta = (row['Patenta?'] || '').toString().trim().toUpperCase();
     if (patenta === 'MAIPU' && !exc.has('geac')){
       const geac = (row['Fecha Entrega Tramite a GEAC'] || '').toString().trim();
@@ -8011,7 +8030,7 @@
     {k:'dominio', label:'🏛️ Sin dominio cargado'},
     {k:'turno', label:'📅 Ya tiene turno asignado'}
   ];
-  function patMotivosNoOk(row){
+  function patMotivosNoOk(row, opt){
     const m = [];
     const up = c => (row[c] || '').toString().trim().toUpperCase();
     if (bloqueoActivo(row)) m.push('bloqueo');
@@ -8035,7 +8054,7 @@
       else if (mot.includes('REPARACION') || mot.includes('EXHIBICION')) add('ubicacion');
       else if (!m.length) add('otraubic');
     }
-    if (up('Dominio') === '') m.push('dominio');
+    if (up('Dominio') === '' && !(opt && opt.sinDominio)) m.push('dominio');
     if (up('Fecha Turno Entrega') !== '') m.push('turno');
     const exc = patExc(row);
     if (!exc.size) return m;
@@ -8763,12 +8782,17 @@
   });
 
   // ---------- Sub-pestañas de Entregas ----------
-  const SUBTAB_TARGETS = {patentados:'tabPatentados', averias:'tabAverias', fueradq:'tabFueraDQ', accesorios:'tabAccesorios', contactacion:'tabContactacion', clienteexterno:'tabClienteExterno', agenda:'tabAgenda'};
+  const SUBTAB_TARGETS = {facturados:'tabPatentados', patentados:'tabPatentados', averias:'tabAverias', fueradq:'tabFueraDQ', accesorios:'tabAccesorios', contactacion:'tabContactacion', clienteexterno:'tabClienteExterno', agenda:'tabAgenda'};
   document.querySelectorAll('#entregasSubNav .subtab-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       document.querySelectorAll('#entregasSubNav .subtab-btn').forEach(b => b.classList.toggle('active', b === btn));
       const target = SUBTAB_TARGETS[btn.dataset.subtab];
       document.querySelectorAll('#tabEntregas .subtab-content').forEach(c => c.classList.toggle('active', c.id === target));
+      if (btn.dataset.subtab === 'facturados' || btn.dataset.subtab === 'patentados'){
+        const modo = btn.dataset.subtab === 'facturados' ? 'fac' : 'pat';
+        if (modo !== PAT_MODO){ PAT_MODO = modo; patMotivoFilter = null; patMesPatFilter = null; patCurrentPage = 1; }
+        try { renderPatentadosSection(); } catch(e){ console.error(e); }
+      }
       if (btn.dataset.subtab === 'clienteexterno' && typeof renderClienteExternoSection === 'function') renderClienteExternoSection();
       if (btn.dataset.subtab === 'agenda' && typeof renderAgendaSection === 'function'){ try { renderAgendaSection(); } catch(e){ console.error('renderAgendaSection', e); } }
     });
@@ -9931,8 +9955,16 @@
   function renderPatentadosSection(){
     const baseRows = ALL_ROWS.filter(r => {
       const marca = (r['Marca'] || '').toString().trim().toUpperCase();
-      return CAR_BRANDS.includes(marca) && categorize(r) === 'Patentado' && !isEntregado(r);
+      return CAR_BRANDS.includes(marca) && categorize(r) === (PAT_MODO === 'fac' ? 'Facturado' : 'Patentado') && !isEntregado(r);
     });
+    const FAC = PAT_MODO === 'fac';
+    $('patTitulo').textContent = FAC ? '🧾 Facturados' : '✅ Patentados';
+    $('patHint').textContent = FAC
+      ? 'Audi · Volkswagen · Ford · Chevrolet — facturados sin patentar, pendientes de entregar. "Listo" = cumple todo lo de entrega salvo el dominio; el plazo es el SLA de patentamiento (zona / crédito).'
+      : 'Audi · Volkswagen · Ford · Chevrolet — solo pendientes de entregar (incluye turnos futuros)';
+    $('patThFecha').textContent = FAC ? 'Fecha facturación' : 'Fecha patentamiento';
+    $('patThDias').textContent = FAC ? 'Días desde facturación' : 'Días desde patentamiento';
+    $('patThDominio').textContent = FAC ? 'Patent. estimado (SLA)' : 'Con dominio';
 
     syncPatCanalFilter();
     function pasaOtrosFiltros(r){
@@ -9971,7 +10003,7 @@
     // patEstadoEntregaFilter pero antes de aplicar el propio filtro de localidad
     // (así ninguna de las dos cards de localidad se autoexcluye a cero).
     const rowsEstadoFiltrado = baseRowsConFiltros.filter(r => patEstadoEntregaFilter.has(patEstadoEntregaDeRow(r)))
-      .filter(r => !patMotivoFilter || (patEstadoEntregaDeRow(r) === 'noOk' && patMotivosNoOk(r).includes(patMotivoFilter)));
+      .filter(r => !patMotivoFilter || (patEstadoEntregaDeRow(r) === 'noOk' && patMotivosNoOk(r, {sinDominio: FAC}).includes(patMotivoFilter)));
     const rowsLoc = rowsEstadoFiltrado.filter(r => patLocalidadFilter.has(esCbaSLA(r) ? 'cordoba' : 'otras'));
     const rows = patMesPatFilter ? rowsLoc.filter(r => patMesPatDe(r) === patMesPatFilter) : rowsLoc;
 
@@ -9981,14 +10013,18 @@
     baseRowsConFiltros.forEach(r => { counts[patEstadoEntregaDeRow(r)]++; });
     const totalConFiltroMarca = counts.okDentro + counts.okFuera + counts.noOk;
 
-    const cardDefs = [
+    const cardDefs = FAC ? [
+      {estado:'okDentro', label:'✅ Listo, solo falta patentar — en plazo', color:'var(--green)'},
+      {estado:'okFuera', label:'🟠 Listo, solo falta patentar — patentamiento vencido', color:'var(--orange)'},
+      {estado:'noOk', label:'🔴 Con pendientes además del patentamiento', color:'var(--red)'}
+    ] : [
       {estado:'okDentro', label:'✅ OK para entregar, en plazo', sub:'Cumple todos los requisitos y va a tiempo', color:'var(--green)'},
       {estado:'okFuera', label:'🟠 OK para entregar, fuera de plazo', sub:'Cumple todos los requisitos pero ya se pasó de los 4 días hábiles', color:'var(--orange)'},
       {estado:'noOk', label:'🔴 No OK para entregar', sub:'Falta alistaje, accesorios, crédito, GEAC, avería, etc.', color:'var(--red)'}
     ];
     const noOkRows = baseRowsConFiltros.filter(r => patEstadoEntregaDeRow(r) === 'noOk');
     const motivoCounts = {};
-    noOkRows.forEach(r => patMotivosNoOk(r).forEach(k => { motivoCounts[k] = (motivoCounts[k] || 0) + 1; }));
+    noOkRows.forEach(r => patMotivosNoOk(r, {sinDominio: FAC}).forEach(k => { motivoCounts[k] = (motivoCounts[k] || 0) + 1; }));
     const motivosHtml = PAT_MOTIVOS_NOOK.filter(m => motivoCounts[m.k])
       .sort((a,b) => motivoCounts[b.k] - motivoCounts[a.k])
       .map(m => {
@@ -10004,7 +10040,7 @@
     // Con un motivo seleccionado: desglose de esos autos por unidad de negocio (Canal)
     let canalHtml = '';
     if (patMotivoFilter){
-      const sel = noOkRows.filter(r => patMotivosNoOk(r).includes(patMotivoFilter));
+      const sel = noOkRows.filter(r => patMotivosNoOk(r, {sinDominio: FAC}).includes(patMotivoFilter));
       const porCanal = {};
       sel.forEach(r => { const c = (r['Canal'] || '').toString().trim() || 'Sin dato'; porCanal[c] = (porCanal[c] || 0) + 1; });
       const items = Object.entries(porCanal).sort((a,b) => b[1] - a[1]);
@@ -10045,10 +10081,11 @@
         const card = (k, label, n, color) => `<div class="pat-brand-card ${patMesPatFilter === k ? 'active' : ''} ${patMesPatFilter && patMesPatFilter !== k ? 'dimmed' : ''}" data-mespat="${k}" title="Clic para ver solo estos autos">
           <div class="brand-name">${label}</div>
           <div class="brand-count" style="color:${color}">${n.toLocaleString('es-AR')}</div>
-          <div class="brand-breakdown">de ${rowsLoc.length.toLocaleString('es-AR')} pendientes · por fecha de patentamiento${k === 'anterior' && prevN ? ` · ${prevN} de meses anteriores` : ''}</div>
+          <div class="brand-breakdown">de ${rowsLoc.length.toLocaleString('es-AR')} pendientes · por fecha de ${FAC ? 'facturación' : 'patentamiento'}${k === 'anterior' && prevN ? ` · ${prevN} de meses anteriores` : ''}</div>
         </div>`;
-        return card('actual', `🗓️ Patentados en ${nom(h)}`, actN, 'var(--green)') +
-          card('anterior', `🗓️ Patentados en ${nom(new Date(h.getFullYear(), h.getMonth() - 1, 1))}`, antN, 'var(--amber)');
+        const pal = FAC ? 'Facturados' : 'Patentados';
+        return card('actual', `🗓️ ${pal} en ${nom(h)}`, actN, 'var(--green)') +
+          card('anterior', `🗓️ ${pal} en ${nom(new Date(h.getFullYear(), h.getMonth() - 1, 1))}`, antN, 'var(--amber)');
       })();
     })();
 
@@ -10091,7 +10128,7 @@
       tbody.innerHTML = shown.map(r => {
         const invitadoVal = isInvitado(r) ? (r['Invitado'] || '').toString().trim() : 'No';
         const tipoCompraVal = (r['Tipo Compra Stock'] || '').toString().trim() || 'Sin dato';
-        const dias = diasDesdePatentamiento(r);
+        const dias = patDiasDesde(r);
         const usadoBadge = esUsado(r)
           ? `<span class="badge-entrega pend">Sí</span>`
           : `<span class="badge-entrega ok">No</span>`;
@@ -10138,7 +10175,7 @@
           <td>${escapeHtml(r['Modelo'])}</td>
           <td>${escapeHtml(r['Color'])}</td>
           <td>${escapeHtml(r['Cliente'])}</td>
-          <td class="col-fecha">${formatDateDisplay(r['Fecha Patentamiento'])}</td>
+          <td class="col-fecha">${formatDateDisplay(r[patFechaCampo()])}</td>
           <td class="col-fecha">${(r['Fecha Arribo Unidad'] || '').toString().trim() ? formatDateDisplay(r['Fecha Arribo Unidad']) : '<span class="badge-entrega bad">Sin arribo</span>'}</td>
           <td>${escapeHtml(invitadoVal)}</td>
           <td>${escapeHtml(tipoCompraVal)}</td>
@@ -10147,7 +10184,9 @@
           <td>${escapeHtml(ubicacionVal)}</td>
           <td>${badge(enDQ)}</td>
           <td>${badge(!hasAveria(r))}</td>
-          <td>${badge((r['Dominio'] || '').toString().trim() !== '')}</td>
+          <td class="col-fecha">${PAT_MODO === 'fac' ? (() => { const e = facPatEstimada(r); if (!e) return '—'; const hoy = new Date(); hoy.setHours(0,0,0,0);
+            return e < hoy ? `<span class="badge-entrega bad" title="Ya pasó el plazo de patentamiento según SLA">${formatDateDisplay(e)} · vencido</span>` : `<span class="badge-entrega pend">${formatDateDisplay(e)}</span>`; })()
+            : badge((r['Dominio'] || '').toString().trim() !== '')}</td>
           <td>${badge(alistado, alistadoTitle)}</td>
           <td>${badgeNA(esMaipuGeac, geacOk, geacTitle)}</td>
           <td>${badgeNA(tieneAcc, accOk, accTitle)}</td>
@@ -10457,16 +10496,17 @@
       'Modelo': r['Modelo'] || '',
       'Color': r['Color'] || '',
       'Cliente': r['Cliente'] || '',
-      'Fecha Patentamiento': formatDateDisplay(r['Fecha Patentamiento']),
+      [PAT_MODO === 'fac' ? 'Fecha Facturacion' : 'Fecha Patentamiento']: formatDateDisplay(r[patFechaCampo()]),
+      ...(PAT_MODO === 'fac' ? {'Patentamiento estimado (SLA)': formatDateDisplay(facPatEstimada(r))} : {}),
       'Fecha Arribo': formatDateDisplay(r['Fecha Arribo Unidad']),
       'Entrega': isEntregado(r) ? 'Entregado' : 'Falta entregar',
       'Averia': hasAveria(r) ? 'SI' : 'NO',
       'Con Dominio': (r['Dominio'] || '').toString().trim() !== '' ? 'SI' : 'NO',
-      'OK para turno': isOkParaTurno(r) ? 'SI' : 'NO',
+      [PAT_MODO === 'fac' ? 'Listo (salvo patente)' : 'OK para turno']: isOkParaTurno(r, {sinDominio: PAT_MODO === 'fac'}) ? 'SI' : 'NO',
       'Bloqueo saldo / pago': bloqueoActivo(r) ? 'SI' : (bloqueoRec(r) ? 'Liberado' : ''),
       'Invitado': isInvitado(r) ? (r['Invitado'] || '').toString().trim() : 'No',
       'Tipo Compra Stock': (r['Tipo Compra Stock'] || '').toString().trim() || 'Sin dato',
-      'Dias desde patentamiento': (() => { const d = diasDesdePatentamiento(r); return d === null ? '' : d; })(),
+      [PAT_MODO === 'fac' ? 'Dias desde facturacion' : 'Dias desde patentamiento']: (() => { const d = patDiasDesde(r); return d === null ? '' : d; })(),
       'Usado': esUsado(r) ? 'SI' : 'NO',
       'Ubicacion actual': (r['Ubicacion'] || '').toString().trim() || '',
       'Alistado': isAlistado(r) ? 'SI' : 'NO',
@@ -10509,7 +10549,7 @@
     if (!data.length) return;
     const csv = Papa.unparse(data, {delimiter:';'});
     const blob = new Blob(['\ufeff' + csv], {type:'text/csv;charset=utf-8;'});
-    downloadBlob(blob, `patentados_${todayStamp()}.csv`);
+    downloadBlob(blob, `${PAT_MODO === 'fac' ? 'facturados' : 'patentados'}_${todayStamp()}.csv`);
   });
 
   function buildPatentadosExcelExportRows(){
@@ -10527,6 +10567,7 @@
       'Patenta?': r['Patenta?'] || '',
       'Usado?': esUsado(r) ? 'SI' : 'NO',
       'Cliente': r['Cliente'] || '',
+      [PAT_MODO === 'fac' ? 'Fecha Facturacion' : 'Fecha Patentamiento']: formatDateDisplay(r[patFechaCampo()]),
       'Observacion': (OBSERVATIONS.get(obsKey((r['Interno']||'').toString().trim(), 'patentados')) || {}).observacion || ''
     }));
   }
@@ -10536,8 +10577,8 @@
     if (!data.length) return;
     const ws = XLSX.utils.json_to_sheet(data);
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Patentados');
-    XLSX.writeFile(wb, `patentados_${todayStamp()}.xlsx`);
+    XLSX.utils.book_append_sheet(wb, ws, PAT_MODO === 'fac' ? 'Facturados' : 'Patentados');
+    XLSX.writeFile(wb, `${PAT_MODO === 'fac' ? 'facturados' : 'patentados'}_${todayStamp()}.xlsx`);
   });
 
   // ---------- Averías ----------
