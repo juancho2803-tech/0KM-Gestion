@@ -868,6 +868,12 @@
     <div id="authLoading" class="auth-loading">
       <div id="authLoadingText">Verificando…</div>
       <button type="button" id="authLoadingRetryBtn" style="display:none; margin-top:16px; padding:10px 20px; background:#3b82f6; color:white; border:none; border-radius:4px; cursor:pointer; font-size:14px;">🔄 Reintentar</button>
+      <!-- Texto fijo (no depende del JS): si el cartel queda trabado, recargar forzado -->
+      <div class="auth-stuck-hint" style="margin-top:18px; font-size:12.5px; line-height:1.5; opacity:.85;">
+        ¿Este cartel no se va en unos segundos?<br>
+        Presioná <b>Ctrl + Shift + R</b> (o <b>F5</b>) para recargar la página.
+        <div style="margin-top:10px;"><button type="button" onclick="location.replace(location.pathname + '?r=' + Date.now())" style="padding:7px 14px; border-radius:4px; border:1px solid currentColor; background:transparent; color:inherit; cursor:pointer; font-size:12.5px;">🔄 Recargar ahora</button></div>
+      </div>
     </div>
 
     <form id="authLoginForm" class="auth-form" style="display:none;">
