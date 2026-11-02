@@ -1314,6 +1314,7 @@
           <button type="button" class="page-btn" id="agHoy">Hoy</button>
           <button type="button" class="page-btn" id="agRefresh" title="Traer los últimos cambios">🔄 Actualizar</button>
           <button type="button" class="page-btn" id="agSinEntregaBtn" title="Turnos de días pasados cuyo auto todavía no tiene Fecha Entrega Unidad en la base (casos en amarillo)">⬇️ Sin entrega confirmada</button>
+          <button type="button" class="page-btn" id="agImprimirBtn" title="Grilla del día + detalle por asesor, lista para imprimir">🖨️ Imprimir día</button>
           <div class="ag-dia" id="agDiaLabel"></div>
           <div style="flex:1"></div>
           <div class="table-search" style="margin:0;"><input type="text" id="agBuscar" placeholder="🔎 Buscar interno en la agenda…" autocomplete="off"></div>
@@ -12403,6 +12404,19 @@
     return f ? {fecha:fk, hora, entregador:ent, estado:'bloqueado', interno:'', nota: f.motivo || 'Bloqueo fijo', fijo:true} : null;
   }
   function agEsExcepcion(ent){ return (agReglas().excepcion || []).includes(ent); }
+  // Horarios especiales (lunes a viernes): no admiten ciertos autos
+  const AG_ESPECIALES = {'17:45': {nota:'Sin plan de ahorro, sin usado, sin accesorios'}};
+  function agEsEspecial(hora){ return !!AG_ESPECIALES[hora]; }
+  // Motivos por los que un auto NO puede ir en un horario especial ([] = puede)
+  function agRestriccionEspecial(hora, r){
+    if (!agEsEspecial(hora) || !r) return [];
+    const m = [];
+    const canal = (r['Canal'] || '').toString().toUpperCase(), tipo = (r['Tipo Compra Stock'] || '').toString().toUpperCase();
+    if (canal.includes('PLAN') || tipo.includes('PLAN AUTO AHORRO')) m.push('plan de ahorro');
+    if (esUsado(r)) m.push('entrega usado');
+    if (tieneAccesorios(r)) m.push('tiene accesorios');
+    return m;
+  }
   function agMarcaPermitida(ent, marca){
     const m = (agReglas().marcas || {})[ent];
     return !m || !m.length || !marca || m.includes(marca);
@@ -12418,11 +12432,12 @@
     }
     return agMarcaPermitida(ent, marca);
   }
-  function agLibresDia(d, marca, excepcion){
+  function agLibresDia(d, marca, excepcion, row){
     const fk = agKey(d), dia = agDia(d), out = [];
     const ahora = new Date(), hoyK = agKey(ahora), minAhora = ahora.getHours() * 60 + ahora.getMinutes();
     dia.horas.forEach(h => dia.entregadores.forEach(e => {
       if (agEfectivo(fk, h, e)) return;
+      if (agRestriccionEspecial(h, row).length) return; // horario especial: este auto no puede ir
       if (fk < hoyK || (fk === hoyK && agHoraMin(h) <= minAhora)) return; // ya pasó
       const ok = agSlotPermitido(fk, h, e, marca) && !agEsExcepcion(e);
       if (!excepcion && !ok) return;
@@ -12453,6 +12468,7 @@
   function agDia(d){
     const k = agKey(d), p = agPlantilla(d);
     const horas = new Set(p.horas), ents = [...p.entregadores];
+    if (d.getDay() >= 1 && d.getDay() <= 5) Object.keys(AG_ESPECIALES).forEach(h => horas.add(h));
     AG.data.forEach(t => { if (t.fecha === k){ horas.add(t.hora); if (!ents.includes(t.entregador)) ents.push(t.entregador); } });
     return {horas:[...horas].sort((a,b) => agHoraMin(a) - agHoraMin(b)), entregadores:ents};
   }
@@ -12620,7 +12636,7 @@
       $('agGrid').innerHTML = `<tr><td class="table-empty">${f.getDay() === 0 ? 'Domingo: no se dan turnos.' : 'No hay horarios configurados para este día.'}</td></tr>`;
     } else {
       $('agGrid').innerHTML = `<thead><tr><th class="h">Hora</th>${dia.entregadores.map(e => `<th>${escapeHtml(e)}</th>`).join('')}</tr></thead><tbody>` +
-        dia.horas.map(h => `<tr><td class="h">${escapeHtml(h)}</td>${dia.entregadores.map(e => {
+        dia.horas.map(h => `<tr><td class="h" ${agEsEspecial(h) ? `title="Horario especial: ${escapeHtml(AG_ESPECIALES[h].nota)}"` : ''}>${escapeHtml(h)}${agEsEspecial(h) ? '<div style="font-size:9.5px; font-weight:700; color:#f97316; line-height:1.15; margin-top:2px;">⭐ especial<br>sin plan · usado · acc.</div>' : ''}</td>${dia.entregadores.map(e => {
           const t = agEfectivo(k, h, e);
           const attrs = `data-hora="${escapeHtml(h)}" data-ent="${escapeHtml(e)}"`;
           if (!t) return `<td class="ag-cell ${edit ? 'edit' : ''} ${edit && AG.pick ? 'libre-pick' : ''}" ${attrs}></td>`;
@@ -12638,6 +12654,8 @@
             const r0 = ests[0].r;
             if (r0) sub = `${escapeHtml((r0['Cliente'] || '').toString())} · ${escapeHtml((r0['Modelo'] || '').toString())}`;
             if (ests.some(x => x.r && agPatentaCliente(x.r))) falta = `<div class="pc">🙋 Patenta cliente — la documentación la trae el cliente</div>` + falta;
+            const espMal = [...new Set([].concat(...ests.map(x => agRestriccionEspecial(h, x.r))))];
+            if (espMal.length){ falta = `<div class="f">⛔ No va en ${escapeHtml(h)}: ${escapeHtml(espMal.join(', '))}</div>` + falta; if (!warn) warn = `<span class="w" title="Horario especial">⚠️</span>`; }
           }
           const es = AG_ESTADOS[t.estado] || {label:t.estado || 'Nota', icon:'📝'};
           const rMarca = ints.length ? agRowIndex().get(ints[0]) : null;
@@ -12764,7 +12782,9 @@
       const mk = r ? (r['Marca'] || '').toString().trim().toUpperCase() : '';
       const marcaWarn = AG.edit && r && !agMarcaPermitida(AG.edit.ent, mk)
         ? `<br><span style="color:var(--red)">⚠️ ${escapeHtml(AG.edit.ent)} solo entrega ${escapeHtml((agReglas().marcas[AG.edit.ent] || []).join(', '))} (este es ${escapeHtml(mk)})</span>` : '';
-      return `<div class="ag-info ${e.lvl}"><b>${escapeHtml(i)}</b>${r ? ` · ${escapeHtml((r['Cliente'] || '').toString())} · ${escapeHtml((r['Modelo'] || '').toString())} ${escapeHtml((r['Color'] || '').toString())}` : ''}<br>${escapeHtml(e.txt)}` +
+      const espM = AG.edit ? agRestriccionEspecial(AG.edit.hora, r) : [];
+      const espWarn = espM.length ? `<br><b style="color:var(--red)">⛔ Horario especial ${escapeHtml(AG.edit.hora)}: no puede ir (${escapeHtml(espM.join(', '))})</b>` : '';
+      return `<div class="ag-info ${espM.length ? 'bad' : e.lvl}"><b>${escapeHtml(i)}</b>${r ? ` · ${escapeHtml((r['Cliente'] || '').toString())} · ${escapeHtml((r['Modelo'] || '').toString())} ${escapeHtml((r['Color'] || '').toString())}` : ''}${espWarn}<br>${escapeHtml(e.txt)}` +
         (r && agPatentaCliente(r) ? `<br><b style="color:var(--blue)">🙋 Patenta cliente — la documentación la trae el cliente</b>` : '') +
         (r && esUsado(r) ? agUsadoTxt.replace('🔶', agUsadoIcon(true)) : '') +
         (r && tieneTurnoEntregaDado(r) ? `<br>📅 En el sistema ya figura turno el ${formatDateDisplay(r['Fecha Turno Entrega'])}` : '') +
@@ -12778,6 +12798,10 @@
     const nota = estado === '' ? '' : $('agModalNota').value.trim();
     if ((estado === 'turno' || estado === 'reservado') && !agInternos(interno).length){ $('agModalError').textContent = 'Ingresá el interno.'; return; }
     const {fecha, hora, ent, fijo} = AG.edit;
+    if (estado && estado !== 'bloqueado'){
+      const malos = agInternos(interno).map(i => [i, agRestriccionEspecial(hora, agRowIndex().get(i))]).filter(x => x[1].length);
+      if (malos.length){ $('agModalError').textContent = `⛔ El horario ${hora} es especial: no admite ${malos.map(x => x[0] + ' (' + x[1].join(', ') + ')').join('; ')}.`; return; }
+    }
     const chk = !!($('agModalFijoChk') && $('agModalFijoChk').checked);
     const tieneExplicito = AG.data.has(agSlot(fecha, hora, ent));
     if (AG.pick && agInternos(interno).includes(AG.pick)) AG.pick = null;
@@ -12803,7 +12827,7 @@
     if (estado && estado !== 'bloqueado') agLiberarOtros(agInternos(interno), fecha, hora, ent);
     if (estado === 'turno'){
       const ints = agInternos(interno), r0 = agRowIndex().get(ints[0]);
-      const pl = agPrimerLibre(r0 ? (r0['Marca'] || '').toString().trim().toUpperCase() : '');
+      const pl = agPrimerLibre(r0 ? (r0['Marca'] || '').toString().trim().toUpperCase() : '', r0);
       const primer = pl ? pl.dia : null;
       agRegistrarAsignacion(ints, fecha, primer, agMotivoFecha($('agModalMotivo'), primer, fecha));
     }
@@ -13017,9 +13041,9 @@
     while (out.length < n){ if (d.getDay() !== 0) out.push(new Date(d)); d.setDate(d.getDate() + 1); }
     return out;
   }
-  function agPrimerLibre(marca){
+  function agPrimerLibre(marca, row){
     for (const d of agProximosDias(30)){
-      const l = agLibresDia(d, marca, false);
+      const l = agLibresDia(d, marca, false, row);
       if (l.length) return {dia:d, ...l[0]};
     }
     return null;
@@ -13031,7 +13055,7 @@
       AGP.slot = null; AGP.estado = 'turno';
       $('agPickExc').checked = false; $('agPickNota').value = ''; $('agPickError').textContent = '';
       if ($('agPickMotivo')) $('agPickMotivo').value = '';
-      const sug = agPrimerLibre(AGP.marca);
+      const sug = agPrimerLibre(AGP.marca, agRowIndex().get(AGP.interno));
       AGP.dia = sug ? sug.dia : agProximosDias(1)[0];
       if (sug) AGP.slot = {hora:sug.hora, ent:sug.ent};
       agRenderPicker();
@@ -13052,27 +13076,29 @@
       (r && esUsado(r) ? agUsadoTxt.replace('🔶', agUsadoIcon(true)) : '') +
       (ya.length ? `<br><span style="color:var(--amber)">🔁 Ya tiene en la agenda: ${ya.map(t => `${entFmt(agFromKey(t.fecha)).slice(0,5)} ${escapeHtml(t.hora)} · ${escapeHtml(t.entregador)} (${(AG_ESTADOS[t.estado] || {label:t.estado}).label})`).join(', ')} — al guardar se reprograma y ese lugar queda libre</span>` : '') + '</div>';
     const R = agReglas();
-    const sug = agPrimerLibre(AGP.marca);
+    const sug = agPrimerLibre(AGP.marca, agRowIndex().get(AGP.interno));
     $('agPickSug').innerHTML = sug
       ? `<div class="ag-info ok" style="display:flex; justify-content:space-between; align-items:center; gap:8px;"><span>⚡ Primer turno libre: <b>${escapeHtml(sug.dia.toLocaleDateString('es-AR', {weekday:'long', day:'2-digit', month:'2-digit'}))} ${escapeHtml(sug.hora)} · ${escapeHtml(sug.ent)}</b></span><button type="button" class="page-btn" id="agPickUsarSug">Usar este</button></div>`
       : `<div class="ag-info warn">No hay turnos libres en los próximos 30 días con las reglas actuales.</div>`;
     const exc = $('agPickExc').checked;
     const hoyK = agKey(new Date());
     $('agPickDias').innerHTML = agProximosDias(12).map(d => {
-      const n = agLibresDia(d, AGP.marca, exc).length, k = agKey(d);
+      const n = agLibresDia(d, AGP.marca, exc, agRowIndex().get(AGP.interno)).length, k = agKey(d);
       return `<button type="button" data-fecha="${k}" class="${AGP.dia && agKey(AGP.dia) === k ? 'sel' : ''} ${n ? '' : 'zero'}">${escapeHtml(d.toLocaleDateString('es-AR', {weekday:'short', day:'2-digit', month:'2-digit'}))}${k === hoyK ? ' · hoy' : ''}<span class="n">${n} libre${n === 1 ? '' : 's'}</span></button>`;
     }).join('');
-    const libres = AGP.dia ? agLibresDia(AGP.dia, AGP.marca, exc) : [];
+    const libres = AGP.dia ? agLibresDia(AGP.dia, AGP.marca, exc, agRowIndex().get(AGP.interno)) : [];
     $('agPickSlotsTitle').textContent = AGP.dia ? `Horarios libres · ${AGP.dia.toLocaleDateString('es-AR', {weekday:'long', day:'2-digit', month:'2-digit'})}` : 'Horarios libres';
     const regla = `Regla: turno para el mismo día solo si se pide antes de las ${R.corte} y desde las ${R.desde}` +
-      Object.entries(R.marcas || {}).filter(([,m]) => m.length).map(([en, m]) => ` · ${en} solo ${m.join('/')}`).join('');
+      Object.entries(R.marcas || {}).filter(([,m]) => m.length).map(([en, m]) => ` · ${en} solo ${m.join('/')}`).join('') +
+      Object.entries(AG_ESPECIALES).map(([h, x]) => ` · ${h}: ${x.nota.toLowerCase()}`).join('') +
+      (agRowIndex().get(AGP.interno) && Object.keys(AG_ESPECIALES).some(h => agRestriccionEspecial(h, agRowIndex().get(AGP.interno)).length) ? ' (este auto no puede ir en ese horario)' : '');
     $('agPickSlots').innerHTML = (libres.length ? libres.map(x => `<button type="button" data-hora="${escapeHtml(x.hora)}" data-ent="${escapeHtml(x.ent)}" class="${AGP.slot && AGP.slot.hora === x.hora && AGP.slot.ent === x.ent ? 'sel' : ''} ${x.regla ? '' : 'exc'}" title="${x.regla ? '' : 'Fuera de regla (excepción)'}">${escapeHtml(x.hora)} · ${escapeHtml(x.ent)}</button>`).join('')
       : '<span class="hint">Sin horarios libres ese día.</span>') + `<div class="hint" style="width:100%; font-size:11px; margin-top:4px;">${escapeHtml(regla)}</div>`;
     if (AGP.slot && !libres.some(x => x.hora === AGP.slot.hora && x.ent === AGP.slot.ent)) AGP.slot = null;
     document.querySelectorAll('#agPickEstado button').forEach(b => b.classList.toggle('active', b.dataset.estado === AGP.estado));
     if ($('agPickMotivoWrap')){
       $('agPickMotivoWrap').style.display = AGP.estado === 'turno' ? '' : 'none';
-      const sg = agPrimerLibre(AGP.marca);
+      const sg = agPrimerLibre(AGP.marca, agRowIndex().get(AGP.interno));
       const posterior = sg && AGP.slot && AGP.dia && agKey(AGP.dia) > agKey(sg.dia);
       $('agPickMotivo').options[0].textContent = posterior ? '(automático: Cliente pidió una fecha posterior — había lugar antes)' : '(automático: Primer turno disponible)';
     }
@@ -13091,12 +13117,81 @@
       }
       $('agPickModal').style.display = 'none';
       if (AGP.estado === 'turno'){
-        const pl = agPrimerLibre(AGP.marca), primer = pl ? pl.dia : null;
+        const pl = agPrimerLibre(AGP.marca, agRowIndex().get(AGP.interno)), primer = pl ? pl.dia : null;
         agRegistrarAsignacion([AGP.interno], fk, primer, agMotivoFecha($('agPickMotivo'), primer, fk));
       }
       agLiberarOtros([AGP.interno], fk, hora, ent);
       agGuardar(fk, hora, ent, AGP.estado, AGP.interno, $('agPickNota').value.trim());
     });
+  }
+  // ---------- Hoja imprimible del día (grilla + detalle por asesor) ----------
+  function agImprimirDia(){
+    const f = AG.fecha || new Date(), k = agKey(f), dia = agDia(f);
+    const esc = escapeHtml;
+    const fechaTxt = f.toLocaleDateString('es-AR', {weekday:'long', day:'2-digit', month:'2-digit', year:'numeric'});
+    const info = i => {
+      const r = agRowIndex().get(i), e = agEstadoInterno(i);
+      if (!r) return {i, r:null, e, tags:[]};
+      const tags = [];
+      if (esUsado(r)) tags.push('🚗 USADO');
+      if (tieneAccesorios(r)) tags.push('🎒 ACC' + (accesoriosListos(r) ? ' ✓' : ' pend.'));
+      if (agPatentaCliente(r)) tags.push('🙋 PATENTA CLIENTE');
+      if (isInvitado(r)) tags.push('INVITADO');
+      if ((r['Credito?'] || '').toString().trim().toUpperCase() === 'SI') tags.push('💳 CRÉDITO' + (tieneCreditoSinLiquidar(r) ? ' sin liq.' : ''));
+      const canal = (r['Canal'] || '').toString().trim(); if (canal) tags.push(canal);
+      return {i, r, e, tags};
+    };
+    const celdas = [];
+    dia.horas.forEach(h => dia.entregadores.forEach(en => {
+      const t = agEfectivo(k, h, en);
+      celdas.push({h, en, t, ints: t && t.estado !== 'bloqueado' ? agInternos(t.interno).map(info) : []});
+    }));
+    // Mini grilla
+    const grid = `<table class="g"><thead><tr><th>Hora</th>${dia.entregadores.map(en => `<th>${esc(en)}</th>`).join('')}</tr></thead><tbody>` +
+      dia.horas.map(h => `<tr><td class="h">${esc(h)}${agEsEspecial(h) ? '<br><small>⭐ especial</small>' : ''}</td>${dia.entregadores.map(en => {
+        const c = celdas.find(x => x.h === h && x.en === en), t = c.t;
+        if (!t) return '<td></td>';
+        if (t.estado === 'bloqueado') return `<td class="bl">⛔ ${esc(t.nota || 'Bloqueado')}</td>`;
+        const est = t.estado !== 'turno' ? `<div class="st">${esc((AG_ESTADOS[t.estado] || {label:t.estado}).label)}</div>` : '';
+        return `<td>${est}${c.ints.map(x => `<b>${esc(x.i)}</b> ${x.r ? esc((x.r['Cliente'] || '').toString()) : ''}<div class="m">${x.r ? esc((x.r['Modelo'] || '').toString()) : ''}${x.tags.some(z => z.includes('USADO')) ? ' · 🚗' : ''}${x.tags.some(z => z.includes('ACC')) ? ' · 🎒' : ''}</div>`).join('')}${t.nota ? `<div class="nt">📌 ${esc(t.nota)}</div>` : ''}</td>`;
+      }).join('')}</tr>`).join('') + '</tbody></table>';
+    // Detalle por asesor
+    const det = dia.entregadores.map(en => {
+      const filas = celdas.filter(c => c.en === en && c.t && c.t.estado !== 'bloqueado' && (c.ints.length || c.t.nota));
+      if (!filas.length) return '';
+      return `<section class="as"><h2>${esc(en)} <span>· ${esc(fechaTxt)} · ${filas.length} turno${filas.length === 1 ? '' : 's'}</span></h2>
+        <table class="d"><thead><tr><th>Hora</th><th>Interno</th><th>Cliente</th><th>Modelo / color</th><th>Dominio</th><th>Nro. op.</th><th>Vendedor</th><th>Atención</th><th>Estado / nota</th><th>✔</th></tr></thead><tbody>` +
+        filas.map(c => (c.ints.length ? c.ints : [{i:'', r:null, e:{txt:''}, tags:[]}]).map(x => `<tr>
+          <td class="h">${esc(c.h)}</td><td><b>${esc(x.i)}</b></td>
+          <td>${x.r ? esc((x.r['Cliente'] || '').toString()) : ''}${x.r && (x.r['Tel Celular'] || x.r['Email']) ? `<div class="m">${esc([x.r['Tel Celular'], x.r['Email']].filter(Boolean).join(' · '))}</div>` : ''}</td>
+          <td>${x.r ? esc((x.r['Modelo'] || '').toString()) + `<div class="m">${esc((x.r['Color'] || '').toString())}</div>` : ''}</td>
+          <td>${x.r ? esc((x.r['Dominio'] || '').toString() || '—') : ''}</td>
+          <td>${x.r ? esc((x.r['Nro. Operacion'] || '').toString()) : ''}</td>
+          <td>${x.r ? esc((x.r['Vendedor'] || '').toString()) : ''}</td>
+          <td>${x.tags.map(z => `<span class="tg">${esc(z)}</span>`).join(' ')}</td>
+          <td>${agRestriccionEspecial(c.h, x.r).length ? `<b class="bad">⛔ No va en ${esc(c.h)}: ${esc(agRestriccionEspecial(c.h, x.r).join(', '))}</b><br>` : ''}${c.t.estado !== 'turno' ? `<b>${esc((AG_ESTADOS[c.t.estado] || {label:c.t.estado}).label)}</b> · ` : ''}${x.e && x.e.lvl !== 'ok' && x.e.txt ? `<span class="bad">${esc(x.e.txt)}</span>` : ''}${c.t.nota ? `<div class="nt">📌 ${esc(c.t.nota)}</div>` : ''}</td>
+          <td class="ck"></td></tr>`).join('')).join('') + '</tbody></table></section>';
+    }).join('');
+    const html = `<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Agenda ${esc(k)}</title><style>
+      *{box-sizing:border-box} body{font-family:Arial,Helvetica,sans-serif; color:#111; background:#fff; margin:12mm; font-size:11px;}
+      h1{font-size:17px; margin:0 0 2px;} .sub{color:#555; margin-bottom:8px;}
+      table{width:100%; border-collapse:collapse; margin-bottom:10px;} th,td{border:1px solid #999; padding:4px 5px; vertical-align:top; text-align:left;}
+      th{background:#eee; font-size:10.5px;} td.h{font-weight:700; white-space:nowrap; width:48px;} td.h small{color:#c2410c;}
+      .g{table-layout:fixed;} .g th:first-child{width:56px;} .g td{height:38px;} .bl{background:#f3f3f3; color:#777;} .m{color:#555; font-size:10px;} .nt{color:#9d174d; font-size:10px; margin-top:2px;}
+      .st{font-size:9.5px; font-weight:700; color:#6d28d9;} .tg{display:inline-block; border:1px solid #c2410c; color:#c2410c; border-radius:3px; padding:0 3px; margin:1px 0; font-size:9.5px; font-weight:700;}
+      .bad{color:#b91c1c;} .ck{width:24px;} section.as{page-break-before:always;} h2{font-size:15px; margin:0 0 6px;} h2 span{font-weight:400; color:#555; font-size:12px;}
+      .tools{margin-bottom:10px;} @media print{.tools{display:none;} body{margin:8mm;}}
+    </style></head><body>
+      <div class="tools"><button onclick="window.print()">🖨️ Imprimir</button></div>
+      <h1>Agenda de entregas — ${esc(fechaTxt)}</h1>
+      <div class="sub">Generado ${esc(new Date().toLocaleString('es-AR'))} · 🚗 entrega usado · 🎒 accesorios · ⭐ 17:45 especial: sin plan de ahorro, sin usado, sin accesorios</div>
+      ${dia.horas.length ? grid : '<p>No hay horarios para este día.</p>'}
+      ${det || ''}
+    </body></html>`;
+    const w = window.open('', '_blank');
+    if (!w){ showToast('⚠️ El navegador bloqueó la ventana emergente — permitila para imprimir', true); return; }
+    w.document.open(); w.document.write(html); w.document.close();
+    setTimeout(() => { try { w.focus(); w.print(); } catch(e){} }, 400);
   }
   // Celda de la columna "Agenda" en Contactación
   function agContactCell(interno){
@@ -13114,7 +13209,7 @@
     $('agPickSlots').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; AGP.slot = {hora:b.dataset.hora, ent:b.dataset.ent}; agRenderPicker(); });
     $('agPickSug').addEventListener('click', e => {
       if (!e.target.closest('#agPickUsarSug')) return;
-      const s = agPrimerLibre(AGP.marca); if (!s) return;
+      const s = agPrimerLibre(AGP.marca, agRowIndex().get(AGP.interno)); if (!s) return;
       AGP.dia = s.dia; AGP.slot = {hora:s.hora, ent:s.ent}; agRenderPicker();
     });
     $('agPickExc').addEventListener('change', agRenderPicker);
@@ -13475,6 +13570,7 @@
     b.style.borderColor = n ? '#ffd600' : '';
   }
   if ($('agSinEntregaBtn')){
+    $('agImprimirBtn').addEventListener('click', agImprimirDia);
     $('agSinEntregaBtn').addEventListener('click', () => {
       const rows = agSinEntregaRows();
       if (!rows.length){ showToast('No hay turnos pasados sin fecha de entrega en lo cargado de la agenda'); return; }
