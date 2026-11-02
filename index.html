@@ -847,6 +847,13 @@
   body.rol-usados #entregasSubNav .subtab-btn:not([data-subtab="agenda"]),
   body.rol-usados #agSinEntregaBtn,
   body.rol-usados #dropZoneLocked { display:none !important; }
+  /* Rol "accesorios": Accesorios (Entregas y Aceleración) + Agenda de turnos (sin editar) */
+  body.rol-accesorios #tabNav .tab-btn:not([data-tab="entregas"]):not([data-tab="aceleracion"]),
+  body.rol-accesorios #tabNav .fi-search,
+  body.rol-accesorios #entregasSubNav .subtab-btn:not([data-subtab="agenda"]):not([data-subtab="accesorios"]),
+  body.rol-accesorios #aceleracionSubNav .subtab-btn:not([data-subtab="accesorios"]),
+  body.rol-accesorios #agSinEntregaBtn,
+  body.rol-accesorios #dropZoneLocked { display:none !important; }
 </style>
 </head>
 <body data-theme="dark">
@@ -2813,6 +2820,7 @@
             <option value="usuario">Usuario</option>
             <option value="entregas">Entregas</option>
             <option value="usados">Usados (solo ve la agenda)</option>
+            <option value="accesorios">Accesorios (accesorios + agenda)</option>
             <option value="admin">Administrador</option>
           </select>
           <button type="submit" class="page-btn">Crear usuario</button>
@@ -2858,6 +2866,7 @@
           <option value="usuario">Usuario</option>
           <option value="entregas">Entregas</option>
           <option value="usados">Usados (solo ve la agenda)</option>
+            <option value="accesorios">Accesorios (accesorios + agenda)</option>
           <option value="admin">Administrador</option>
         </select>
       </label>
@@ -3375,6 +3384,7 @@
     // rechaza igual, pero lo cortamos acá antes para no generar un guardado optimista
     // que después haya que revertir, y para avisar al toque por qué no se guardó.
     if (CURRENT_SESSION && CURRENT_SESSION.role === 'usados') return Promise.reject(new Error('Tu rol solo puede consultar la agenda.'));
+    if (CURRENT_SESSION && CURRENT_SESSION.role === 'accesorios' && seccion !== 'accesorios') return Promise.reject(new Error('Tu rol solo puede cargar observaciones de accesorios.'));
     if (CURRENT_SESSION && CURRENT_SESSION.role === 'entregas' && seccion !== 'contactacion' && seccion !== 'contactacionfinalizado' && seccion !== 'bloqueosaldo' && seccion !== 'clienteexterno' && seccion !== 'excepcion' && seccion !== 'turnoinfo'){
       showToast('⚠️ Tu rol (entregas) solo puede editar Contactación.', true);
       return Promise.reject(new Error('Rol sin permiso de edición para esta sección'));
@@ -8828,7 +8838,7 @@
   const TAB_TARGETS = {general:'tabGeneral', lebomb:'tabLeBomb', ventas:'tabVentas', entregas:'tabEntregas', gestoria:'tabGestoria', aceleracion:'tabAceleracion', auditoria:'tabAuditoria', usuarios:'tabUsuarios', analisis:'tabAnalisis'};
   document.querySelectorAll('.tab-btn').forEach(btn => {
     btn.addEventListener('click', () => {
-      if (typeof esRolUsados === 'function' && esRolUsados() && btn.dataset.tab !== 'entregas') return;
+      if (typeof rolVista === 'function' && rolVista() && !rolVista().tabs.includes(btn.dataset.tab)) return;
       document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b === btn));
       const target = TAB_TARGETS[btn.dataset.tab] || 'tabGeneral';
       document.querySelectorAll('.tab-content').forEach(c => c.classList.toggle('active', c.id === target));
@@ -8843,7 +8853,7 @@
   const SUBTAB_TARGETS = {facturados:'tabPatentados', patentados:'tabPatentados', averias:'tabAverias', fueradq:'tabFueraDQ', accesorios:'tabAccesorios', contactacion:'tabContactacion', clienteexterno:'tabClienteExterno', agenda:'tabAgenda'};
   document.querySelectorAll('#entregasSubNav .subtab-btn').forEach(btn => {
     btn.addEventListener('click', () => {
-      if (typeof esRolUsados === 'function' && esRolUsados() && btn.dataset.subtab !== 'agenda') return;
+      if (typeof rolVista === 'function' && rolVista() && !rolVista().entregas.includes(btn.dataset.subtab)) return;
       document.querySelectorAll('#entregasSubNav .subtab-btn').forEach(b => b.classList.toggle('active', b === btn));
       const target = SUBTAB_TARGETS[btn.dataset.subtab];
       document.querySelectorAll('#tabEntregas .subtab-content').forEach(c => c.classList.toggle('active', c.id === target));
@@ -9569,6 +9579,7 @@
   const ACEL_SUBTAB_TARGETS = {resumen:'tabResumen', alistaje:'subAlistaje', averias:'subAverias', accesorios:'subAccesorios', pagofabrica:'subPagofabrica', geac:'subGeac', credito:'subCredito', entregasacel:'subEntregasAcel', informegerman:'subInformeGerman'};
   document.querySelectorAll('#aceleracionSubNav .subtab-btn').forEach(btn => {
     btn.addEventListener('click', () => {
+      if (typeof rolVista === 'function' && rolVista() && !rolVista().acel.includes(btn.dataset.subtab)) return;
       document.querySelectorAll('#aceleracionSubNav .subtab-btn').forEach(b => b.classList.toggle('active', b === btn));
       const target = ACEL_SUBTAB_TARGETS[btn.dataset.subtab];
       document.querySelectorAll('#tabAceleracion .subtab-content').forEach(c => c.classList.toggle('active', c.id === target));
@@ -11591,16 +11602,32 @@
     aplicarVistaUsados();
   }
 
-  // Rol "usados": queda fijo en Entregas › Agenda de turnos, solo lectura
-  function esRolUsados(){ return !!(CURRENT_SESSION && CURRENT_SESSION.role === 'usados'); }
+  // Roles con vista limitada (solo lectura salvo lo indicado):
+  //  usados      → Entregas › Agenda de turnos
+  //  accesorios  → Entregas › Accesorios y Agenda · Aceleración › Accesorios
+  const ROL_VISTAS = {
+    usados:     {tabs:['entregas'], entregas:['agenda'], acel:[], inicio:['entregas','agenda']},
+    accesorios: {tabs:['entregas','aceleracion'], entregas:['accesorios','agenda'], acel:['accesorios'], inicio:['entregas','accesorios']}
+  };
+  function rolVista(){ return (CURRENT_SESSION && ROL_VISTAS[CURRENT_SESSION.role]) || null; }
+  function esRolUsados(){ return !!rolVista(); } // (nombre histórico: cualquier rol de vista limitada)
   function aplicarVistaUsados(){
-    const on = esRolUsados();
-    document.body.classList.toggle('rol-usados', on);
-    if (!on) return;
-    const main = document.querySelector('.tab-btn[data-tab="entregas"]');
-    if (main && !main.classList.contains('active')) main.click();
-    const sub = document.querySelector('#entregasSubNav .subtab-btn[data-subtab="agenda"]');
-    if (sub && !sub.classList.contains('active')) sub.click();
+    Object.keys(ROL_VISTAS).forEach(r => document.body.classList.toggle('rol-' + r, !!(CURRENT_SESSION && CURRENT_SESSION.role === r)));
+    const v = rolVista();
+    if (!v) return;
+    const actTab = document.querySelector('#tabNav .tab-btn.active');
+    const actEnt = document.querySelector('#entregasSubNav .subtab-btn.active');
+    const actAcel = document.querySelector('#aceleracionSubNav .subtab-btn.active');
+    // Aceleración: dejar parado en una subpestaña permitida
+    if (v.acel.length && !(actAcel && v.acel.includes(actAcel.dataset.subtab))){
+      const b = document.querySelector(`#aceleracionSubNav .subtab-btn[data-subtab="${v.acel[0]}"]`); if (b) b.click();
+    }
+    if (!(actEnt && v.entregas.includes(actEnt.dataset.subtab))){
+      const b = document.querySelector(`#entregasSubNav .subtab-btn[data-subtab="${v.inicio[0] === 'entregas' ? v.inicio[1] : v.entregas[0]}"]`); if (b) b.click();
+    }
+    if (!(actTab && v.tabs.includes(actTab.dataset.tab))){
+      const b = document.querySelector(`.tab-btn[data-tab="${v.inicio[0]}"]`); if (b) b.click();
+    }
   }
 
   // El rol "usuario" no debe ver la subpestaña Contactación (queda para admin/entregas).
