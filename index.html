@@ -739,6 +739,8 @@
   .an-table td, .an-table th{white-space:nowrap;}
   .an-table td.num, .an-table th.num{text-align:right; font-family:'JetBrains Mono',monospace;}
   .an-table td.heat{text-align:center; font-family:'JetBrains Mono',monospace;}
+  .an-var{margin-top:1px; font-size:10.5px; font-weight:800;} .an-var.up{color:var(--green);} .an-var.down{color:var(--red);} .an-var.eq{color:var(--text-dim);}
+  [data-theme="light"] .an-var.up{color:#0d7a3f;} [data-theme="light"] .an-var.down{color:#c0392b;}
   .an-table th.sel, .an-table td.sel{outline:2px solid var(--blue); outline-offset:-2px;}
   /* ---- Agenda de turnos ---- */
   .ag-toolbar{display:flex; align-items:center; gap:8px; flex-wrap:wrap;}
@@ -10053,8 +10055,12 @@
       if (!ALL_ROWS.length || !obsConfigured()) return;
       const sec = patSnapSeccion(), hoy = agKey(new Date());
       // Solo con la base del día (una PC con base vieja no pisa la foto de hoy)
-      const fb = CURRENT_META && CURRENT_META.fecha ? new Date(CURRENT_META.fecha) : null;
-      if (!fb || isNaN(fb.getTime()) || agKey(fb) !== hoy) return;
+      const fs = CURRENT_META && CURRENT_META.fecha ? CURRENT_META.fecha.toString() : '';
+      let fb = null;
+      const mx = fs.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);   // "2/11/2026, 10:17:29" (es-AR)
+      if (mx) fb = new Date(+mx[3], +mx[2] - 1, +mx[1]);
+      else if (fs){ const t = new Date(fs); if (!isNaN(t.getTime())) fb = t; }   // ISO del servidor
+      if (!fb || agKey(fb) !== hoy) return;
       const d = {};
       baseRows.forEach(r => {
         const i = (r['Interno'] || '').toString().trim(); if (!i) return;
@@ -10158,7 +10164,20 @@
     patSnapGuardar(baseRows, FAC);
     const totalConFiltroMarca = counts.okDentro + counts.okFuera + counts.noOk;
 
-    if (ayerTot !== null){ const vs = patVsAyer(rows.length, ayerTot, snapRef, true).replace('margin-top:4px;', 'display:inline-block; margin-left:10px;').replace('<div', '<span').replace('</div>', '</span>'); $('patTotalValue').innerHTML += vs; }
+    // Total general vs día anterior: neto + cuántos entraron y cuántos salieron
+    if (ayerTot !== null){
+      const snapTot = patMesPatFilter ? snapLoc.filter(x => patMesPatDe(x.r) === patMesPatFilter) : snapLoc;
+      const setHoy = new Set(rows.map(r => (r['Interno'] || '').toString().trim()));
+      const setAyer = new Set(snapTot.map(x => (x.r['Interno'] || '').toString().trim()));
+      const entraron = [...setHoy].filter(i => !setAyer.has(i)).length, salieron = [...setAyer].filter(i => !setHoy.has(i)).length;
+      const d = rows.length - ayerTot, fecha = entFmt(agFromKey(snapRef.f)).slice(0, 5);
+      const col = d > 0 ? 'var(--red)' : (d < 0 ? 'var(--green)' : 'var(--text-dim)');
+      $('patTotalValue').innerHTML += `<span title="El ${fecha} eran ${ayerTot}" style="display:inline-flex; flex-direction:column; align-items:flex-end; margin-left:12px; vertical-align:middle; line-height:1.2;">
+        <span style="font-size:14px; color:${col};">${d > 0 ? '▲ +' + d : (d < 0 ? '▼ ' + d : '= 0')} vs ${fecha}</span>
+        <span style="font-size:11px; font-weight:600; color:var(--text-dim);">+${entraron} nuevos · −${salieron} salieron</span></span>`;
+    } else {
+      $('patTotalValue').innerHTML += `<span style="margin-left:12px; font-size:11px; font-weight:600; color:var(--text-dim); vertical-align:middle;" title="Se compara contra la foto del último día con base cargada">vs día anterior: disponible desde el próximo día con base</span>`;
+    }
     const cardDefs = FAC ? [
       {estado:'okDentro', label:'✅ Listo, solo falta patentar — en plazo', color:'var(--green)'},
       {estado:'okFuera', label:'🟠 Listo, solo falta patentar — patentamiento vencido', color:'var(--orange)'},
@@ -12377,7 +12396,6 @@
     vendPrev.forEach(x => { const m = anModelo(x.r); modPrev[m] = (modPrev[m] || 0) + 1; });
     ev.forEach(x => { if (!x.e.venta) return; const k = anMk(x.e.venta); if (!mesesTabla.includes(k)) return; const m = anModelo(x.r); (modMes[m] = modMes[m] || {})[k] = ((modMes[m] || {})[k] || 0) + 1; });
     const topMod = Object.entries(modP).sort((a,b) => b[1] - a[1]).slice(0, 15);
-    const maxCell = Math.max(1, ...topMod.map(([m]) => Math.max(0, ...mesesTabla.map(k => (modMes[m] || {})[k] || 0))));
     $('anModelosTable').innerHTML = !topMod.length ? '<tr><td class="table-empty">Sin ventas en el período</td></tr>' :
       `<thead><tr><th>#</th><th>Modelo</th>${mesesTabla.map(k => `<th class="num ${k === mes ? 'sel' : ''}">${anMkLabel(k)}</th>`).join('')}<th class="num">Período</th><th class="num">% del total</th><th class="num">Δ</th></tr></thead><tbody>` +
       topMod.map(([m, v], i) => `<tr><td>${i + 1}</td><td><b>${escapeHtml(m)}</b></td>${mesesTabla.map((k, j) => {
@@ -12387,14 +12405,14 @@
         let vr = '';
         if (ant !== null && (c || ant)){
           // Chip con fondo propio para que el color se lea sobre el degradado
-          const chip = (txt, col) => `<div><span style="display:inline-block; margin-top:2px; padding:0 5px; border-radius:4px; font-size:10px; font-weight:800; line-height:15px; color:${col}; background:var(--surface); border:1px solid ${col};">${txt}</span></div>`;
-          if (!ant) vr = chip('nuevo', 'var(--green)');
+          const chip = (txt, cls) => `<div class="an-var ${cls}">${txt}</div>`;
+          if (!ant) vr = chip('nuevo', 'up');
           else {
             const p = Math.round((c - ant) / ant * 100);
-            vr = chip(`${p > 0 ? '▲ ' : (p < 0 ? '▼ ' : '')}${Math.abs(p)}%`, p > 0 ? 'var(--green)' : (p < 0 ? 'var(--red)' : 'var(--text-dim)'));
+            vr = chip(`${p > 0 ? '▲ ' : (p < 0 ? '▼ ' : '')}${Math.abs(p)}%`, p > 0 ? 'up' : (p < 0 ? 'down' : 'eq'));
           }
         }
-        return `<td class="heat ${k === mes ? 'sel' : ''}" style="background:rgba(76,141,255,${c ? (0.08 + 0.5 * c / maxCell).toFixed(2) : 0})">${c || '<span style="color:var(--text-faint)">·</span>'}${vr}</td>`;
+        return `<td class="heat ${k === mes ? 'sel' : ''}">${c || '<span style="color:var(--text-faint)">·</span>'}${vr}</td>`;
       }).join('')}<td class="num"><b>${anN(v)}</b></td><td class="num">${pct(v, vend.length)}</td><td class="num">${anD(v, modPrev[m] || 0)}</td></tr>`).join('') + '</tbody>';
 
     // ---------- Invitados ----------
