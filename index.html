@@ -2749,7 +2749,7 @@
       </div>
 
       <div class="panel">
-        <div class="panel-head"><h3>🚗 Modelos más vendidos por mes</h3><div class="hint">Top 15 modelos del período elegido · columnas = ventas de cada mes · Δ = período contra el anterior de igual duración</div></div>
+        <div class="panel-head"><h3>🚗 Modelos más vendidos por mes</h3><div class="hint">Top 15 modelos del período elegido · columnas = ventas de cada mes con ▲▼ % contra el mes anterior · Δ = período contra el anterior de igual duración</div></div>
         <div class="table-scroll"><table class="data-table an-table" id="anModelosTable"></table></div>
       </div>
 
@@ -12293,9 +12293,19 @@
     const maxCell = Math.max(1, ...topMod.map(([m]) => Math.max(0, ...mesesTabla.map(k => (modMes[m] || {})[k] || 0))));
     $('anModelosTable').innerHTML = !topMod.length ? '<tr><td class="table-empty">Sin ventas en el período</td></tr>' :
       `<thead><tr><th>#</th><th>Modelo</th>${mesesTabla.map(k => `<th class="num ${k === mes ? 'sel' : ''}">${anMkLabel(k)}</th>`).join('')}<th class="num">Período</th><th class="num">% del total</th><th class="num">Δ</th></tr></thead><tbody>` +
-      topMod.map(([m, v], i) => `<tr><td>${i + 1}</td><td><b>${escapeHtml(m)}</b></td>${mesesTabla.map(k => {
+      topMod.map(([m, v], i) => `<tr><td>${i + 1}</td><td><b>${escapeHtml(m)}</b></td>${mesesTabla.map((k, j) => {
         const c = (modMes[m] || {})[k] || 0;
-        return `<td class="heat ${k === mes ? 'sel' : ''}" style="background:rgba(76,141,255,${c ? (0.08 + 0.5 * c / maxCell).toFixed(2) : 0})">${c || '<span style="color:var(--text-faint)">·</span>'}</td>`;
+        // Variación contra el mes anterior (como en Informe Germán)
+        const ant = j > 0 ? ((modMes[m] || {})[mesesTabla[j - 1]] || 0) : null;
+        let vr = '';
+        if (ant !== null && (c || ant)){
+          if (!ant) vr = `<div style="font-size:10px; font-weight:700; color:var(--green);">nuevo</div>`;
+          else {
+            const p = Math.round((c - ant) / ant * 100);
+            vr = `<div style="font-size:10px; font-weight:700; color:${p > 0 ? 'var(--green)' : (p < 0 ? 'var(--red)' : 'var(--text-dim)')};">${p > 0 ? '▲ ' : (p < 0 ? '▼ ' : '')}${Math.abs(p)}%</div>`;
+          }
+        }
+        return `<td class="heat ${k === mes ? 'sel' : ''}" style="background:rgba(76,141,255,${c ? (0.08 + 0.5 * c / maxCell).toFixed(2) : 0})">${c || '<span style="color:var(--text-faint)">·</span>'}${vr}</td>`;
       }).join('')}<td class="num"><b>${anN(v)}</b></td><td class="num">${pct(v, vend.length)}</td><td class="num">${anD(v, modPrev[m] || 0)}</td></tr>`).join('') + '</tbody>';
 
     // ---------- Invitados ----------
