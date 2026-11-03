@@ -12041,7 +12041,17 @@
   function anMk(d){ return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0'); }
   function anMkLabel(k){ const [y,m] = k.split('-'); return AN_MESES[parseInt(m,10)-1] + ' ' + y.slice(2); }
   function anShiftMk(k, n){ const [y,m] = k.split('-').map(Number); return anMk(new Date(y, m-1+n, 1)); }
-  function anModelo(r){ return (r['Modelo'] || '').toString().toUpperCase().replace(/[\s.]+$/,'').replace(/\s+/g,' ').trim() || '(sin modelo)'; }
+  // Modelo unificado: sin puntos, motor (1.0T / 1.2T), año modelo (MY25, 2026.5), "Nuevo/Nueva" ni "DC"
+  function anModelo(r){
+    let m = (r['Modelo'] || '').toString().toUpperCase().replace(/\./g, ' ').replace(/\s+/g, ' ').trim();
+    m = m.replace(/\b(\d) (\d)T?\b/g, ' ')          // "1.0T" / "1.2T" / "1.0" (los puntos ya son espacios)
+         .replace(/\bMY ?\d{2}(\/\d{2})?\b/g, ' ')    // MY25 / MY 25/26
+         .replace(/\b20\d{2}( \d)?\b/g, ' ')          // 2026.5
+         .replace(/^NUEV[OA] /, '').replace(/ DC$/, '')
+         .replace(/^T CROSS\b/, 'T-CROSS')
+         .replace(/\s+/g, ' ').trim();
+    return m || '(sin modelo)';
+  }
   function anTxt(v){ return (v || '').toString().normalize('NFD').replace(/[̀-ͯ]/g,'').toUpperCase().trim(); }
   function anProv(r){
     const p = anTxt(r['Provincia']);
@@ -12299,10 +12309,12 @@
         const ant = j > 0 ? ((modMes[m] || {})[mesesTabla[j - 1]] || 0) : null;
         let vr = '';
         if (ant !== null && (c || ant)){
-          if (!ant) vr = `<div style="font-size:10px; font-weight:700; color:var(--green);">nuevo</div>`;
+          // Chip con fondo propio para que el color se lea sobre el degradado
+          const chip = (txt, col) => `<div><span style="display:inline-block; margin-top:2px; padding:0 5px; border-radius:4px; font-size:10px; font-weight:800; line-height:15px; color:${col}; background:var(--surface); border:1px solid ${col};">${txt}</span></div>`;
+          if (!ant) vr = chip('nuevo', 'var(--green)');
           else {
             const p = Math.round((c - ant) / ant * 100);
-            vr = `<div style="font-size:10px; font-weight:700; color:${p > 0 ? 'var(--green)' : (p < 0 ? 'var(--red)' : 'var(--text-dim)')};">${p > 0 ? '▲ ' : (p < 0 ? '▼ ' : '')}${Math.abs(p)}%</div>`;
+            vr = chip(`${p > 0 ? '▲ ' : (p < 0 ? '▼ ' : '')}${Math.abs(p)}%`, p > 0 ? 'var(--green)' : (p < 0 ? 'var(--red)' : 'var(--text-dim)'));
           }
         }
         return `<td class="heat ${k === mes ? 'sel' : ''}" style="background:rgba(76,141,255,${c ? (0.08 + 0.5 * c / maxCell).toFixed(2) : 0})">${c || '<span style="color:var(--text-faint)">·</span>'}${vr}</td>`;
