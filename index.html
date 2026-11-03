@@ -12623,8 +12623,9 @@
     AG.data.forEach(t => { if (t.fecha === k){ horas.add(t.hora); if (!ents.includes(t.entregador)) ents.push(t.entregador); } });
     return {horas:[...horas].sort((a,b) => agHoraMin(a) - agHoraMin(b)), entregadores:ents};
   }
-  // Cliente externo (Tipo Compra Stock = "Cliente Externo"): auto que no es del stock propio
-  function agClienteExterno(r){ return !!r && (r['Tipo Compra Stock'] || '').toString().trim().toUpperCase() === 'CLIENTE EXTERNO'; }
+  // Cliente externo: mismo criterio que Entregas › Cliente externo / VD
+  // (Cliente Externo o Venta Directa de Fábrica SIN Nro. de operación)
+  function agClienteExterno(r){ return !!r && esClienteExterno(r); }
   const AG_EXT_TXT = '<br><b class="ag-ext">🤝 Cliente externo — no es stock propio</b>';
   function agPatentaCliente(r){ return (r['Patenta?'] || '').toString().trim().toUpperCase() === 'CLIENTE'; }
   function agInternos(txt){ return ((txt || '').toString().match(/\d{3,}/g) || []); }
