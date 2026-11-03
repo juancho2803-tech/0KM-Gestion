@@ -13424,6 +13424,18 @@
     if (fp && !fa) a.push(['bad', 'Patentado sin fecha de arribo de la unidad']);
     if (entregado && !fp) a.push(['bad', 'Entregado sin fecha de patentamiento']);
     if (entregado && !fal) a.push(['warn', 'Entregado sin fecha de alistaje']);
+    // Alistaje: objetivo 2 días hábiles desde arribo o facturación (lo último que ocurra)
+    if (fa && fv && !entregado){
+      const ini = fa > fv ? fa : fv, desdeTxt = fa > fv ? 'el arribo' : 'la facturación';
+      if (!fal){
+        const dh = diasHabilesSLA(ini, new Date());
+        if (dh > 2) a.push(['bad', `Sin alistar: ${dh} días hábiles desde ${desdeTxt} (${entFmt(ini)}) · objetivo 2 — el alistaje está demorando la entrega`]);
+        else a.push(['info', `Pendiente de alistar · vence el ${entFmt(addBusinessDaysSLA(ini, 2))} (2 días hábiles desde ${desdeTxt})`]);
+      } else {
+        const dh = diasHabilesSLA(ini, fal);
+        if (dh > 2) a.push(['info', `Se alistó ${dh} días hábiles después de ${desdeTxt} (objetivo 2)`]);
+      }
+    }
     if (ft && fp && ft < fp) a.push(['bad', 'El turno de entrega es anterior al patentamiento']);
     if (fe && fv && fe < fv) a.push(['bad', 'La entrega es anterior a la venta']);
     if (fp && fv && fp < fv) a.push(['warn', 'El patentamiento es anterior a la venta']);
