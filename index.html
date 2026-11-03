@@ -362,7 +362,7 @@
   .pat-card-noOk{flex:2 1 380px !important; min-width:340px;}
   .pat-motivos{margin-top:10px; border-top:1px dashed var(--border); padding-top:8px; text-align:left;}
   .pat-motivos .pm-title{font-size:10.5px; text-transform:uppercase; letter-spacing:.5px; color:var(--text-faint); margin-bottom:5px;}
-  .pat-motivo{display:grid; grid-template-columns:minmax(150px,1.2fr) 1fr 34px; gap:8px; align-items:center; padding:3px 6px; border-radius:6px; font-size:12px; cursor:pointer;}
+  .pat-motivo{display:grid; grid-template-columns:minmax(150px,1.2fr) 1fr 34px auto; gap:8px; align-items:center; padding:3px 6px; border-radius:6px; font-size:12px; cursor:pointer;}
   .pat-motivo:hover{background:var(--surface-3);}
   .pat-motivo.active{background:rgba(255,92,77,.15); font-weight:700;}
   .pat-motivo .pm-bar{height:8px; background:var(--surface-3); border-radius:4px; overflow:hidden;}
@@ -3391,7 +3391,7 @@
     // que después haya que revertir, y para avisar al toque por qué no se guardó.
     if (CURRENT_SESSION && CURRENT_SESSION.role === 'usados') return Promise.reject(new Error('Tu rol solo puede consultar la agenda.'));
     if (CURRENT_SESSION && CURRENT_SESSION.role === 'accesorios' && seccion !== 'accesorios') return Promise.reject(new Error('Tu rol solo puede cargar observaciones de accesorios.'));
-    if (CURRENT_SESSION && CURRENT_SESSION.role === 'entregas' && seccion !== 'contactacion' && seccion !== 'contactacionfinalizado' && seccion !== 'bloqueosaldo' && seccion !== 'clienteexterno' && seccion !== 'excepcion' && seccion !== 'turnoinfo'){
+    if (CURRENT_SESSION && CURRENT_SESSION.role === 'entregas' && seccion !== 'contactacion' && seccion !== 'contactacionfinalizado' && seccion !== 'bloqueosaldo' && seccion !== 'clienteexterno' && seccion !== 'excepcion' && seccion !== 'turnoinfo' && !seccion.startsWith('snapshot_')){
       showToast('⚠️ Tu rol (entregas) solo puede editar Contactación.', true);
       return Promise.reject(new Error('Rol sin permiso de edición para esta sección'));
     }
@@ -10029,6 +10029,62 @@
     $('contactAlertModal').style.display = 'flex';
   }
 
+  // ---------- "vs ayer": foto diaria de Patentados / Facturados ----------
+  // Se guarda una foto por modo (estado, motivos y zona de cada interno pendiente) en
+  // Observaciones (interno "__SNAP__"). Se va actualizando durante el día; al cambiar
+  // el día la foto anterior queda como referencia ("ayer" = último día con foto).
+  const PAT_SNAP_INTERNO = '__SNAP__';
+  const patSnapSeccion = () => PAT_MODO === 'fac' ? 'snapshot_fac' : 'snapshot_pat';
+  function patSnapLeer(){
+    const rec = OBSERVATIONS.get(obsKey(PAT_SNAP_INTERNO, patSnapSeccion()));
+    if (!rec || !rec.observacion) return {};
+    try { return JSON.parse(rec.observacion) || {}; } catch(e){ return {}; }
+  }
+  function patSnapRef(){
+    const st = patSnapLeer(), hoy = agKey(new Date());
+    if (st.hoy && st.hoy.f && st.hoy.f < hoy) return st.hoy;
+    if (st.prev && st.prev.f && st.prev.f < hoy) return st.prev;
+    return null;
+  }
+  let PAT_SNAP_ULT = {};
+  function patSnapGuardar(baseRows, FAC){
+    try {
+      if (!CURRENT_SESSION || !['admin','entregas','usuario'].includes(CURRENT_SESSION.role)) return;
+      if (!ALL_ROWS.length || !obsConfigured()) return;
+      const sec = patSnapSeccion(), hoy = agKey(new Date());
+      // Solo con la base del día (una PC con base vieja no pisa la foto de hoy)
+      const fb = CURRENT_META && CURRENT_META.fecha ? new Date(CURRENT_META.fecha) : null;
+      if (!fb || isNaN(fb.getTime()) || agKey(fb) !== hoy) return;
+      const d = {};
+      baseRows.forEach(r => {
+        const i = (r['Interno'] || '').toString().trim(); if (!i) return;
+        const e = patEstadoEntregaDeRow(r);
+        d[i] = [e === 'okDentro' ? 'D' : (e === 'okFuera' ? 'F' : 'N'), e === 'noOk' ? patMotivosNoOk(r, {sinDominio: FAC}).join(',') : '', esCbaSLA(r) ? 'c' : 'o'];
+      });
+      const st = patSnapLeer();
+      const firma = JSON.stringify(d);
+      const mismoDia = st.hoy && st.hoy.f === hoy;
+      if (mismoDia && JSON.stringify(st.hoy.d) === firma) return;               // sin cambios
+      if (mismoDia && Date.now() - (PAT_SNAP_ULT[sec] || 0) < 60 * 60000 && st.hoy.t && Date.now() - st.hoy.t < 60 * 60000) return; // máx. 1 vez por hora
+      PAT_SNAP_ULT[sec] = Date.now();
+      const nuevo = {hoy: {f: hoy, t: Date.now(), d}, prev: mismoDia ? st.prev : (st.hoy || st.prev || null)};
+      // Guardado silencioso (sin avisos si falla: se reintenta en el próximo render)
+      const rec = {interno: PAT_SNAP_INTERNO, seccion: sec, observacion: JSON.stringify(nuevo), estadoAveria: '', fechaSolucion: ''};
+      OBSERVATIONS.set(obsKey(PAT_SNAP_INTERNO, sec), rec);
+      RECENTLY_SAVED_LOCALLY.set(obsKey(PAT_SNAP_INTERNO, sec), Date.now());
+      apiPost(Object.assign({token: currentToken()}, rec)).catch(() => { PAT_SNAP_ULT[sec] = 0; });
+    } catch(e){ console.error('patSnapGuardar', e); }
+  }
+  // Chip "+x / -x vs ayer"
+  function patVsAyer(hoyN, ayerN, ref, invertir){
+    if (ayerN === null || ayerN === undefined || !ref) return '';
+    const d = hoyN - ayerN;
+    const fecha = entFmt(agFromKey(ref.f)).slice(0, 5);
+    const bueno = invertir ? d < 0 : d > 0;
+    const col = d === 0 ? 'var(--text-dim)' : (bueno ? 'var(--green)' : 'var(--red)');
+    return `<div class="pat-vs" title="El ${fecha} había ${ayerN}" style="margin-top:4px; font-size:11px; font-weight:700; color:${col};">${d > 0 ? '▲ +' : (d < 0 ? '▼ ' : '= ')}${d === 0 ? '0' : d} vs ${fecha}</div>`;
+  }
+
   function renderPatentadosSection(){
     const baseRows = ALL_ROWS.filter(r => {
       const marca = (r['Marca'] || '').toString().trim().toUpperCase();
@@ -10084,12 +10140,25 @@
     const rowsLoc = rowsEstadoFiltrado.filter(r => patLocalidadFilter.has(esCbaSLA(r) ? 'cordoba' : 'otras'));
     const rows = patMesPatFilter ? rowsLoc.filter(r => patMesPatDe(r) === patMesPatFilter) : rowsLoc;
 
-    $('patTotalValue').textContent = rows.length.toLocaleString('es-AR');
+    $('patTotalValue').innerHTML = rows.length.toLocaleString('es-AR');
 
     const counts = {okDentro:0, okFuera:0, noOk:0};
     baseRowsConFiltros.forEach(r => { counts[patEstadoEntregaDeRow(r)]++; });
+    // Foto del día anterior, con los mismos filtros aplicados
+    const snapRef = patSnapRef();
+    const snapRows = [];
+    if (snapRef && snapRef.d){
+      const idx = agRowIndex();
+      Object.entries(snapRef.d).forEach(([i, v]) => { const r = idx.get(i); if (r && pasaOtrosFiltros(r)) snapRows.push({r, e: {D:'okDentro', F:'okFuera', N:'noOk'}[v[0]], m: v[1] ? v[1].split(',') : [], l: v[2] === 'c' ? 'cordoba' : 'otras'}); });
+    }
+    const ayer = f => snapRef ? snapRows.filter(f).length : null;
+    const snapEstado = snapRows.filter(x => patEstadoEntregaFilter.has(x.e) && (!patMotivoFilter || (x.e === 'noOk' && x.m.includes(patMotivoFilter))));
+    const snapLoc = snapEstado.filter(x => patLocalidadFilter.has(x.l));
+    const ayerTot = snapRef ? (patMesPatFilter ? snapLoc.filter(x => patMesPatDe(x.r) === patMesPatFilter) : snapLoc).length : null;
+    patSnapGuardar(baseRows, FAC);
     const totalConFiltroMarca = counts.okDentro + counts.okFuera + counts.noOk;
 
+    if (ayerTot !== null){ const vs = patVsAyer(rows.length, ayerTot, snapRef, true).replace('margin-top:4px;', 'display:inline-block; margin-left:10px;').replace('<div', '<span').replace('</div>', '</span>'); $('patTotalValue').innerHTML += vs; }
     const cardDefs = FAC ? [
       {estado:'okDentro', label:'✅ Listo, solo falta patentar — en plazo', color:'var(--green)'},
       {estado:'okFuera', label:'🟠 Listo, solo falta patentar — patentamiento vencido', color:'var(--orange)'},
@@ -10107,11 +10176,14 @@
       .map(m => {
         const n = motivoCounts[m.k];
         const pct = noOkRows.length ? Math.round(n / noOkRows.length * 100) : 0;
+        const nAy = snapRef ? snapRows.filter(x => x.e === 'noOk' && x.m.includes(m.k)).length : null;
+        const dm = nAy === null ? '' : (n - nAy);
+        const dmHtml = nAy === null ? '' : `<span class="pm-vs" title="Antes: ${nAy}" style="font-size:10.5px; font-weight:700; min-width:30px; text-align:right; color:${dm > 0 ? 'var(--red)' : (dm < 0 ? 'var(--green)' : 'var(--text-dim)')};">${dm > 0 ? '+' + dm : (dm < 0 ? dm : '=')}</span>`;
         const act = patMotivoFilter === m.k;
         return `<div class="pat-motivo ${act ? 'active' : ''}" data-motivo="${m.k}" title="Clic para ver solo estos autos">
           <span class="pm-label">${m.label}</span>
           <span class="pm-bar"><span style="width:${Math.max(pct, 3)}%;"></span></span>
-          <span class="pm-n">${n}</span>
+          <span class="pm-n">${n}</span>${dmHtml}
         </div>`;
       }).join('');
     // Con un motivo seleccionado: desglose de esos autos por unidad de negocio (Canal)
@@ -10132,6 +10204,7 @@
       <div class="pat-brand-card ${patEstadoEntregaFilter.has(c.estado) ? 'active' : ''} ${!patEstadoEntregaFilter.has(c.estado) ? 'dimmed' : ''} ${c.estado === 'noOk' ? 'pat-card-noOk' : ''}" data-estado="${c.estado}">
         <div class="brand-name">${c.label}</div>
         <div class="brand-count" style="color:${c.color}">${counts[c.estado].toLocaleString('es-AR')}</div>
+        ${patVsAyer(counts[c.estado], ayer(x => x.e === c.estado), snapRef, c.estado !== 'okDentro')}
         <div class="brand-breakdown">de ${totalConFiltroMarca.toLocaleString('es-AR')} pendientes de entregar</div>
         ${c.estado === 'noOk' && motivosHtml ? `<div class="pat-motivos"><div class="pm-title">Qué los frena (un auto puede tener varios)${patMotivoFilter ? ' · <u>clic de nuevo para quitar el filtro</u>' : ''}</div>${motivosHtml}</div>${canalHtml}` : ''}
       </div>
@@ -10142,11 +10215,13 @@
       <div class="pat-brand-card ${patLocalidadFilter.has('cordoba') ? 'active' : ''} ${!patLocalidadFilter.has('cordoba') ? 'dimmed' : ''}" data-localidad="cordoba">
         <div class="brand-name">📍 Córdoba (Capital)</div>
         <div class="brand-count" style="color:var(--blue)">${cordobaCount.toLocaleString('es-AR')}</div>
+        ${patVsAyer(cordobaCount, snapRef ? snapEstado.filter(x => x.l === 'cordoba').length : null, snapRef, true)}
         <div class="brand-breakdown">de ${rowsEstadoFiltrado.length.toLocaleString('es-AR')} pendientes de entregar (con el estado seleccionado)</div>
       </div>
       <div class="pat-brand-card ${patLocalidadFilter.has('otras') ? 'active' : ''} ${!patLocalidadFilter.has('otras') ? 'dimmed' : ''}" data-localidad="otras">
         <div class="brand-name">🗺️ Otras provincias</div>
         <div class="brand-count" style="color:var(--purple, #a78bfa)">${otrasCount.toLocaleString('es-AR')}</div>
+        ${patVsAyer(otrasCount, snapRef ? snapEstado.filter(x => x.l === 'otras').length : null, snapRef, true)}
         <div class="brand-breakdown">de ${rowsEstadoFiltrado.length.toLocaleString('es-AR')} pendientes de entregar (con el estado seleccionado)</div>
       </div>
     ` + (() => {
@@ -10158,6 +10233,7 @@
         const card = (k, label, n, color) => `<div class="pat-brand-card ${patMesPatFilter === k ? 'active' : ''} ${patMesPatFilter && patMesPatFilter !== k ? 'dimmed' : ''}" data-mespat="${k}" title="Clic para ver solo estos autos">
           <div class="brand-name">${label}</div>
           <div class="brand-count" style="color:${color}">${n.toLocaleString('es-AR')}</div>
+          ${patVsAyer(n, snapRef ? snapLoc.filter(x => patMesPatDe(x.r) === k).length : null, snapRef, true)}
           <div class="brand-breakdown">de ${rowsLoc.length.toLocaleString('es-AR')} pendientes · por fecha de ${FAC ? 'facturación' : 'patentamiento'}${k === 'anterior' && prevN ? ` · ${prevN} de meses anteriores` : ''}</div>
         </div>`;
         const pal = FAC ? 'Facturados' : 'Patentados';
@@ -10170,6 +10246,7 @@
         const usadoCard = `<div class="pat-brand-card ${patUsadoFilter === 'SI' ? 'active' : ''}" data-usados="1" title="Clic para ver solo estos autos">
           <div class="brand-name">${agUsadoIcon(true)} Usados pendientes de recibir</div>
           <div class="brand-count" style="color:#f97316">${usados.length.toLocaleString('es-AR')}</div>
+          ${patVsAyer(usados.length, snapRef ? snapRows.filter(x => esUsado(x.r)).length : null, snapRef, true)}
           <div class="brand-breakdown">${conT} con turno (${semana} en los próximos 7 días) · ${usados.length - conT} sin turno</div>
           <button type="button" class="page-btn" data-usados-xlsx="1" style="margin-top:8px; font-size:12px;">⬇️ Excel de todas las operaciones con usado</button>
         </div>`;
