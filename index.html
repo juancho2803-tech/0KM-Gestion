@@ -782,6 +782,7 @@
   .ag-cell .c{font-size:10.5px; color:var(--text-dim); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:190px;}
   .ag-cell .nt{font-size:10.5px; font-style:italic; color:var(--text-dim); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:190px;}
   .ag-cell .w{position:absolute; top:4px; right:6px; font-size:13px;}
+  .ag-ext{color:#b49bff !important;} [data-theme="light"] .ag-ext{color:#6d28d9 !important;}
   .ag-cell .pc{font-size:10.5px; font-weight:700; color:var(--blue); white-space:normal; line-height:1.25; margin-top:2px;}
   .ag-cell .f{font-size:10.5px; color:var(--red); font-weight:700; white-space:normal; line-height:1.25; margin-top:2px;}
   #agPendTabs button{flex:1;}
@@ -12622,6 +12623,9 @@
     AG.data.forEach(t => { if (t.fecha === k){ horas.add(t.hora); if (!ents.includes(t.entregador)) ents.push(t.entregador); } });
     return {horas:[...horas].sort((a,b) => agHoraMin(a) - agHoraMin(b)), entregadores:ents};
   }
+  // Cliente externo (Tipo Compra Stock = "Cliente Externo"): auto que no es del stock propio
+  function agClienteExterno(r){ return !!r && (r['Tipo Compra Stock'] || '').toString().trim().toUpperCase() === 'CLIENTE EXTERNO'; }
+  const AG_EXT_TXT = '<br><b class="ag-ext">🤝 Cliente externo — no es stock propio</b>';
   function agPatentaCliente(r){ return (r['Patenta?'] || '').toString().trim().toUpperCase() === 'CLIENTE'; }
   function agInternos(txt){ return ((txt || '').toString().match(/\d{3,}/g) || []); }
   function agRowIndex(){
@@ -12804,6 +12808,7 @@
             const r0 = ests[0].r;
             if (r0) sub = `${escapeHtml((r0['Cliente'] || '').toString())} · ${escapeHtml((r0['Modelo'] || '').toString())}`;
             if (ests.some(x => x.r && agPatentaCliente(x.r))) falta = `<div class="pc">🙋 Patenta cliente — la documentación la trae el cliente</div>` + falta;
+            if (ests.some(x => agClienteExterno(x.r))) falta = `<div class="pc ag-ext">🤝 Cliente externo</div>` + falta;
             const espMal = [...new Set([].concat(...ests.map(x => agRestriccionEspecial(h, x.r))))];
             if (espMal.length){ falta = `<div class="f">⛔ No va en ${escapeHtml(h)}: ${escapeHtml(espMal.join(', '))}</div>` + falta; if (!warn) warn = `<span class="w" title="Horario especial">⚠️</span>`; }
           }
@@ -12857,6 +12862,7 @@
           <span class="i">${escapeHtml(i)}${esUsado(r) ? ' ' + agUsadoIcon() : ''}</span><span>${escapeHtml((r['Cliente'] || '').toString())}</span>
           <span class="s">${escapeHtml((r['Modelo'] || '').toString())} · ${escapeHtml(PATENTADOS_BRAND_LABELS[(r['Marca'] || '').toString().trim().toUpperCase()] || '')}${dias !== null ? ` · ${dias} d desde patent.` : ''}</span>
           ${agPatentaCliente(r) ? '<span class="s" style="grid-column:2; color:var(--blue); font-weight:700;">🙋 Patenta cliente</span>' : ''}
+          ${agClienteExterno(r) ? '<span class="s ag-ext" style="grid-column:2; font-weight:700;">🤝 Cliente externo</span>' : ''}
           ${AG.pendTab === 'nook' ? `<span class="s" style="grid-column:2; color:var(--red);">Falta: ${escapeHtml((agEstadoInterno(i).falta || []).join(', '))}</span>` : ''}</div>`;
       }).join('');
     $('agInternosList').innerHTML = pendOk.concat(pendNo).slice(0, 400).map(r => `<option value="${escapeHtml((r['Interno'] || '').toString().trim())}">${escapeHtml((r['Cliente'] || '').toString())}</option>`).join('');
@@ -12937,6 +12943,7 @@
       return `<div class="ag-info ${espM.length ? 'bad' : e.lvl}"><b>${escapeHtml(i)}</b>${r ? ` · ${escapeHtml((r['Cliente'] || '').toString())} · ${escapeHtml((r['Modelo'] || '').toString())} ${escapeHtml((r['Color'] || '').toString())}` : ''}${espWarn}<br>${escapeHtml(e.txt)}` +
         (r && agPatentaCliente(r) ? `<br><b style="color:var(--blue)">🙋 Patenta cliente — la documentación la trae el cliente</b>` : '') +
         (r && esUsado(r) ? agUsadoTxt.replace('🔶', agUsadoIcon(true)) : '') +
+        (agClienteExterno(r) ? AG_EXT_TXT : '') +
         (r && tieneTurnoEntregaDado(r) ? `<br>📅 En el sistema ya figura turno el ${formatDateDisplay(r['Fecha Turno Entrega'])}` : '') +
         (otros.length ? `<br><span style="color:var(--amber)">🔁 Ya tiene turno en la agenda: ${otros.map(t => entFmt(agFromKey(t.fecha)).slice(0,5) + ' ' + escapeHtml(t.hora) + ' (' + escapeHtml(t.entregador) + ')').join(', ')} — al guardar se mueve a este casillero y el anterior queda libre</span>` : '') + marcaWarn + '</div>';
     }).join('');
@@ -13224,6 +13231,7 @@
     $('agPickInfo').innerHTML = `<div class="ag-info ${e.lvl}"><b>${escapeHtml(i)}</b>${r ? ` · ${escapeHtml((r['Cliente'] || '').toString())} · ${escapeHtml((r['Modelo'] || '').toString())} · ${escapeHtml(PATENTADOS_BRAND_LABELS[AGP.marca] || AGP.marca)}` : ''}<br>${escapeHtml(e.txt)}` +
       (r && agPatentaCliente(r) ? `<br><b style="color:var(--blue)">🙋 Patenta cliente — la documentación la trae el cliente</b>` : '') +
       (r && esUsado(r) ? agUsadoTxt.replace('🔶', agUsadoIcon(true)) : '') +
+      (agClienteExterno(r) ? AG_EXT_TXT : '') +
       (ya.length ? `<br><span style="color:var(--amber)">🔁 Ya tiene en la agenda: ${ya.map(t => `${entFmt(agFromKey(t.fecha)).slice(0,5)} ${escapeHtml(t.hora)} · ${escapeHtml(t.entregador)} (${(AG_ESTADOS[t.estado] || {label:t.estado}).label})`).join(', ')} — al guardar se reprograma y ese lugar queda libre</span>` : '') + '</div>';
     const R = agReglas();
     const sug = agPrimerLibre(AGP.marca, agRowIndex().get(AGP.interno));
@@ -13286,6 +13294,7 @@
       if (esUsado(r)) tags.push('🚗 USADO');
       if (tieneAccesorios(r)) tags.push('🎒 ACC' + (accesoriosListos(r) ? ' ✓' : ' pend.'));
       if (agPatentaCliente(r)) tags.push('🙋 PATENTA CLIENTE');
+      if (agClienteExterno(r)) tags.push('🤝 CLIENTE EXTERNO');
       if (isInvitado(r)) tags.push('INVITADO');
       if ((r['Credito?'] || '').toString().trim().toUpperCase() === 'SI') tags.push('💳 CRÉDITO' + (tieneCreditoSinLiquidar(r) ? ' sin liq.' : ''));
       const canal = (r['Canal'] || '').toString().trim(); if (canal) tags.push(canal);
@@ -13303,7 +13312,7 @@
         if (!t) return '<td></td>';
         if (t.estado === 'bloqueado') return `<td class="bl">⛔ ${esc(t.nota || 'Bloqueado')}</td>`;
         const est = t.estado !== 'turno' ? `<div class="st">${esc((AG_ESTADOS[t.estado] || {label:t.estado}).label)}</div>` : '';
-        return `<td>${est}${c.ints.map(x => `<b>${esc(x.i)}</b> ${x.r ? esc((x.r['Cliente'] || '').toString()) : ''}<div class="m">${x.r ? esc((x.r['Modelo'] || '').toString()) : ''}${x.tags.some(z => z.includes('USADO')) ? ' · 🚗' : ''}${x.tags.some(z => z.includes('ACC')) ? ' · 🎒' : ''}</div>`).join('')}${t.nota ? `<div class="nt">📌 ${esc(t.nota)}</div>` : ''}</td>`;
+        return `<td>${est}${c.ints.map(x => `<b>${esc(x.i)}</b> ${x.r ? esc((x.r['Cliente'] || '').toString()) : ''}<div class="m">${x.r ? esc((x.r['Modelo'] || '').toString()) : ''}${x.tags.some(z => z.includes('USADO')) ? ' · 🚗' : ''}${x.tags.some(z => z.includes('ACC')) ? ' · 🎒' : ''}${x.tags.some(z => z.includes('EXTERNO')) ? ' · 🤝 externo' : ''}</div>`).join('')}${t.nota ? `<div class="nt">📌 ${esc(t.nota)}</div>` : ''}</td>`;
       }).join('')}</tr>`).join('') + '</tbody></table>';
     // Detalle por asesor
     const det = dia.entregadores.map(en => {
@@ -13334,7 +13343,7 @@
     </style></head><body>
       <div class="tools"><button onclick="window.print()">🖨️ Imprimir</button></div>
       <h1>Agenda de entregas — ${esc(fechaTxt)}</h1>
-      <div class="sub">Generado ${esc(new Date().toLocaleString('es-AR'))} · 🚗 entrega usado · 🎒 accesorios · ⭐ 17:45 especial: sin plan de ahorro, sin usado, sin accesorios</div>
+      <div class="sub">Generado ${esc(new Date().toLocaleString('es-AR'))} · 🚗 entrega usado · 🎒 accesorios · 🤝 cliente externo · ⭐ 17:45 especial: sin plan de ahorro, sin usado, sin accesorios</div>
       ${dia.horas.length ? grid : '<p>No hay horarios para este día.</p>'}
       ${det || ''}
     </body></html>`;
