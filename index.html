@@ -13764,7 +13764,16 @@
       ['📞 Contactación para turno (marcado OK)', '__contacto'],
       ['Turno de entrega', 'Fecha Turno Entrega'], ['Entrega de la unidad', 'Fecha Entrega Unidad'],
       ['Último movimiento de ubicación', 'Fecha Ubicacion', () => [fiTxt(r, 'Ubicacion'), fiTxt(r, 'Motivo Cambio Ubicacion')].filter(Boolean).join(' · ')]
-    ].map(([l, c, extra]) => ({l, d: c === '__contacto' ? fechaContactacion(r) : fiD(r, c), x: extra ? extra() : ''})).filter(e => e.d).sort((a,b) => a.d - b.d);
+    ].map(([l, c, extra]) => ({l, d: c === '__contacto' ? fechaContactacion(r) : fiD(r, c), x: extra ? extra() : ''})).filter(e => e.d);
+    // Agenda de la app: cuándo se confirmó el turno y para qué día/hora quedó
+    try {
+      const ti = turnoInfo(r);
+      if (ti && ti.asignado) ev.push({l:'📅 Turno confirmado en la agenda', d: ti.asignado, x: [ti.primerLibre && 'primer libre: ' + entFmt(ti.primerLibre), ti.motivo].filter(Boolean).join(' · ')});
+      [...AG.data.values()].filter(t => t.estado !== 'bloqueado' && agInternos(t.interno).includes(i)).forEach(t => {
+        ev.push({l: `📅 ${(AG_ESTADOS[t.estado] || {label:t.estado}).label} en la agenda`, d: agFromKey(t.fecha), x: [`${t.hora} · ${t.entregador}`, t.nota, t.usuario && 'cargó ' + t.usuario].filter(Boolean).join(' · ')});
+      });
+    } catch(e){}
+    ev.sort((a,b) => a.d - b.d);
     const fv = fiD(r, 'Fecha Venta');
     const tl = ev.map((e, k) => {
       const prev = k ? ev[k-1].d : null, dd = fiDias(prev, e.d);
