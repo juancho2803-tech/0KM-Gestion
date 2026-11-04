@@ -1779,6 +1779,8 @@
                 <th>Fin trámite</th>
                 <th>Entrega GEAC</th>
                 <th>Observación</th>
+                <th title="Gestoría interna: simple 1 dh, con crédito 2 dh">Plazo GI</th>
+                <th title="Gestoría externa: Córdoba 2 dh, Sur 12 dh, resto 9 dh">Plazo GE</th>
               </tr>
             </thead>
             <tbody id="gestoriaTableBody"></tbody>
@@ -4712,6 +4714,63 @@
     return GES_STAGES.some(s => (row[s.field] || '').toString().trim() !== '');
   }
 
+  // ---- Plazos de gestoría (días hábiles) ----
+  // Interna: simple (sin crédito) 1 dh desde facturación / arribo de certificado (lo último);
+  //          con crédito 2 dh desde facturación / certificado / liquidación del crédito (lo último).
+  //          Termina con "Listo GI" (o, si falta, con la entrega del trámite al gestor externo).
+  // Externa (solo patenta Maipú): desde la entrega del trámite al gestor externo hasta el patentamiento:
+  //          Córdoba 2 dh (48 hs) · Sur patagónico 12 dh · resto de las provincias 9 dh.
+  const gesD = (r, c) => parseDateFlexible(r[c]);
+  const gesCredito = r => (r['Credito?'] || '').toString().trim().toUpperCase() === 'SI';
+  function gesProvCba(r){
+    const g = (r['Grupo Localidad'] || '').toString().toUpperCase(), p = (r['Provincia'] || '').toString().toUpperCase();
+    return g.startsWith('CORDOBA') || (!g && p.includes('CORDOBA')) || (g !== 'OTRAS PROVINCIAS' && p.includes('CORDOBA'));
+  }
+  function gesSur(r){
+    const t = ((r['Provincia'] || '') + ' ' + (r['Localidad'] || '')).toString().toLowerCase();
+    return /neuqu[eé]n|r[ií]o negro|chubut|santa cruz|tierra del fuego/.test(t);
+  }
+  function gesPlazo(inicio, plazo, fin){
+    const hoy = new Date(); hoy.setHours(0,0,0,0);
+    const vence = addBusinessDaysSLA(inicio, plazo);
+    if (fin){ const dh = diasHabilesSLA(inicio, fin); return {estado: dh <= plazo ? 'cumplido' : 'tarde', dh, vence, plazo, inicio, fin}; }
+    const dh = diasHabilesSLA(inicio, hoy);
+    return {estado: dh > plazo ? 'vencido' : 'enplazo', dh, vence, plazo, inicio};
+  }
+  function gesSlaGI(r){
+    const fv = gesD(r, 'Fecha Venta'); if (!fv) return null;
+    const cred = gesCredito(r);
+    // Fin de la gestoría interna: Patenta Maipú → "Listo GI"; cliente / invitado → "Fecha Gestoria"
+    // (documentación entregada; en esos casos casi nunca se carga Listo GI)
+    const fin = gesEsMaipu(r) ? (gesD(r, 'Fecha Listo GI') || gesD(r, 'Fecha Entrega Tramite GE'))
+      : (gesD(r, 'Fecha Gestoria') || gesD(r, 'Fecha Listo GI'));
+    const cert = gesD(r, 'Fecha Arribo Certificado'), liq = cred ? gesD(r, 'Fecha Liquidacion Credito') : null;
+    const espera = [];
+    if (!cert) espera.push('certificado');
+    if (cred && !liq) espera.push('liquidación del crédito');
+    if (espera.length && !fin) return {estado:'espera', espera, plazo: cred ? 2 : 1, tipo: cred ? 'con crédito' : 'simple'};
+    const inicio = [fv, cert, liq].filter(Boolean).reduce((a, b) => b > a ? b : a);
+    return Object.assign(gesPlazo(inicio, cred ? 2 : 1, fin), {tipo: cred ? 'con crédito' : 'simple'});
+  }
+  function gesSlaGE(r){
+    if (!gesEsMaipu(r)) return null;
+    const ini = gesD(r, 'Fecha Entrega Tramite GE'); if (!ini) return null;
+    const zona = gesSur(r) ? 'Sur' : (gesProvCba(r) ? 'Córdoba' : 'Otras provincias');
+    const plazo = zona === 'Córdoba' ? 2 : (zona === 'Sur' ? 12 : 9);
+    const fin = gesD(r, 'Fecha Patentamiento') || gesD(r, 'Fecha Fin Tramite');
+    return Object.assign(gesPlazo(ini, plazo, fin), {zona});
+  }
+  function gesSlaBadge(x, que){
+    if (!x) return '<span class="badge-entrega" title="No aplica">—</span>';
+    if (x.estado === 'espera') return `<span class="badge-entrega pend" title="El plazo de ${x.plazo} dh (${x.tipo}) arranca cuando llegue: ${x.espera.join(', ')}">⏸️ Espera ${escapeHtml(x.espera.join(' y '))}</span>`;
+    const t = `${que}: ${x.plazo} dh desde ${entFmt(x.inicio)}${x.zona ? ' (' + x.zona + ')' : (x.tipo ? ' (' + x.tipo + ')' : '')}`;
+    if (x.estado === 'cumplido') return `<span class="badge-entrega ok" title="${escapeHtml(t)}">✓ ${x.dh} dh</span>`;
+    if (x.estado === 'tarde') return `<span class="badge-entrega bad" title="${escapeHtml(t)}">✓ ${x.dh} dh (+${x.dh - x.plazo})</span>`;
+    if (x.estado === 'vencido') return `<span class="badge-entrega bad" title="${escapeHtml(t)}">⏰ Vencido +${x.dh - x.plazo} dh</span>`;
+    return `<span class="badge-entrega pend" title="${escapeHtml(t)}">Vence ${entFmt(x.vence).slice(0,5)}</span>`;
+  }
+  let gesSlaFilter = null; // 'giVenc' | 'geVenc'
+
   let GES_ALL_BRANDS = [];
   let gesSelectedBrands = new Set();
   let GES_ALL_CANAL = [];
@@ -4855,7 +4914,37 @@
       </div>
     `).join('');
 
-    let rows = universo.filter(r => gesEstadoFilter.has(gesEstadoDeRow(r)));
+    // Plazos de gestoría interna / externa
+    const pendGes = ALL_ROWS.filter(r => {
+      const marca = (r['Marca'] || '').toString().trim();
+      if (!CAR_BRANDS.includes(marca.toUpperCase()) || isEntregado(r)) return false;
+      if (GES_ALL_BRANDS.length && !gesSelectedBrands.has(marca)) return false;
+      if (GES_ALL_CANAL.length && gesSelectedCanal.size < GES_ALL_CANAL.length && !gesSelectedCanal.has((r['Canal'] || '').toString().trim())) return false;
+      return !!(r['Fecha Venta'] || '').toString().trim();
+    });
+    const giAbiertos = pendGes.map(r => [r, gesSlaGI(r)]).filter(([, x]) => x && (x.estado === 'vencido' || x.estado === 'enplazo' || x.estado === 'espera'));
+    const geAbiertos = pendGes.map(r => [r, gesSlaGE(r)]).filter(([, x]) => x && (x.estado === 'vencido' || x.estado === 'enplazo'));
+    const hace60 = new Date(); hace60.setDate(hace60.getDate() - 60);
+    const cerr = f => ALL_ROWS.filter(r => CAR_BRANDS.includes((r['Marca'] || '').toString().trim().toUpperCase())).map(r => f(r)).filter(x => x && x.fin && x.fin >= hace60);
+    const giC = cerr(gesSlaGI), geC = cerr(gesSlaGE);
+    const pctOk = arr => arr.length ? Math.round(arr.filter(x => x.estado === 'cumplido').length / arr.length * 100) : null;
+    const slaCard = (k, titulo, ab, c, desc) => {
+      const v = ab.filter(([, x]) => x.estado === 'vencido').length, ep = ab.filter(([, x]) => x.estado === 'enplazo').length, es = ab.filter(([, x]) => x.estado === 'espera').length;
+      const p = pctOk(c);
+      return `<div class="pat-brand-card ${gesSlaFilter === k ? 'active' : ''}" data-sla="${k}" title="Clic para ver en la tabla los vencidos" style="min-width:300px;">
+        <div class="brand-name">${titulo}</div>
+        <div class="brand-count" style="color:${v ? 'var(--red)' : 'var(--green)'}">${v} vencido${v === 1 ? '' : 's'}</div>
+        <div class="brand-breakdown">${ep} en plazo${es ? ` · ${es} esperando certificado/crédito` : ''}</div>
+        <div class="brand-breakdown" style="margin-top:4px;">${desc}</div>
+        <div class="brand-breakdown" style="margin-top:4px; font-weight:700; color:${p === null ? 'var(--text-dim)' : (p >= 90 ? 'var(--green)' : (p >= 70 ? 'var(--amber)' : 'var(--red)'))};">Cumplimiento últimos 60 días: ${p === null ? '—' : p + '%'} ${c.length ? `(${c.length} trámites)` : ''}</div>
+      </div>`;
+    };
+    $('gestoriaKpis').innerHTML += slaCard('giVenc', '🏢 Gestoría interna', giAbiertos, giC, 'Simple 1 dh · con crédito 2 dh · desde facturación / certificado / liquidación (lo último) hasta Listo GI (cliente/invitado: hasta Gestoría)') +
+      slaCard('geVenc', '🚗 Gestoría externa', geAbiertos, geC, 'Córdoba 48 hs · Sur 12 dh · resto 9 dh · desde la entrega al gestor externo hasta el patentamiento');
+
+    let rows = gesSlaFilter
+      ? (gesSlaFilter === 'giVenc' ? giAbiertos : geAbiertos).filter(([, x]) => x.estado === 'vencido').map(([r]) => r)
+      : universo.filter(r => gesEstadoFilter.has(gesEstadoDeRow(r)));
 
     if (gesSearchTerm){
       rows = rows.filter(r => matchesInterno(r, gesSearchTerm));
@@ -4874,6 +4963,8 @@
   $('gestoriaKpis').addEventListener('click', e => {
     const card = e.target.closest('.pat-brand-card');
     if (!card) return;
+    if (card.dataset.sla){ gesSlaFilter = gesSlaFilter === card.dataset.sla ? null : card.dataset.sla; gesCurrentPage = 1; renderGestoriaSection(); return; }
+    gesSlaFilter = null;
     const estado = card.dataset.estado;
     if (gesEstadoFilter.has(estado)) gesEstadoFilter.delete(estado); else gesEstadoFilter.add(estado);
     syncGesEstadoButtons();
@@ -4892,7 +4983,7 @@
     const tbody = $('gestoriaTableBody');
 
     if (!shown.length){
-      tbody.innerHTML = `<tr><td colspan="13" class="table-empty">No hay trámites para este filtro</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="15" class="table-empty">No hay trámites para este filtro</td></tr>`;
     } else {
       tbody.innerHTML = shown.map(r => {
         const etapa = gesEtapaActual(r);
@@ -4920,6 +5011,8 @@
           <td class="col-fecha">${formatDateDisplay(r['Fecha Fin Tramite'])}</td>
           <td class="col-fecha">${formatDateDisplay(r['Fecha Entrega Tramite a GEAC'])}</td>
           <td>${gesObservadoSinArreglar(r) ? `<span class="badge-entrega bad">🚨 Sí</span>` : '—'}</td>
+          <td style="white-space:nowrap;">${gesSlaBadge(gesSlaGI(r), 'Gestoría interna')}</td>
+          <td style="white-space:nowrap;">${gesSlaBadge(gesSlaGE(r), 'Gestoría externa')}</td>
         </tr>
       `;
       }).join('');
@@ -4942,6 +5035,7 @@
   });
 
   $('clearGestoriaFiltersBtn').addEventListener('click', () => {
+    gesSlaFilter = null;
     $('gesBrandSelectAll').click();
     gesEstadoFilter = new Set(['observado','enCurso','completo']);
     syncGesEstadoButtons();
@@ -4966,7 +5060,9 @@
         'Entrega Tramite GE': formatDateDisplay(r['Fecha Entrega Tramite GE']),
         'Fin Tramite': formatDateDisplay(r['Fecha Fin Tramite']),
         'Entrega GEAC': formatDateDisplay(r['Fecha Entrega Tramite a GEAC']),
-        'Observado sin arreglar': gesObservadoSinArreglar(r) ? 'Sí' : 'No'
+        'Observado sin arreglar': gesObservadoSinArreglar(r) ? 'Sí' : 'No',
+        'Plazo GI': (x => !x ? '' : x.estado === 'espera' ? 'Espera ' + x.espera.join(' y ') : `${x.estado} · ${x.dh} dh de ${x.plazo}`)(gesSlaGI(r)),
+        'Plazo GE': (x => !x ? '' : `${x.estado} · ${x.dh} dh de ${x.plazo} (${x.zona})`)(gesSlaGE(r))
       };
     });
   }
@@ -8262,7 +8358,8 @@
   }
 
   function esSurPatagonicoSLA(r){
-    const loc = ((r['Grupo Localidad'] || r['Localidad'] || r['Provincia'] || '')).toString().toLowerCase();
+    // Provincia + localidad (antes solo miraba "Grupo Localidad", que para el Sur dice "Otras Provincias")
+    const loc = ((r['Grupo Localidad'] || '') + ' ' + (r['Localidad'] || '') + ' ' + (r['Provincia'] || '')).toString().toLowerCase();
     return loc.includes('neuquen') || loc.includes('neuquén') ||
            loc.includes('rio negro') || loc.includes('río negro') ||
            loc.includes('chubut') || loc.includes('santa cruz') ||
