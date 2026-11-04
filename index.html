@@ -9015,7 +9015,7 @@
     clienteturno:{label:'Cliente pidió una fecha posterior', icon:'🙋‍♂️', color:'#c084fc', track:'turno'},
     geac:       {label:'Carpeta GEAC',                            icon:'📋', color:'#4c8dff', track:'documental'},
     averia:     {label:'Averías',                                   icon:'⚠️', color:'#ff5c4d', track:'fisico'},
-    accesorios: {label:'Accesorios (instalación)',                  icon:'🎒', color:'#ff8a3d', track:'fisico'},
+    accesorios: {label:'Accesorios',                                icon:'🎒', color:'#ff8a3d', track:'fisico'},
     pedidoacc:  {label:'Envío a accesorios (pedido)',               icon:'📦', color:'#f59e0b', track:'fisico'},
     alistaje:   {label:'Alistaje',                                  icon:'🧹', color:'#ffb020', track:'fisico'},
     certificado:{label:'Certificado de fábrica',    icon:'📄', color:'#06b6d4', track:'documental'},
@@ -9155,7 +9155,8 @@
     // alistado) y la INSTALACIÓN (desde el envío hasta el regreso).
     const Eacc = up('Enviado a Accesorios') === 'SI' ? ok(dt('Fecha Envio a Accesorios')) : null;
     if (Eacc && Cacc){
-      etapa('pedidoacc', 'pedidoacc', 'Envío a accesorios', 'fisico', Eacc, iniAcc, OBJ.pedidoacc);
+      // Envío (pedido) e instalación se miden por separado pero suman a la misma área "Accesorios"
+      etapa('pedidoacc', 'accesorios', 'Envío a accesorios', 'fisico', Eacc, iniAcc, OBJ.pedidoacc);
       etapa('accesorios', 'accesorios', 'Regreso accesorios', 'fisico', Cacc, [{d:Eacc, k:'pedidoacc'}], OBJ.accesorios);
     } else {
       etapa('accesorios', 'accesorios', 'Regreso accesorios', 'fisico', Cacc, iniAcc, OBJ.accesorios);
@@ -9298,7 +9299,8 @@
       interno:(r['Interno'] || '').toString().trim(),
       canal:(r['Canal'] || '').toString().trim() || '(sin canal)',
       zona, fv, dPat, D, E, atraso: tarde ? atraso : 0, tarde, causa,
-      factores:[...factores], aporte, tl, mes: entMonthKey(E), frena, etapas, OKd, limTurno: limTurnoOut, finFisico, finDoc,
+      factores:[...factores], aporte, tl,
+      accDesg: {envio: (S.pedidoacc && S.pedidoacc.aporte) || 0, instal: (S.accesorios && S.accesorios.aporte) || 0}, mes: entMonthKey(E), frena, etapas, OKd, limTurno: limTurnoOut, finFisico, finDoc,
       tInf, fCont, dCont, dListoCont: (fCont && OKd && fCont >= OKd) ? (diasHabilesSLA(OKd, fCont) || 0) : null
     };
   }
@@ -9463,7 +9465,14 @@
         const pp = tarde.length ? Math.round(x.n / tarde.length * 100) : 0;    // aportó
         return `<div class="ent-rank-row ${ENT_STATE.area === x.k ? 'sel' : ''}" data-area="${x.k}" title="Causa principal en ${x.inv} de ${tarde.length} autos fuera de plazo · aportó demora en ${x.n}">
           <span class="pos">${i+1}</span>
-          <span class="name">${tr || x.k === 'turno' ? '' : `<span class="ent-trk">${trIcon(x.k)}</span>`}${a.icon} ${escapeHtml(a.label)}</span>
+          <span class="name">${tr || x.k === 'turno' ? '' : `<span class="ent-trk">${trIcon(x.k)}</span>`}${a.icon} ${escapeHtml(a.label)}${x.k === 'accesorios' ? (() => {
+            // Desglose: en cuántos autos (con accesorios como causa principal) pesó más el envío o la instalación
+            const us = tarde.filter(u => u.causa === 'accesorios');
+            const env = us.filter(u => u.accDesg && u.accDesg.envio > u.accDesg.instal).length;
+            const ins = us.length - env;
+            const dEnv = us.reduce((s2, u) => s2 + ((u.accDesg && u.accDesg.envio) || 0), 0), dIns = us.reduce((s2, u) => s2 + ((u.accDesg && u.accDesg.instal) || 0), 0);
+            return `<div class="hint" style="font-size:11px; font-weight:400; margin-top:2px;" title="Días de demora aportados: envío ${dEnv} dh · instalación ${dIns} dh">📦 envío (pedido): ${env} · 🔧 instalación: ${ins}</div>`;
+          })() : ''}</span>
           <div class="track"><div class="fill" style="width:${Math.max(p, 1)}%; background:${a.color};"></div><span class="pct">${p}%</span></div>
           <span class="meta"><b>${x.inv.toLocaleString('es-AR')}</b> de ${tarde.length.toLocaleString('es-AR')} autos<br>aportó en ${x.n.toLocaleString('es-AR')} (${pp}%)</span>
         </div>`;
