@@ -7803,6 +7803,31 @@
   let PAT_MODO = 'pat';
   const patFechaCampo = () => PAT_MODO === 'fac' ? 'Fecha Venta' : 'Fecha Patentamiento';
   function patDiasDesde(r){ return PAT_MODO === 'fac' ? diasDesdeFecha(r['Fecha Venta']) : diasDesdePatentamiento(r); }
+  // Facturados: en qué parte del trámite de patentamiento está (la primera traba, en orden)
+  const FAC_TRAMITE = [
+    {k:'pago', label:'💰 Sin pago a fábrica'},
+    {k:'cert', label:'📄 Sin certificado de fábrica'},
+    {k:'cliente', label:'🙋 Trámite a cargo del cliente / invitado'},
+    {k:'obs', label:'⚠️ Trámite observado sin arreglar'},
+    {k:'sininicio', label:'⏸️ Trámite sin iniciar'},
+    {k:'curso', label:'🏛️ Trámite en curso, sin finalizar'},
+    {k:'fin', label:'✅ Trámite finalizado, falta cargar patente'}
+  ];
+  let facTramFilter = null;
+  function facTramiteDe(r){
+    const t = c => (r[c] || '').toString().trim();
+    if (!t('Fecha Pago Fab')) return 'pago';
+    if (!t('Fecha Arribo Certificado')) return 'cert';
+    if (t('Patenta?').toUpperCase() !== 'MAIPU' && !t('Fecha Inicio Tramite')) return 'cliente';
+    if (t('Fecha Fin Tramite')) return 'fin';
+    if (gesObservadoSinArreglar(r)) return 'obs';
+    if (!gesEtapaActual(r)) return 'sininicio';
+    return 'curso';
+  }
+  function facTramiteDetalle(r){
+    const k = facTramiteDe(r), e = gesEtapaActual(r);
+    return k === 'curso' && e ? `en curso · última etapa: ${e.label} (${formatDateDisplay(r[e.field])})` : (FAC_TRAMITE.find(x => x.k === k) || {label:''}).label.replace(/^\S+\s/, '');
+  }
   // Facturados: fecha estimada de patentamiento según SLA (zona / crédito)
   function facPatEstimada(r){
     const fv = parseDateFlexible(r['Fecha Venta']);
@@ -8038,7 +8063,7 @@
     const dominio = (row['Dominio'] || '').toString().trim();
     if (dominio === '' && !(opt && opt.sinDominio)) return false;
     const patenta = (row['Patenta?'] || '').toString().trim().toUpperCase();
-    if (patenta === 'MAIPU' && !exc.has('geac')){
+    if (patenta === 'MAIPU' && !exc.has('geac') && !(opt && opt.sinDominio)){
       const geac = (row['Fecha Entrega Tramite a GEAC'] || '').toString().trim();
       if (geac === '') return false;
     }
@@ -8071,7 +8096,7 @@
     const m = [];
     const up = c => (row[c] || '').toString().trim().toUpperCase();
     if (bloqueoActivo(row)) m.push('bloqueo');
-    if (up('Patenta?') === 'MAIPU' && up('Fecha Entrega Tramite a GEAC') === '') m.push('geac');
+    if (up('Patenta?') === 'MAIPU' && up('Fecha Entrega Tramite a GEAC') === '' && !(opt && opt.sinDominio)) m.push('geac');
     if (hasAveria(row)) m.push('averia');
     const arribado = up('Fecha Arribo Unidad') !== '' && up('Ubicacion') !== '';
     // Sin alistar: solo cuenta si el auto ya arribó (si no arribó, el freno es el arribo)
@@ -8868,7 +8893,7 @@
       document.querySelectorAll('#tabEntregas .subtab-content').forEach(c => c.classList.toggle('active', c.id === target));
       if (btn.dataset.subtab === 'facturados' || btn.dataset.subtab === 'patentados'){
         const modo = btn.dataset.subtab === 'facturados' ? 'fac' : 'pat';
-        if (modo !== PAT_MODO){ PAT_MODO = modo; patMotivoFilter = null; patMesPatFilter = null; patCurrentPage = 1; }
+        if (modo !== PAT_MODO){ PAT_MODO = modo; patMotivoFilter = null; patMesPatFilter = null; facTramFilter = null; patCurrentPage = 1; }
         try { renderPatentadosSection(); } catch(e){ console.error(e); }
       }
       if (btn.dataset.subtab === 'clienteexterno' && typeof renderClienteExternoSection === 'function') renderClienteExternoSection();
@@ -10145,7 +10170,8 @@
     const rowsEstadoFiltrado = baseRowsConFiltros.filter(r => patEstadoEntregaFilter.has(patEstadoEntregaDeRow(r)))
       .filter(r => !patMotivoFilter || (patEstadoEntregaDeRow(r) === 'noOk' && patMotivosNoOk(r, {sinDominio: FAC}).includes(patMotivoFilter)));
     const rowsLoc = rowsEstadoFiltrado.filter(r => patLocalidadFilter.has(esCbaSLA(r) ? 'cordoba' : 'otras'));
-    const rows = patMesPatFilter ? rowsLoc.filter(r => patMesPatDe(r) === patMesPatFilter) : rowsLoc;
+    const rowsMes = patMesPatFilter ? rowsLoc.filter(r => patMesPatDe(r) === patMesPatFilter) : rowsLoc;
+    const rows = (FAC && facTramFilter) ? rowsMes.filter(r => facTramiteDe(r) === facTramFilter) : rowsMes;
 
     $('patTotalValue').innerHTML = rows.length.toLocaleString('es-AR');
 
@@ -10271,7 +10297,17 @@
           <button type="button" class="page-btn" data-usados-xlsx="1" style="margin-top:8px; font-size:12px;">⬇️ Excel de todas las operaciones con usado</button>
         </div>`;
         return card('actual', `🗓️ ${pal} en ${nom(h)}`, actN, 'var(--green)') +
-          card('anterior', `🗓️ ${pal} en ${nom(new Date(h.getFullYear(), h.getMonth() - 1, 1))}`, antN, 'var(--amber)') + usadoCard;
+          card('anterior', `🗓️ ${pal} en ${nom(new Date(h.getFullYear(), h.getMonth() - 1, 1))}`, antN, 'var(--amber)') + usadoCard + (() => {
+            if (!FAC) return '';
+            // Trámite de patentamiento: dónde está cada facturado (sobre los pendientes con filtros, estado y zona)
+            const tc = {}; rowsMes.forEach(r => { const k = facTramiteDe(r); tc[k] = (tc[k] || 0) + 1; });
+            const maxT = Math.max(1, ...Object.values(tc));
+            const items = FAC_TRAMITE.filter(x => tc[x.k]).map(x => `<div class="pat-motivo ${facTramFilter === x.k ? 'active' : ''}" data-tram="${x.k}" title="Clic para ver solo estos autos">
+              <span class="pm-label">${x.label}</span><span class="pm-bar"><span style="width:${Math.max(3, Math.round(tc[x.k] / maxT * 100))}%; background:var(--blue);"></span></span><span class="pm-n">${tc[x.k]}</span></div>`).join('');
+            return `<div class="pat-brand-card" style="cursor:default; flex-basis:100%;">
+              <div class="brand-name">🏛️ Trámite de patentamiento — dónde está cada facturado</div>
+              <div class="pat-motivos" style="margin-top:6px;"><div class="pm-title">La primera traba de cada auto, en orden: pago → certificado → trámite${facTramFilter ? ' · <u>clic de nuevo para quitar el filtro</u>' : ''}</div>${items || '<div class="hint">Sin facturados con estos filtros</div>'}</div></div>`;
+          })();
       })();
     })();
 
@@ -10372,7 +10408,8 @@
           <td>${badge(enDQ)}</td>
           <td>${badge(!hasAveria(r))}</td>
           <td class="col-fecha">${PAT_MODO === 'fac' ? (() => { const e = facPatEstimada(r); if (!e) return '—'; const hoy = new Date(); hoy.setHours(0,0,0,0);
-            return e < hoy ? `<span class="badge-entrega bad" title="Ya pasó el plazo de patentamiento según SLA">${formatDateDisplay(e)} · vencido</span>` : `<span class="badge-entrega pend">${formatDateDisplay(e)}</span>`; })()
+            const tr = `<div style="font-size:11px; color:var(--text-dim); margin-top:3px; white-space:normal; min-width:150px;">${escapeHtml(facTramiteDetalle(r))}</div>`;
+            return (e < hoy ? `<span class="badge-entrega bad" title="Ya pasó el plazo de patentamiento según SLA">${formatDateDisplay(e)} · vencido</span>` : `<span class="badge-entrega pend">${formatDateDisplay(e)}</span>`) + tr; })()
             : badge((r['Dominio'] || '').toString().trim() !== '')}</td>
           <td>${badge(alistado, alistadoTitle)}</td>
           <td>${badgeNA(esMaipuGeac, geacOk, geacTitle)}</td>
@@ -10476,6 +10513,8 @@
       return;
     }
     if (e.target.closest('[data-usados-xlsx]')){ exportarUsadosExcel(); return; }
+    const tram = e.target.closest('[data-tram]');
+    if (tram){ facTramFilter = facTramFilter === tram.dataset.tram ? null : tram.dataset.tram; patCurrentPage = 1; renderPatentadosSection(); return; }
     const card = e.target.closest('.pat-brand-card');
     if (!card) return;
     if (card.dataset.usados){
@@ -10693,7 +10732,7 @@
       'Color': r['Color'] || '',
       'Cliente': r['Cliente'] || '',
       [PAT_MODO === 'fac' ? 'Fecha Facturacion' : 'Fecha Patentamiento']: formatDateDisplay(r[patFechaCampo()]),
-      ...(PAT_MODO === 'fac' ? {'Patentamiento estimado (SLA)': formatDateDisplay(facPatEstimada(r))} : {}),
+      ...(PAT_MODO === 'fac' ? {'Patentamiento estimado (SLA)': formatDateDisplay(facPatEstimada(r)), 'Tramite de patentamiento': facTramiteDetalle(r)} : {}),
       'Fecha Arribo': formatDateDisplay(r['Fecha Arribo Unidad']),
       'Entrega': isEntregado(r) ? 'Entregado' : 'Falta entregar',
       'Averia': hasAveria(r) ? 'SI' : 'NO',
@@ -11795,6 +11834,7 @@
   });
 
   $('clearPatentadosFiltersBtn').addEventListener('click', () => {
+    facTramFilter = null;
     $('patBrandSelectAll').click();
     $('patCanalSelectAll').click();
     document.querySelector('#patAveriaSegmented button[data-averia="todos"]').click();
