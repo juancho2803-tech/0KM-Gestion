@@ -7834,14 +7834,10 @@
     return fv ? addBusinessDaysSLA(fv, getSLAFacPat(r)) : null;
   }
   let patPatentaFilter = 'todos'; // Patenta? = MAIPU (sí) / otro (no) // null | 'actual' | 'anterior' — mes de patentamiento
+  // Mes (YYYY-MM) de la fecha de patentamiento (o de facturación en Facturados)
   function patMesPatDe(r){
     const d = parseDateFlexible(r[patFechaCampo()]);
-    if (!d) return null;
-    const h = new Date();
-    const ant = new Date(h.getFullYear(), h.getMonth() - 1, 1);
-    if (d.getFullYear() === h.getFullYear() && d.getMonth() === h.getMonth()) return 'actual';
-    if (d.getFullYear() === ant.getFullYear() && d.getMonth() === ant.getMonth()) return 'anterior';
-    return 'previos';
+    return d ? d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') : 'sin';
   }
 
   function patCumplePlazoPatentamiento(row){
@@ -10271,17 +10267,21 @@
         <div class="brand-breakdown">de ${rowsEstadoFiltrado.length.toLocaleString('es-AR')} pendientes de entregar (con el estado seleccionado)</div>
       </div>
     ` + (() => {
-        const h = new Date();
-        const nom = d => d.toLocaleDateString('es-AR', {month:'long'});
-        const actN = rowsLoc.filter(r => patMesPatDe(r) === 'actual').length;
-        const antN = rowsLoc.filter(r => patMesPatDe(r) === 'anterior').length;
-        const prevN = rowsLoc.length - actN - antN;
-        const card = (k, label, n, color) => `<div class="pat-brand-card ${patMesPatFilter === k ? 'active' : ''} ${patMesPatFilter && patMesPatFilter !== k ? 'dimmed' : ''}" data-mespat="${k}" title="Clic para ver solo estos autos">
-          <div class="brand-name">${label}</div>
-          <div class="brand-count" style="color:${color}">${n.toLocaleString('es-AR')}</div>
-          ${patVsAyer(n, snapRef ? snapLoc.filter(x => patMesPatDe(x.r) === k).length : null, snapRef, true)}
-          <div class="brand-breakdown">de ${rowsLoc.length.toLocaleString('es-AR')} pendientes · por fecha de ${FAC ? 'facturación' : 'patentamiento'}${k === 'anterior' && prevN ? ` · ${prevN} de meses anteriores` : ''}</div>
-        </div>`;
+        // Una sola card: de qué mes son los pendientes (clic en un mes → filtra la tabla)
+        const porMes = {}; rowsLoc.forEach(r => { const k = patMesPatDe(r); porMes[k] = (porMes[k] || 0) + 1; });
+        const ayerMes = {}; if (snapRef) snapLoc.forEach(x => { const k = patMesPatDe(x.r); ayerMes[k] = (ayerMes[k] || 0) + 1; });
+        const mesesK = Object.keys(porMes).sort().reverse();
+        const maxMes = Math.max(1, ...Object.values(porMes));
+        const mesLbl = k => { if (k === 'sin') return 'Sin fecha'; const [y, m] = k.split('-').map(Number); const t = new Date(y, m - 1, 1).toLocaleDateString('es-AR', {month:'long', year:'numeric'}); return t.charAt(0).toUpperCase() + t.slice(1); };
+        const mesCard = `<div class="pat-brand-card" style="cursor:default;">
+          <div class="brand-name">🗓️ ${FAC ? 'Facturados' : 'Patentados'} pendientes por mes</div>
+          <div class="pat-motivos" style="margin-top:6px;"><div class="pm-title">Por fecha de ${FAC ? 'facturación' : 'patentamiento'} · clic para filtrar la tabla${patMesPatFilter ? ' · <u>clic de nuevo para quitar el filtro</u>' : ''}</div>
+          ${mesesK.map(k => {
+            const n = porMes[k], ay = snapRef ? (ayerMes[k] || 0) : null, d = ay === null ? null : n - ay;
+            const dh = d === null ? '' : `<span class="pm-vs" title="Antes: ${ay}" style="font-size:10.5px; font-weight:700; min-width:30px; text-align:right; color:${d > 0 ? 'var(--red)' : (d < 0 ? 'var(--green)' : 'var(--text-dim)')};">${d > 0 ? '+' + d : (d < 0 ? d : '=')}</span>`;
+            return `<div class="pat-motivo ${patMesPatFilter === k ? 'active' : ''}" data-mespat="${k}" title="Clic para ver solo estos autos">
+              <span class="pm-label">${mesLbl(k)}</span><span class="pm-bar"><span style="width:${Math.max(3, Math.round(n / maxMes * 100))}%; background:var(--amber);"></span></span><span class="pm-n">${n}</span>${dh}</div>`;
+          }).join('') || '<div class="hint">Sin pendientes con estos filtros</div>'}</div></div>`;
         const pal = FAC ? 'Facturados' : 'Patentados';
         // Usados pendientes de recibir: se reciben con la entrega del 0km (hasta la fecha de turno)
         const usados = baseRowsConFiltros.filter(esUsado);
@@ -10296,8 +10296,7 @@
           <div class="brand-breakdown">${conT} con turno (${semana} en los próximos 7 días) · ${usados.length - conT} sin turno</div>
           <button type="button" class="page-btn" data-usados-xlsx="1" style="margin-top:8px; font-size:12px;">⬇️ Excel de todas las operaciones con usado</button>
         </div>`;
-        return card('actual', `🗓️ ${pal} en ${nom(h)}`, actN, 'var(--green)') +
-          card('anterior', `🗓️ ${pal} en ${nom(new Date(h.getFullYear(), h.getMonth() - 1, 1))}`, antN, 'var(--amber)') + usadoCard + (() => {
+        return mesCard + usadoCard + (() => {
             if (!FAC) return '';
             // Trámite de patentamiento: dónde está cada facturado (sobre los pendientes con filtros, estado y zona)
             const tc = {}; rowsMes.forEach(r => { const k = facTramiteDe(r); tc[k] = (tc[k] || 0) + 1; });
@@ -10513,6 +10512,8 @@
       return;
     }
     if (e.target.closest('[data-usados-xlsx]')){ exportarUsadosExcel(); return; }
+    const mesEl = e.target.closest('[data-mespat]');
+    if (mesEl){ patMesPatFilter = patMesPatFilter === mesEl.dataset.mespat ? null : mesEl.dataset.mespat; patCurrentPage = 1; renderPatentadosSection(); return; }
     const tram = e.target.closest('[data-tram]');
     if (tram){ facTramFilter = facTramFilter === tram.dataset.tram ? null : tram.dataset.tram; patCurrentPage = 1; renderPatentadosSection(); return; }
     const card = e.target.closest('.pat-brand-card');
