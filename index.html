@@ -9,6 +9,17 @@
 <title>Gestión Integral Ventas</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+<script>
+  // Recargar la página: en GitHub Pages con "?_v=" (saltea la caché); dentro de la segunda
+  // dirección (Apps Script, que muestra la página en un marco de googleusercontent) se recarga
+  // la dirección de Apps Script completa.
+  window.GI_APPS_URL = 'https://script.google.com/macros/s/AKfycbzZp2v23S2zdhYHDEk6ybpGzXZL0tM39P5wV9O4QYmjO-OMltuDRZxPr3EAC1OuWL76Gg/exec';
+  window.giEnAppsScript = function(){ return /googleusercontent\.com$/.test(location.hostname); };
+  window.recargarPagina = function(){
+    try { if (window.giEnAppsScript()){ window.top.location.href = window.GI_APPS_URL; return; } } catch(e){}
+    recargarPagina();
+  };
+</script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
@@ -875,7 +886,7 @@
       <div class="auth-stuck-hint" style="margin-top:18px; font-size:12.5px; line-height:1.5; opacity:.85;">
         ¿Este cartel no se va en unos segundos?<br>
         Presioná <b>Ctrl + Shift + R</b> (o <b>F5</b>) para recargar la página.
-        <div style="margin-top:10px;"><button type="button" onclick="location.replace(location.pathname + '?r=' + Date.now())" style="padding:7px 14px; border-radius:4px; border:1px solid currentColor; background:transparent; color:inherit; cursor:pointer; font-size:12.5px;">🔄 Recargar ahora</button></div>
+        <div style="margin-top:10px;"><button type="button" onclick="recargarPagina()" style="padding:7px 14px; border-radius:4px; border:1px solid currentColor; background:transparent; color:inherit; cursor:pointer; font-size:12.5px;">🔄 Recargar ahora</button></div>
       </div>
     </div>
 
@@ -12220,7 +12231,7 @@
     // dejando la pantalla de login trabada en "Verificando…" hasta que alguien
     // hace Ctrl+Shift+R a mano. Forzamos una recarga real, salteando el caché,
     // igual que en el resto de la app.
-    location.href = location.pathname + '?_v=' + Date.now();
+    recargarPagina();
   });
 
   // ========== Entregas › Cliente externo (pendientes de entregar) ==========
@@ -14159,7 +14170,7 @@
       const overlay = document.getElementById('authOverlay');
       const appEstaTrabada = overlay && !overlay.classList.contains('hidden');
       if (appEstaTrabada){
-        location.href = location.pathname + '?_v=' + Date.now();
+        recargarPagina();
       }
     }
   });
@@ -14181,7 +14192,7 @@
         const overlay = document.getElementById('authOverlay');
         const appEstaTrabada = overlay && !overlay.classList.contains('hidden');
         if (appEstaTrabada){
-          location.href = location.pathname + '?_v=' + Date.now();
+          recargarPagina();
         }
       }
       appHiddenAt = null;
@@ -14196,6 +14207,7 @@
   // si lo es, mostramos un aviso con botón para actualizar. No recargamos solos,
   // para no perder algo que el usuario esté por guardar.
   function checkForNewerVersion(){
+    if (window.giEnAppsScript && window.giEnAppsScript()) return; // en Apps Script la página siempre viene fresca
     fetch(location.pathname + '?_v=' + Date.now(), {method:'HEAD', cache:'no-store'})
       .then(r => {
         const remoteLM = r.headers.get('Last-Modified');
@@ -14219,7 +14231,7 @@
       <button type="button" style="background:#fff; color:var(--blue,#3b82f6); border:none; border-radius:6px; padding:6px 12px; font-weight:700; cursor:pointer; white-space:nowrap;">Actualizar</button>
     `;
     banner.querySelector('button').addEventListener('click', () => {
-      location.href = location.pathname + '?_v=' + Date.now();
+      recargarPagina();
     });
     document.body.appendChild(banner);
   }
@@ -14293,7 +14305,7 @@
       const yaReintento = sessionStorage.getItem('fatalErrorRetried');
       if (!yaReintento){
         sessionStorage.setItem('fatalErrorRetried', '1');
-        location.href = location.pathname + '?_v=' + Date.now();
+        recargarPagina();
         return;
       }
       sessionStorage.removeItem('fatalErrorRetried'); // para que el próximo intento arranque limpio
@@ -14323,7 +14335,7 @@
         const retryBtn = document.getElementById('fatalErrorRetryBtn');
         if (retryBtn){
           retryBtn.addEventListener('click', () => {
-            location.href = location.pathname + '?_v=' + Date.now();
+            recargarPagina();
           });
         }
       }
