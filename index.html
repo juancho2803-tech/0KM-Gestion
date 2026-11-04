@@ -8099,6 +8099,8 @@
   function isEntregado(row){
     // Marcado a mano como entregado (ej.: unidad de otro concesionario que nunca arribó)
     if (entregadoManual(row)) return true;
+    // Turno ya cumplido en la Agenda de la app (aunque todavía no esté cargado en el sistema)
+    if (agTurnoCumplido(row)) return true;
     const fEntrega = (row['Fecha Entrega Unidad'] || '').toString().trim();
     if (fEntrega !== '') return true;
     const motivo = (row['Motivo Cambio Ubicacion'] || '').toString().trim().toUpperCase();
@@ -8122,6 +8124,9 @@
   // "Fecha Ubicacion" (cuándo se registró ese movimiento) como mejor aproximación disponible;
   // si tampoco hay eso, se cae al turno de entrega ya vencido.
   function fechaEntregaEfectiva(row){
+    if (!(row['Fecha Turno Entrega'] || '').toString().trim() && !(row['Fecha Entrega Unidad'] || '').toString().trim()){
+      const fa = agTurnoCumplido(row); if (fa) return fa;
+    }
     // El turno es "cuándo se fue" el auto de verdad — Fecha Entrega Unidad muchas veces
     // se carga después, demorada por trámites/bloqueos administrativos, así que si hay
     // turno YA CUMPLIDO se prioriza por sobre la fecha de entrega final (pedido de
@@ -10001,6 +10006,8 @@
 
     $('emptyState').style.display = 'none';
     $('dashboard').style.display = 'block';
+    // La agenda se carga en segundo plano: un turno cumplido ahí cuenta como entregado
+    try { if (CURRENT_SESSION && !AG.loadedOnce && !AG.loading) setTimeout(() => { agAsegurarCarga(); }, 1500); } catch(e){}
     try { aplicarVistaUsados(); } catch(e){}
     $('metaFecha').textContent = formatMetaFecha(meta.fecha);
     $('metaRegistros').textContent = ALL_ROWS.length.toLocaleString('es-AR');
@@ -12878,6 +12885,22 @@
   // (Cliente Externo o Venta Directa de Fábrica SIN Nro. de operación)
   function agClienteExterno(r){ return !!r && esClienteExterno(r); }
   const AG_EXT_TXT = '<br><b class="ag-ext">🤝 Cliente externo — no es stock propio</b>';
+  // Internos con turno (estado "Turno") de hoy o anterior en la agenda → se toman como entregados
+  function agTurnoCumplido(r){
+    try {
+      if (typeof AG === 'undefined' || !AG.data || !AG.data.size) return null;
+      const i = (r['Interno'] || '').toString().trim(); if (!i) return null;
+      const hoyK = agKey(new Date());
+      const firma = AG.data.size + '|' + (AG.lastLoad ? AG.lastLoad.getTime() : 0) + '|' + (AG._mut || 0) + '|' + hoyK;
+      if (AG._cumplFirma !== firma){
+        const m = new Map();
+        AG.data.forEach(t => { if (t.estado !== 'turno' || t.fecha > hoyK) return; agInternos(t.interno).forEach(x => { if (!m.has(x) || t.fecha > m.get(x)) m.set(x, t.fecha); }); });
+        AG._cumpl = m; AG._cumplFirma = firma;
+      }
+      const f = AG._cumpl.get(i);
+      return f ? agFromKey(f) : null;
+    } catch(e){ return null; }
+  }
   function agPatentaCliente(r){ return (r['Patenta?'] || '').toString().trim().toUpperCase() === 'CLIENTE'; }
   function agInternos(txt){ return ((txt || '').toString().match(/\d{3,}/g) || []); }
   function agRowIndex(){
@@ -13244,6 +13267,16 @@
   }
   function agRefrescarVistas(){
     try { renderAgendaSection(); } catch(e){}
+    // Si cambió quién tiene turno cumplido en la agenda, se actualizan las listas de pendientes
+    try {
+      agTurnoCumplido({Interno:'__'});
+      const sig = AG._cumpl ? [...AG._cumpl.keys()].sort().join(',') : '';
+      if (ALL_ROWS.length && sig !== AG._cumplSigVista){
+        AG._cumplSigVista = sig;
+        renderAccesoriosSection(); renderPatentadosSection(); renderLeBombSection(); renderResumenSection(); renderFueraDQSection(); renderClienteExternoSection();
+        if (typeof renderAveriasSection === 'function') renderAveriasSection();
+      }
+    } catch(e){ console.error('agRefrescarVistas', e); }
     try { if ($('tabContactacion') && $('tabContactacion').classList.contains('active')) renderContactacionSection(); } catch(e){}
   }
   // Un interno no puede tener dos turnos a futuro: al asignarlo en otro casillero,
@@ -13279,6 +13312,7 @@
     const prev = AG.data.get(key);
     if (estado === '' && !nota) AG.data.delete(key);
     else AG.data.set(key, {fecha, hora, entregador:ent, estado, interno, nota, usuario: (CURRENT_SESSION && CURRENT_SESSION.username) || '', actualizado: new Date().toLocaleString('es-AR')});
+    AG._mut = (AG._mut || 0) + 1;
     agRefrescarVistas();
     return apiPost({token: currentToken(), type:'turno', fecha, hora, entregador:ent, estado, interno, nota}).then(res => {
       handleAuthResult(res);
@@ -13655,6 +13689,8 @@
   // Por qué la app lo considera entregado (o no)
   function fiEntregaRazon(r){
     if (entregadoManual(r)) return 'Marcado a mano como entregado en la app';
+    const fa = agTurnoCumplido(r);
+    if (fa && !fiTxt(r, 'Fecha Entrega Unidad') && !fiTxt(r, 'Fecha Turno Entrega')) return `Turno cumplido en la Agenda de la app (${entFmt(fa)}) — todavía no figura en el sistema`;
     if (fiTxt(r, 'Fecha Entrega Unidad')) return `Fecha Entrega Unidad cargada (${formatDateDisplay(r['Fecha Entrega Unidad'])})`;
     const mot = fiTxt(r, 'Motivo Cambio Ubicacion').toUpperCase();
     if (ENTREGA_MOTIVOS.includes(mot)) return `Motivo de ubicación "${mot}"`;
