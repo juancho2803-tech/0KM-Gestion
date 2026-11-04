@@ -2491,7 +2491,7 @@
         <div class="panel">
           <div class="panel-head">
             <h3>🚚 Entregas fuera de plazo</h3>
-            <div class="hint">Plazo = Fecha venta + plazo de patentamiento según zona + 48 hs hasta la entrega (todos editables abajo, en objetivos) · fecha de entrega = fecha del turno (col. BR), no la del aviso · solo autos con chasis válido y turno ya cumplido</div>
+            <div class="hint">Plazo = Fecha venta + gestoría interna (simple 1 dh · con crédito 2 dh) + gestoría externa (Córdoba 2 · Sur 12 · resto 9 dh) + 48 hs hasta la entrega (todos editables abajo, en objetivos) · fecha de entrega = fecha del turno (col. BR), no la del aviso · solo autos con chasis válido y turno ya cumplido</div>
           </div>
           <div class="filter-row ent-filters">
             <div class="pill-group">
@@ -4748,15 +4748,17 @@
     const espera = [];
     if (!cert) espera.push('certificado');
     if (cred && !liq) espera.push('liquidación del crédito');
-    if (espera.length && !fin) return {estado:'espera', espera, plazo: cred ? 2 : 1, tipo: cred ? 'con crédito' : 'simple'};
+    const O = entObjetivos(), pl = cred ? O.giCredito : O.giSimple;
+    if (espera.length && !fin) return {estado:'espera', espera, plazo: pl, tipo: cred ? 'con crédito' : 'simple'};
     const inicio = [fv, cert, liq].filter(Boolean).reduce((a, b) => b > a ? b : a);
-    return Object.assign(gesPlazo(inicio, cred ? 2 : 1, fin), {tipo: cred ? 'con crédito' : 'simple'});
+    return Object.assign(gesPlazo(inicio, pl, fin), {tipo: cred ? 'con crédito' : 'simple'});
   }
   function gesSlaGE(r){
     if (!gesEsMaipu(r)) return null;
     const ini = gesD(r, 'Fecha Entrega Tramite GE'); if (!ini) return null;
     const zona = gesSur(r) ? 'Sur' : (gesProvCba(r) ? 'Córdoba' : 'Otras provincias');
-    const plazo = zona === 'Córdoba' ? 2 : (zona === 'Sur' ? 12 : 9);
+    const O = entObjetivos();
+    const plazo = zona === 'Córdoba' ? O.geCba : (zona === 'Sur' ? O.geSur : O.geOtras);
     const fin = gesD(r, 'Fecha Patentamiento') || gesD(r, 'Fecha Fin Tramite');
     return Object.assign(gesPlazo(ini, plazo, fin), {zona});
   }
@@ -8371,10 +8373,14 @@
   }
 
   // Días hábiles Facturación → Patentamiento: Cba 2-3dh, Otras 10-11dh, Sur 15-16dh
+  // v34: facturación → patentamiento = gestoría interna + gestoría externa (mismos objetivos
+  // que Entregas fuera de plazo y Gestoría): interna simple 1 / con crédito 2 dh; externa
+  // Córdoba 2 · Sur 12 · resto 9 dh.
   function getSLAFacPat(r){
-    if (esCbaSLA(r)) return esCreditoSLA(r) ? 3 : 2;
-    if (esSurPatagonicoSLA(r)) return esCreditoSLA(r) ? 16 : 15;
-    return esCreditoSLA(r) ? 11 : 10;
+    const O = entObjetivos();
+    const gi = (r['Credito?'] || '').toString().trim().toUpperCase() === 'SI' ? O.giCredito : O.giSimple;
+    const ge = gesSur(r) ? O.geSur : (gesProvCba(r) ? O.geCba : O.geOtras);
+    return gi + ge;
   }
 
   function esAutoValidoSLA(r){
@@ -9014,7 +9020,8 @@
     alistaje:   {label:'Alistaje',                                  icon:'🧹', color:'#ffb020', track:'fisico'},
     certificado:{label:'Certificado de fábrica',    icon:'📄', color:'#06b6d4', track:'documental'},
     pagofab:    {label:'Pago a fábrica',                            icon:'🏭', color:'#64748b', track:'documental'},
-    gestoria:   {label:'Gestoría / Registro (patentamiento)',       icon:'🏛️', color:'#14b8a6', track:'documental'},
+    gestoria:   {label:'Gestoría externa / Registro (patentamiento)', icon:'🏛️', color:'#14b8a6', track:'documental'},
+    gestoriaint:{label:'Gestoría interna',                          icon:'🏢', color:'#0ea5e9', track:'documental'},
     cliente:    {label:'Patentamiento por cliente',                 icon:'🙋', color:'#94a3b8', track:'documental'},
     credito:    {label:'Créditos (liquidación)',                    icon:'💳', color:'#e11d48', track:'documental'},
     bloqueo:    {label:'Bloqueo de saldo / pago',                   icon:'🔒', color:'#be185d', track:'documental'},
@@ -9052,8 +9059,11 @@
 
   // Objetivos por etapa (días hábiles salvo certificado: días corridos). Editables en la
   // pantalla; se guardan en este navegador. Alistaje/Accesorios/Certificado = los de Aceleración.
-  const ENT_OBJ_DEFAULT = {patCba:2, patOtras:10, patSur:15, patPlan:1, plazoEntrega:2, arribo:0, alistaje:2, averia:0, pedidoacc:1, accesorios:2, pagofab:0, certificado:3, geac:2, credito:5, turno:2};
-  const ENT_OBJ_LABELS = {patCba:'Patentam. Córdoba', patOtras:'Patentam. otras prov.', patSur:'Patentam. Sur', patPlan:'+ si es Plan de Ahorro', plazoEntrega:'Entrega (desde patentam.)', arribo:'Arribo (desde venta)', alistaje:'Alistaje (desde arribo/venta)', averia:'Avería (0 = todo cuenta)', pedidoacc:'Envío a accesorios (desde alistado)', accesorios:'Accesorios (desde envío)', pagofab:'Pago fábrica (desde venta)', certificado:'Certificado (corridos)', geac:'Carpeta GEAC', credito:'Crédito', turno:'Turno (desde auto listo)'};
+  // v34: el patentamiento se mide en dos tramos (parámetros de gestoría):
+  //  interna: simple 1 dh / con crédito 2 dh desde facturación, certificado y liquidación (lo último);
+  //  externa: desde la entrega al gestor externo hasta el patentamiento — Córdoba 2 · Sur 12 · resto 9 dh.
+  const ENT_OBJ_DEFAULT = {giSimple:1, giCredito:2, geCba:2, geOtras:9, geSur:12, plazoEntrega:2, arribo:0, alistaje:2, averia:0, pedidoacc:1, accesorios:2, pagofab:0, certificado:3, geac:2, credito:5, turno:2};
+  const ENT_OBJ_LABELS = {giSimple:'Gestoría interna simple', giCredito:'Gestoría interna con crédito', geCba:'Gestoría externa Córdoba', geOtras:'Gestoría externa otras prov.', geSur:'Gestoría externa Sur', plazoEntrega:'Entrega (desde patentam.)', arribo:'Arribo (desde venta)', alistaje:'Alistaje (desde arribo/venta)', averia:'Avería (0 = todo cuenta)', pedidoacc:'Envío a accesorios (desde alistado)', accesorios:'Accesorios (desde envío)', pagofab:'Pago fábrica (desde venta)', certificado:'Certificado (corridos)', geac:'Carpeta GEAC', credito:'Crédito', turno:'Turno (desde auto listo)'};
   // v28: los objetivos se guardan en el servidor (hoja Objetivos, marca "OBJ_ENTREGAS"),
   // así son los mismos para todos y no se pierden. Solo un admin los puede cambiar.
   const ENT_OBJ_MARCA = 'OBJ_ENTREGAS';
@@ -9075,13 +9085,17 @@
 
     // Plazo de patentamiento por zona (editable en objetivos de esta pestaña; +N si es Plan de Ahorro)
     const OBJp = entObjetivos();
-    const slaPat = (esCbaSLA(r) ? OBJp.patCba : (esSurPatagonicoSLA(r) ? OBJp.patSur : OBJp.patOtras)) + (esCreditoSLA(r) ? OBJp.patPlan : 0);
+    const conCred = (r['Credito?'] || '').toString().trim().toUpperCase() === 'SI';
+    const objGI = conCred ? OBJp.giCredito : OBJp.giSimple;
+    const zonaGE = gesSur(r) ? 'Sur' : (gesProvCba(r) ? 'Córdoba' : 'Otras');
+    const objGE = zonaGE === 'Córdoba' ? OBJp.geCba : (zonaGE === 'Sur' ? OBJp.geSur : OBJp.geOtras);
+    const slaPat = objGI + objGE;
     const dPat = addBusinessDaysSLA(fv, slaPat);
     // Plazo real de entrega: 48 hs (2 dh) desde el patentamiento — editable en objetivos
     const D = addBusinessDaysSLA(dPat, entObjetivos().plazoEntrega);
     const atraso = diasHabilesSLA(D, E) || 0;
     const tarde = E > D && atraso >= 1;
-    const zona = esCbaSLA(r) ? 'Córdoba' : (esSurPatagonicoSLA(r) ? 'Sur' : 'Otras');
+    const zona = zonaGE;
 
     const up = c => (r[c] || '').toString().trim().toUpperCase();
     const dt = c => entMid(parseDateFlexible(r[c]));
@@ -9149,10 +9163,23 @@
     // Documental
     etapa('pagofab', 'pagofab', 'Pago fábrica', 'documental', pagoFab, [{d:fv}], OBJ.pagofab);
     etapa('certificado', 'certificado', 'Certificado', 'documental', certificado, [{d:pagoFab, k:'pagofab'}], OBJ.certificado, true);
-    // Si patenta el cliente, la gestión (y la demora) es suya: área aparte
+    // Patentamiento en dos tramos: gestoría interna (hasta Listo GI; cliente/invitado: "Fecha
+    // Gestoria") y gestoría externa (desde la entrega al gestor externo hasta el patentamiento).
+    // Si patenta el cliente, el tramo externo es suyo: área aparte.
     const patCliente = up('Patenta?') === 'CLIENTE';
-    etapa('patente', patCliente ? 'cliente' : 'gestoria', patCliente ? 'Patentamiento (cliente)' : 'Patentamiento', 'documental', P,
-      [{d:fv}, {d:certificado, k:'certificado'}, {d:pagoFab, k:'pagofab'}], slaPat);
+    const patMaipu = up('Patenta?') === 'MAIPU';
+    const GI = ok(patMaipu ? (dt('Fecha Listo GI') || dt('Fecha Entrega Tramite GE')) : (dt('Fecha Gestoria') || dt('Fecha Listo GI')));
+    const giCands = [{d:fv}, {d:certificado, k:'certificado'}, {d:pagoFab, k:'pagofab'}];
+    if (conCred) giCands.push({d:K, k:'credito'});
+    if (GI && P && GI <= P){
+      etapa('gi', 'gestoriaint', 'Gestoría interna' + (conCred ? ' (con crédito)' : ''), 'documental', GI, giCands, objGI);
+      const EGE = patMaipu ? ok(dt('Fecha Entrega Tramite GE')) : null;
+      etapa('patente', patCliente ? 'cliente' : 'gestoria', patCliente ? 'Patentamiento (cliente)' : `Gestoría externa (${zonaGE})`, 'documental', P,
+        [{d:GI, k:'gi'}, {d: EGE && EGE > GI ? EGE : null, k:'gi'}], objGE);
+    } else {
+      // Sin fecha de gestoría interna cargada: se mide el patentamiento completo
+      etapa('patente', patCliente ? 'cliente' : 'gestoria', patCliente ? 'Patentamiento (cliente)' : 'Patentamiento', 'documental', P, giCands, slaPat);
+    }
     etapa('geac', 'geac', 'Carpeta GEAC', 'documental', G, [{d:P, k:'patente'}], OBJ.geac);
     etapa('credito', 'credito', 'Liquidación crédito', 'documental', K, [{d:fv}], OBJ.credito);
     // Bloqueo de saldo / pago (marca manual): desde que se marcó hasta que se liberó.
@@ -9207,7 +9234,7 @@
       if (OKd){
         const tF = finFisico ? finFisico.getTime() : 0, tDc = finDoc ? finDoc.getTime() : 0;
         const circ = tF === tDc ? 'ambos' : (tF > tDc ? 'fisico' : 'documental');
-        const prio = ['bloqueo','arribo','patente','geac','credito','averia','accesorios','pedidoacc','alistaje','certificado','pagofab'];
+        const prio = ['bloqueo','arribo','patente','gi','geac','credito','averia','accesorios','pedidoacc','alistaje','certificado','pagofab'];
         const B = etapas.filter(e => e.end.getTime() === OKd.getTime() && (circ === 'ambos' || e.track === circ))
           .sort((a,b) => (b.exceso - a.exceso) || (prio.indexOf(a.key) - prio.indexOf(b.key)))[0];
         const limT = addBusinessDaysSLA(OKd, OBJ.turno || 0);
