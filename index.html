@@ -3484,7 +3484,8 @@
     'Grupo Localidad','Localidad','Provincia','Fecha Ubicacion',
     'Canal','Catalogo','Tel Celular','Tel Particular','Tel Laboral',
     'Ultima Ubicacion','Ultima Ubi Dique','Ultima Ubi Fila','Ultima Ubi Columna','Fecha Pedido','Situacion','Nro. Operacion',
-    'Nro. Documento','Importe Venta Unidad','Personeria','Sucursal','Email'
+    'Nro. Documento','Importe Venta Unidad','Personeria','Sucursal','Email',
+    'Sobre?','Kit de Seguridad?','Matafuego?','Alfombras?'
   ];
 
   function buildBaseSyncRows(rows){
@@ -13711,6 +13712,8 @@
     if (fp && !fa) a.push(['bad', 'Patentado sin fecha de arribo de la unidad']);
     if (entregado && !fp) a.push(['bad', 'Entregado sin fecha de patentamiento']);
     if (entregado && !fal) a.push(['warn', 'Entregado sin fecha de alistaje']);
+    const faltoEnt = [['Sobre?', 'sobre'], ['Kit de Seguridad?', 'kit de seguridad'], ['Matafuego?', 'matafuego'], ['Alfombras?', 'alfombras']].filter(([c]) => fiTxt(r, c).toUpperCase() === 'NO').map(([, l]) => l);
+    if (entregado && faltoEnt.length) a.push(['warn', `Se entregó sin: ${faltoEnt.join(', ')}`]);
     // Alistaje: objetivo 2 días hábiles desde arribo o facturación (lo último que ocurra)
     if (fa && fv && !entregado){
       const ini = fa > fv ? fa : fv, desdeTxt = fa > fv ? 'el arribo' : 'la facturación';
@@ -13823,6 +13826,14 @@
         ${dato('Ubicación actual', fiTxt(r, 'Ubicacion'))}${dato('Localidad', [fiTxt(r, 'Localidad'), fiTxt(r, 'Provincia')].filter(Boolean).join(', '))}
         ${dato('Teléfono', fiTxt(r, 'Tel Celular') || fiTxt(r, 'Tel Particular'))}
       </div>
+      ${(() => {
+        // Elementos entregados con la unidad (cols. CT–CW de la base) — para reclamos
+        const it = [['Sobre', 'Sobre?'], ['Kit de seguridad', 'Kit de Seguridad?'], ['Matafuego', 'Matafuego?'], ['Alfombras', 'Alfombras?']];
+        if (!it.some(([, c]) => c in r)) return '';
+        return `<div style="display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin-top:10px;"><span class="hint" style="margin-right:4px;">Entregado con la unidad:</span>` +
+          it.map(([l, c]) => { const v = fiTxt(r, c).toUpperCase();
+            return `<span class="badge-entrega ${v === 'SI' ? 'ok' : (v === 'NO' ? 'bad' : '')}" title="${escapeHtml(c)} ${escapeHtml(v || 'sin dato')}">${v === 'SI' ? '✅' : (v === 'NO' ? '❌' : '—')} ${l}</span>`; }).join('') + '</div>';
+      })()}
       ${an.length ? `<div class="an-sub" style="margin-top:12px;">⚠️ Qué surge en el proceso</div><ul class="fi-an">${an.map(([lv, t]) => `<li style="color:${col[lv]}">${ico[lv]} ${escapeHtml(t)}</li>`).join('')}</ul>`
         : '<div class="ag-info ok" style="margin-top:12px;">✅ No se detectan anomalías en el circuito</div>'}
       ${analisis ? `<div style="margin-top:10px;">${analisis}</div>` : ''}
