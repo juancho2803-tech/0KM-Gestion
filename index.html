@@ -4006,11 +4006,10 @@
       return da - db; // más antigua primero
     });
 
-    const tbody = $('fdqTableBody');
-    if (!sorted.length){
-      tbody.innerHTML = `<tr><td colspan="10" class="table-empty">No hay unidades</td></tr>`;
-    } else {
-      tbody.innerHTML = sorted.map(r => {
+    // Dos grupos: talleres internos + Maipú Garage, y el resto (exhibición, préstamo a invitados,
+    // reparaciones fuera de Maipú, depósito, etc.)
+    const fdqInterno = r => { const u = (r['Ubicacion'] || '').toString().trim().toUpperCase(); return u.startsWith('TALLER') || u.includes('MAIPU GARAGE'); };
+    const filaFdq = r => {
         const cat = categorize(r);
         const dateField = FDQ_DATE_FIELD[cat];
         const interno = (r['Interno'] || '').toString().trim();
@@ -4030,7 +4029,16 @@
           <td><textarea class="obs-input" data-interno="${escapeHtml(interno)}" rows="1" placeholder="¿Pedido?">${obsVal}</textarea><span class="obs-saved-tag">✓ guardado</span></td>
         </tr>
       `;
-      }).join('');
+    };
+    const g1 = sorted.filter(fdqInterno), g2 = sorted.filter(r => !fdqInterno(r));
+    const cab = (t, n, sub) => `<tr><td colspan="10" style="background:var(--surface-3); font-weight:700; font-size:13px; padding:10px 12px;">${t} · ${n.toLocaleString('es-AR')} <span style="font-weight:400; color:var(--text-dim); font-size:12px;">${sub}</span></td></tr>`;
+    const tbody = $('fdqTableBody');
+    if (!sorted.length){
+      tbody.innerHTML = `<tr><td colspan="10" class="table-empty">No hay unidades</td></tr>`;
+    } else {
+      tbody.innerHTML =
+        cab('🔧 Talleres internos y Maipú Garage', g1.length, 'Taller VW / GM / Ford y Maipú Garage') + (g1.length ? g1.map(filaFdq).join('') : '<tr><td colspan="10" class="table-empty">Ninguno</td></tr>') +
+        cab('📍 Fuera de los talleres de Maipú', g2.length, 'exhibición, préstamo a invitados, reparaciones afuera y otras ubicaciones') + (g2.length ? g2.map(filaFdq).join('') : '<tr><td colspan="10" class="table-empty">Ninguno</td></tr>');
     }
     $('fdqTableHint').textContent = `${sorted.length.toLocaleString('es-AR')} registro${sorted.length === 1 ? '' : 's'}`;
   }
