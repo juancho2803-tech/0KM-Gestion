@@ -3424,7 +3424,7 @@
     // que después haya que revertir, y para avisar al toque por qué no se guardó.
     if (CURRENT_SESSION && CURRENT_SESSION.role === 'usados') return Promise.reject(new Error('Tu rol solo puede consultar la agenda.'));
     if (CURRENT_SESSION && CURRENT_SESSION.role === 'accesorios' && seccion !== 'accesorios') return Promise.reject(new Error('Tu rol solo puede cargar observaciones de accesorios.'));
-    if (CURRENT_SESSION && CURRENT_SESSION.role === 'entregas' && seccion !== 'contactacion' && seccion !== 'contactacionfinalizado' && seccion !== 'bloqueosaldo' && seccion !== 'clienteexterno' && seccion !== 'excepcion' && seccion !== 'turnoinfo' && !seccion.startsWith('snapshot_')){
+    if (CURRENT_SESSION && CURRENT_SESSION.role === 'entregas' && seccion !== 'contactacion' && seccion !== 'contactacionfinalizado' && seccion !== 'bloqueosaldo' && seccion !== 'clienteexterno' && seccion !== 'excepcion' && seccion !== 'turnoinfo' && seccion !== 'notaentrega' && !seccion.startsWith('snapshot_')){
       showToast('⚠️ Tu rol (entregas) solo puede editar Contactación.', true);
       return Promise.reject(new Error('Rol sin permiso de edición para esta sección'));
     }
@@ -13626,7 +13626,7 @@
           <td>${x.r ? esc((x.r['Nro. Operacion'] || '').toString()) : ''}</td>
           <td>${x.r ? esc((x.r['Vendedor'] || '').toString()) : ''}</td>
           <td>${x.tags.map(z => `<span class="tg">${esc(z)}</span>`).join(' ')}</td>
-          <td>${agRestriccionEspecial(c.h, x.r).length ? `<b class="bad">⛔ No va en ${esc(c.h)}: ${esc(agRestriccionEspecial(c.h, x.r).join(', '))}</b><br>` : ''}${c.t.estado !== 'turno' ? `<b>${esc((AG_ESTADOS[c.t.estado] || {label:c.t.estado}).label)}</b> · ` : ''}${x.e && x.e.lvl !== 'ok' && x.e.txt ? `<span class="bad">${esc(x.e.txt)}</span>` : ''}${c.t.nota ? `<div class="nt">📌 ${esc(c.t.nota)}</div>` : ''}</td>
+          <td>${agRestriccionEspecial(c.h, x.r).length ? `<b class="bad">⛔ No va en ${esc(c.h)}: ${esc(agRestriccionEspecial(c.h, x.r).join(', '))}</b><br>` : ''}${c.t.estado !== 'turno' ? `<b>${esc((AG_ESTADOS[c.t.estado] || {label:c.t.estado}).label)}</b> · ` : ''}${x.e && x.e.lvl !== 'ok' && x.e.txt ? `<span class="bad">${esc(x.e.txt)}</span>` : ''}${c.t.nota ? `<div class="nt">📌 ${esc(c.t.nota)}</div>` : ''}${(() => { const nr = x.i ? OBSERVATIONS.get(obsKey(x.i, 'notaentrega')) : null; return nr && nr.observacion ? `<div class="nt">📝 ${esc(nr.observacion)}</div>` : ''; })()}</td>
           <td class="ck"></td></tr>`).join('')).join('') + '</tbody></table></section>';
     }).join('');
     const html = `<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Agenda ${esc(k)}</title><style>
@@ -13810,7 +13810,7 @@
     // Observaciones cargadas en la app (todas las secciones)
     const obs = [];
     OBSERVATIONS.forEach(o => {
-      if ((o.interno || '').toString().trim() !== i) return;
+      if ((o.interno || '').toString().trim() !== i || o.seccion === 'notaentrega') return;
       // Fechas que vienen como texto largo de JS ("Tue Sep 29 2026 00:00:00 GMT…") → dd/mm/aaaa
       const fx = v => { const t = (v || '').toString(); if (/GMT|^\d{4}-\d{2}-\d{2}T/.test(t)){ const d = new Date(t); if (!isNaN(d)) return entFmt(d); } return t; };
       const partes = [fx(o.observacion), o.estadoAveria && `estado: ${fx(o.estadoAveria)}`, o.fechaSolucion && `fecha: ${fx(o.fechaSolucion)}`].filter(Boolean);
@@ -13845,6 +13845,20 @@
           it.map(([l, c]) => { const v = fiTxt(r, c).toUpperCase();
             return `<span class="badge-entrega ${v === 'SI' ? 'ok' : (v === 'NO' ? 'bad' : '')}" title="${escapeHtml(c)} ${escapeHtml(v || 'sin dato')}">${v === 'SI' ? '✅' : (v === 'NO' ? '❌' : '—')} ${l}</span>`; }).join('') + '</div>';
       })()}
+      ${(() => {
+        // Nota de entrega: la cargan los asesores de entrega (y admin/usuario) desde la ficha
+        const nr = OBSERVATIONS.get(obsKey(i, 'notaentrega')) || {};
+        const txt = (nr.observacion || '').toString();
+        const quien = nr.estadoAveria ? `${escapeHtml(nr.estadoAveria)}${nr.fechaSolucion ? ' · ' + escapeHtml(nr.fechaSolucion) : ''}` : '';
+        const puede = !!(CURRENT_SESSION && ['admin','entregas','usuario'].includes(CURRENT_SESSION.role));
+        if (!puede && !txt) return '';
+        return `<div style="margin-top:12px; border:1px solid ${txt ? 'var(--amber)' : 'var(--border)'}; border-radius:10px; padding:10px 12px; background:var(--surface-2);">
+          <div class="an-sub" style="margin:0 0 6px;">📝 Nota de entrega ${quien ? `<span class="hint" style="text-transform:none; letter-spacing:0; font-weight:400;">— ${quien}</span>` : ''}</div>
+          ${puede ? `<textarea id="fiNotaTxt" data-interno="${escapeHtml(i)}" rows="2" placeholder="Algo importante sobre esta entrega (ej.: cliente pidió…, faltó…, quedó pendiente…)" style="width:100%; box-sizing:border-box; padding:8px; border:1px solid var(--border); border-radius:8px; background:var(--surface); color:var(--text); font:inherit; font-size:13px; resize:vertical;">${escapeHtml(txt)}</textarea>
+            <div style="display:flex; justify-content:flex-end; gap:8px; align-items:center; margin-top:6px;"><span class="hint" id="fiNotaEstado"></span><button type="button" class="page-btn" id="fiNotaSave">Guardar nota</button></div>`
+            : `<div style="white-space:pre-wrap; font-size:13px;">${escapeHtml(txt)}</div>`}
+        </div>`;
+      })()}
       ${an.length ? `<div class="an-sub" style="margin-top:12px;">⚠️ Qué surge en el proceso</div><ul class="fi-an">${an.map(([lv, t]) => `<li style="color:${col[lv]}">${ico[lv]} ${escapeHtml(t)}</li>`).join('')}</ul>`
         : '<div class="ag-info ok" style="margin-top:12px;">✅ No se detectan anomalías en el circuito</div>'}
       ${analisis ? `<div style="margin-top:10px;">${analisis}</div>` : ''}
@@ -13871,6 +13885,16 @@
     $('fiInput').addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.value.trim()) fiAbrir(e.target.value); });
     $('fiBtn').addEventListener('click', () => { if ($('fiInput').value.trim()) fiAbrir($('fiInput').value); });
     $('fiBody').addEventListener('click', e => { const x = e.target.closest('.fi-res'); if (x) $('fiBody').innerHTML = fiRender(fiBuscar(x.dataset.interno)[0]); });
+    $('fiBody').addEventListener('click', e => {
+      if (!e.target.closest('#fiNotaSave')) return;
+      const ta = $('fiNotaTxt'); if (!ta) return;
+      const ahora = new Date();
+      const cuando = entFmt(ahora) + ' ' + String(ahora.getHours()).padStart(2, '0') + ':' + String(ahora.getMinutes()).padStart(2, '0');
+      $('fiNotaEstado').textContent = 'Guardando…';
+      saveObservation(ta.dataset.interno, 'notaentrega', {observacion: ta.value.trim(), estadoAveria: (CURRENT_SESSION && CURRENT_SESSION.username) || '', fechaSolucion: cuando})
+        .then(() => { $('fiNotaEstado').textContent = '✓ Guardada'; showToast('✓ Nota de entrega guardada · interno ' + ta.dataset.interno); })
+        .catch(err => { $('fiNotaEstado').textContent = '❌ No se guardó'; showToast('❌ No se guardó la nota: ' + (err && err.message || ''), true); });
+    });
     $('fiClose').addEventListener('click', () => { $('fiModal').style.display = 'none'; });
     document.addEventListener('keydown', e => { if (e.key === 'Escape' && $('fiModal').style.display === 'flex') $('fiModal').style.display = 'none'; });
   }
