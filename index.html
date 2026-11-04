@@ -2697,6 +2697,23 @@
             </table>
           </div>
         </div>
+
+        <div class="panel" style="margin-top:14px;">
+          <div class="panel-head">
+            <h3 style="font-size:15px;">🗓️ Entregados por día</h3>
+            <div class="hint">Cantidad por marca cada día del mes (mismo criterio de entregado que arriba) · clic en un día para ver los internos y de qué mes es su patentamiento</div>
+          </div>
+          <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:10px;">
+            <label for="igDiaMes" style="font-size:13px; color:var(--text-dim);">Mes:</label>
+            <select id="igDiaMes" class="month-select"></select>
+          </div>
+          <div style="display:grid; grid-template-columns:minmax(0, 1fr) minmax(0, 1.4fr); gap:14px; align-items:start;" id="igDiaWrap">
+            <div class="table-scroll" style="display:block; max-height:520px; overflow:auto; border:1px solid var(--border); border-radius:10px;">
+              <table class="data-table" id="igDiaTable"></table>
+            </div>
+            <div id="igDiaDetalle"></div>
+          </div>
+        </div>
       </div><!-- /sub Informe Germán -->
     </div><!-- /tabAceleracion -->
 
@@ -7284,6 +7301,58 @@
     igRenderGrid('Facturados', autos, 'Fecha Venta', dateFrom, dateTo, Array.from(igSelectedMarcas));
     igRenderGrid('Patentados', autos, 'Fecha Patentamiento', dateFrom, dateTo, Array.from(igSelectedMarcas));
     igRenderGrid('Entregados', autos, fechaEntregaEfectiva, dateFrom, dateTo, Array.from(igSelectedMarcas));
+    try { igRenderPorDia(autos); } catch(e){ console.error('igRenderPorDia', e); }
+  }
+
+  // ---- Entregados por día: cantidad por marca + internos del día con mes de patentamiento ----
+  let IG_DIA_SEL = null;
+  function igRenderPorDia(autos){
+    const ent = [];
+    autos.forEach(r => { if (!isEntregado(r)) return; const d = fechaEntregaEfectiva(r); if (d) ent.push({r, d: new Date(d.getFullYear(), d.getMonth(), d.getDate())}); });
+    const mk = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+    const meses = [...new Set(ent.map(x => mk(x.d)))].sort().reverse().slice(0, 18);
+    const sel = $('igDiaMes');
+    const hoyMk = mk(new Date());
+    const prev = sel.value;
+    sel.innerHTML = meses.map(m => { const [y, mm] = m.split('-').map(Number); const t = new Date(y, mm - 1, 1).toLocaleDateString('es-AR', {month:'long', year:'numeric'}); return `<option value="${m}">${t.charAt(0).toUpperCase() + t.slice(1)}</option>`; }).join('');
+    sel.value = meses.includes(prev) ? prev : (meses.includes(hoyMk) ? hoyMk : (meses[0] || ''));
+    if (!sel.dataset.bound){ sel.dataset.bound = '1'; sel.addEventListener('change', () => { IG_DIA_SEL = null; renderInformeGermanSection(); }); }
+    const mes = sel.value;
+    const delMes = ent.filter(x => mk(x.d) === mes);
+    const marcas = CAR_BRANDS.filter(b => igSelectedMarcas.has(b) && delMes.some(x => (x.r['Marca'] || '').toString().trim().toUpperCase() === b));
+    const lbl = b => (PATENTADOS_BRAND_LABELS[b] || b);
+    const porDia = {};
+    delMes.forEach(x => { const k = agKey(x.d); (porDia[k] = porDia[k] || []).push(x); });
+    const dias = Object.keys(porDia).sort().reverse();
+    if (!IG_DIA_SEL || !porDia[IG_DIA_SEL]) IG_DIA_SEL = dias[0] || null;
+    const cnt = (arr, b) => arr.filter(x => (x.r['Marca'] || '').toString().trim().toUpperCase() === b).length;
+    $('igDiaTable').innerHTML = !dias.length ? '<tr><td class="table-empty">Sin entregas en este mes</td></tr>' :
+      `<thead><tr><th>Día</th>${marcas.map(b => `<th style="text-align:center;">${escapeHtml(lbl(b))}</th>`).join('')}<th style="text-align:center;">Total</th></tr></thead><tbody>` +
+      dias.map(k => { const d = agFromKey(k), arr = porDia[k];
+        return `<tr data-dia="${k}" style="cursor:pointer; ${k === IG_DIA_SEL ? 'background:rgba(76,141,255,.15); font-weight:700;' : ''}" title="Ver los internos de este día">
+          <td style="white-space:nowrap;">${escapeHtml(d.toLocaleDateString('es-AR', {weekday:'short', day:'2-digit', month:'2-digit'}))}</td>
+          ${marcas.map(b => { const n = cnt(arr, b); return `<td style="text-align:center;">${n || '<span style="color:var(--text-faint)">·</span>'}</td>`; }).join('')}
+          <td style="text-align:center; font-weight:700;">${arr.length}</td></tr>`; }).join('') +
+      `<tr style="font-weight:700; background:var(--surface-3);"><td>Total</td>${marcas.map(b => `<td style="text-align:center;">${cnt(delMes, b)}</td>`).join('')}<td style="text-align:center;">${delMes.length}</td></tr></tbody>`;
+    $('igDiaTable').querySelectorAll('tr[data-dia]').forEach(tr => tr.addEventListener('click', () => { IG_DIA_SEL = tr.dataset.dia; igRenderPorDia(autos); }));
+    // Detalle del día elegido
+    const arr = IG_DIA_SEL ? porDia[IG_DIA_SEL].slice().sort((a, b) => (a.r['Marca'] || '').localeCompare(b.r['Marca'] || '') || (a.r['Interno'] || '').toString().localeCompare((b.r['Interno'] || '').toString(), 'es', {numeric:true})) : [];
+    const mesPat = r => { const p = parseDateFlexible(r['Fecha Patentamiento']); return p ? p.getFullYear() + '-' + String(p.getMonth() + 1).padStart(2, '0') : ''; };
+    const mesTxt = m => { if (!m) return 'Sin patentar'; const [y, mm] = m.split('-').map(Number); const t = new Date(y, mm - 1, 1).toLocaleDateString('es-AR', {month:'short', year:'numeric'}); return t.charAt(0).toUpperCase() + t.slice(1); };
+    const resumen = {}; arr.forEach(x => { const m = mesPat(x.r); resumen[m] = (resumen[m] || 0) + 1; });
+    $('igDiaDetalle').innerHTML = !arr.length ? '' : `
+      <div style="font-weight:700; margin-bottom:6px;">${escapeHtml(agFromKey(IG_DIA_SEL).toLocaleDateString('es-AR', {weekday:'long', day:'2-digit', month:'2-digit', year:'numeric'}))} · ${arr.length} entregado${arr.length === 1 ? '' : 's'}</div>
+      <div style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:8px;">${Object.keys(resumen).sort().reverse().map(m => `<span class="badge-entrega ${!m ? 'bad' : (m === mes ? 'ok' : 'pend')}">${m ? 'Patentados en ' + escapeHtml(mesTxt(m)) : 'Sin patentar'}: <b>${resumen[m]}</b></span>`).join('')}</div>
+      <div class="table-scroll" style="display:block; max-height:460px; overflow:auto; border:1px solid var(--border); border-radius:10px;">
+      <table class="data-table"><thead><tr><th>Marca</th><th>Interno</th><th>Modelo</th><th>Cliente</th><th>Patentamiento</th><th>Mes patent.</th></tr></thead><tbody>
+      ${arr.map(x => { const m = mesPat(x.r); return `<tr>
+        <td>${escapeHtml(lbl((x.r['Marca'] || '').toString().trim().toUpperCase()))}</td>
+        <td style="font-weight:700;">${escapeHtml((x.r['Interno'] || '').toString())}</td>
+        <td>${escapeHtml(anModelo(x.r))}</td>
+        <td>${escapeHtml((x.r['Cliente'] || '').toString())}</td>
+        <td class="col-fecha">${formatDateDisplay(x.r['Fecha Patentamiento'])}</td>
+        <td><span class="badge-entrega ${m === mes ? 'ok' : (m ? 'pend' : 'bad')}">${escapeHtml(mesTxt(m))}</span></td></tr>`; }).join('')}
+      </tbody></table></div>`;
   }
 
   // Parsear fecha segura desde input date (formato YYYY-MM-DD)
