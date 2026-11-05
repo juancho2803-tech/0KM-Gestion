@@ -1368,6 +1368,7 @@
         <div id="agBuscarRes"></div>
         <div class="ag-semana" id="agSemana"></div>
         <div class="an-kpis" id="agKpis" style="margin-top:12px;"></div>
+        <div id="sinAvisoPanel" class="pat-brand-card" style="cursor:default; margin-top:12px; display:none;"></div>
         <div id="agAlertas"></div>
         <div class="ag-layout">
           <div>
@@ -13157,6 +13158,7 @@
     agRenderBuscar();
     agRenderEstado();
     try { agActualizarBtnSinEntrega(); } catch(e){}
+    try { renderSinAviso(); } catch(e){ console.error('renderSinAviso', e); }
   }
 
   function agRenderBuscar(){
@@ -14063,6 +14065,81 @@
     $('patExcSave').addEventListener('click', () => patGuardarExc(false));
     $('patExcQuitar').addEventListener('click', () => patGuardarExc(true));
     $('patExcCancel').addEventListener('click', () => { $('patExcModal').style.display = 'none'; });
+  }
+
+  // ---------- Entregados sin aviso de entrega (acumulado) ----------
+  // Autos con turno de entrega ya pasado (agenda de la app o fecha de turno de la base) que
+  // todavía no tienen "Fecha Entrega Unidad" (aviso de entrega, col. BS). Filtro por mes y marca.
+  const SA = {mes: 'todos', marcas: null};
+  function sinAvisoRows(){
+    const hoyK = agKey(new Date()), out = [];
+    ALL_ROWS.forEach(r => {
+      const marca = (r['Marca'] || '').toString().trim().toUpperCase();
+      if (!CAR_BRANDS.includes(marca)) return;
+      if ((r['Fecha Entrega Unidad'] || '').toString().trim() || entregadoManual(r)) return;
+      let f = agTurnoCumplido(r), origen = 'agenda';
+      if (!f){ const b = parseDateFlexible(r['Fecha Turno Entrega']); if (b && agKey(b) < hoyK){ f = b; origen = 'base'; } }
+      if (!f || agKey(f) >= hoyK) return;   // turno de hoy: todavía puede emitirse
+      out.push({r, f, origen, marca, mes: f.getFullYear() + '-' + String(f.getMonth() + 1).padStart(2, '0')});
+    });
+    return out.sort((a, b) => a.f - b.f);
+  }
+  function renderSinAviso(){
+    const el = $('sinAvisoPanel'); if (!el) return;
+    if (!ALL_ROWS.length || (CURRENT_SESSION && ['usados','accesorios'].includes(CURRENT_SESSION.role))){ el.style.display = 'none'; return; }
+    const todos = sinAvisoRows();
+    if (!SA.marcas) SA.marcas = new Set(CAR_BRANDS);
+    const porMarca = todos.filter(x => SA.marcas.has(x.marca));
+    const meses = {}; porMarca.forEach(x => { meses[x.mes] = (meses[x.mes] || 0) + 1; });
+    const mesesK = Object.keys(meses).sort().reverse();
+    if (SA.mes !== 'todos' && !meses[SA.mes]) SA.mes = 'todos';
+    const vis = SA.mes === 'todos' ? porMarca : porMarca.filter(x => x.mes === SA.mes);
+    const mesLbl = k => { const [y, m] = k.split('-').map(Number); const t = new Date(y, m - 1, 1).toLocaleDateString('es-AR', {month:'long', year:'numeric'}); return t.charAt(0).toUpperCase() + t.slice(1); };
+    const lbl = b => PATENTADOS_BRAND_LABELS[b] || b;
+    const cntM = b => (SA.mes === 'todos' ? todos : todos.filter(x => x.mes === SA.mes)).filter(x => x.marca === b).length;
+    const maxMes = Math.max(1, ...Object.values(meses));
+    el.style.display = '';
+    el.innerHTML = `
+      <div style="display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap; align-items:flex-start;">
+        <div>
+          <div class="brand-name">📋 Entregados sin aviso de entrega (acumulado)</div>
+          <div class="brand-count" style="color:${vis.length ? 'var(--amber)' : 'var(--green)'}">${vis.length.toLocaleString('es-AR')}</div>
+          <div class="brand-breakdown">Turno de entrega ya pasado (agenda o base) y sin "Fecha Entrega Unidad" (col. BS)${SA.mes !== 'todos' ? ' · ' + mesLbl(SA.mes) : ''}</div>
+        </div>
+        <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+          <select id="saMes" class="month-select" aria-label="Mes del turno"><option value="todos">Todos los meses</option>${mesesK.map(k => `<option value="${k}" ${SA.mes === k ? 'selected' : ''}>${mesLbl(k)} (${meses[k]})</option>`).join('')}</select>
+          <button type="button" class="page-btn" id="saXlsx">⬇️ Excel</button>
+        </div>
+      </div>
+      <div class="pill-list" style="margin-top:10px;">
+        ${CAR_BRANDS.map(b => `<button type="button" class="${SA.marcas.has(b) ? 'active' : ''}" data-sa-marca="${b}">${escapeHtml(lbl(b))} · ${cntM(b)}</button>`).join('')}
+      </div>
+      ${SA.mes === 'todos' && mesesK.length ? `<div class="pat-motivos" style="margin-top:10px;"><div class="pm-title">Por mes del turno · clic para filtrar</div>${mesesK.map(k => `<div class="pat-motivo" data-sa-mes="${k}"><span class="pm-label">${mesLbl(k)}</span><span class="pm-bar"><span style="width:${Math.max(3, Math.round(meses[k] / maxMes * 100))}%; background:var(--amber);"></span></span><span class="pm-n">${meses[k]}</span></div>`).join('')}</div>` : ''}`;
+  }
+  if ($('sinAvisoPanel')){
+    $('sinAvisoPanel').addEventListener('change', e => { if (e.target.id === 'saMes'){ SA.mes = e.target.value; renderSinAviso(); } });
+    $('sinAvisoPanel').addEventListener('click', e => {
+      const m = e.target.closest('[data-sa-marca]');
+      if (m){ const b = m.dataset.saMarca; if (SA.marcas.has(b)) SA.marcas.delete(b); else SA.marcas.add(b); if (!SA.marcas.size) SA.marcas = new Set(CAR_BRANDS); renderSinAviso(); return; }
+      const me = e.target.closest('[data-sa-mes]');
+      if (me){ SA.mes = me.dataset.saMes; renderSinAviso(); return; }
+      if (e.target.closest('#saXlsx')){
+        const rows = sinAvisoRows().filter(x => SA.marcas.has(x.marca) && (SA.mes === 'todos' || x.mes === SA.mes));
+        if (!rows.length){ showToast('No hay autos sin aviso de entrega con estos filtros'); return; }
+        const hoy = new Date(); hoy.setHours(0,0,0,0);
+        const t = (r, c) => (r[c] || '').toString().trim();
+        const data = rows.map(x => ({
+          'Fecha turno': entFmt(x.f), 'Origen del turno': x.origen === 'agenda' ? 'Agenda de la app' : 'Base (Fecha Turno Entrega)',
+          'Dias sin aviso': Math.round((hoy - x.f) / 86400000), 'Marca': t(x.r, 'Marca'), 'Interno': t(x.r, 'Interno'),
+          'Nro. Operacion': t(x.r, 'Nro. Operacion'), 'Cliente': t(x.r, 'Cliente'), 'Modelo': t(x.r, 'Modelo'), 'Dominio': t(x.r, 'Dominio'),
+          'Vendedor': t(x.r, 'Vendedor'), 'Fecha Patentamiento': formatDateDisplay(x.r['Fecha Patentamiento'])
+        }));
+        const ws = XLSX.utils.json_to_sheet(data);
+        ws['!cols'] = Object.keys(data[0]).map(k => ({wch: Math.max(12, k.length + 2)}));
+        const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Sin aviso de entrega');
+        XLSX.writeFile(wb, `sin_aviso_de_entrega_${SA.mes === 'todos' ? 'acumulado' : SA.mes}_${todayStamp()}.xlsx`);
+      }
+    });
   }
 
   // ---------- Agenda: Excel de turnos sin fecha de entrega confirmada (casos en amarillo) ----------
