@@ -14081,7 +14081,8 @@
       // reventa, entrega con unidad facturada, traslado, etc.)
       const mot = (r['Motivo Cambio Ubicacion'] || '').toString().trim().toUpperCase();
       const ubi = ((r['Ubicacion'] || '') + ' ' + (r['Lugar Entrega'] || '')).toString().toUpperCase();
-      if (ENTREGA_MOTIVOS.includes(mot) || ubi.includes('DON BOSCO')) return;
+      // "Traslado" sí son turnos de entrega de acá: esos se cuentan
+      if ((ENTREGA_MOTIVOS.includes(mot) && mot !== 'TRASLADO') || ubi.includes('DON BOSCO')) return;
       let f = agTurnoCumplido(r), origen = 'agenda';
       if (!f){ const b = parseDateFlexible(r['Fecha Turno Entrega']); if (b && agKey(b) < hoyK){ f = b; origen = 'base'; } }
       if (!f || agKey(f) >= hoyK) return;   // turno de hoy: todavía puede emitirse
@@ -14109,7 +14110,7 @@
         <div>
           <div class="brand-name">📋 Entregados sin aviso de entrega (acumulado)</div>
           <div class="brand-count" style="color:${vis.length ? 'var(--amber)' : 'var(--green)'}">${vis.length.toLocaleString('es-AR')}</div>
-          <div class="brand-breakdown">Turno de entrega ya pasado (agenda o base) y sin "Fecha Entrega Unidad" (col. BS) · no cuenta los que salen por Don Bosco, reventa, unidad facturada, traslado, etc.${SA.mes !== 'todos' ? ' · ' + mesLbl(SA.mes) : ''}</div>
+          <div class="brand-breakdown">Turno de entrega ya pasado (agenda o base) y sin "Fecha Entrega Unidad" (col. BS) · no cuenta los que salen por Don Bosco, reventa, unidad facturada, etc. (los traslados sí)${SA.mes !== 'todos' ? ' · ' + mesLbl(SA.mes) : ''}</div>
         </div>
         <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
           <select id="saMes" class="month-select" aria-label="Mes del turno"><option value="todos">Todos los meses</option>${mesesK.map(k => `<option value="${k}" ${SA.mes === k ? 'selected' : ''}>${mesLbl(k)} (${meses[k]})</option>`).join('')}</select>
