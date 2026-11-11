@@ -8251,6 +8251,8 @@
     if (hasAveria(row) && !exc.has('averia')) return false;
     const dominio = (row['Dominio'] || '').toString().trim();
     if (dominio === '' && !(opt && opt.sinDominio)) return false;
+    // Facturados: sin certificado de fábrica arribado no se puede patentar → no está listo
+    if (opt && opt.sinDominio && !(row['Fecha Arribo Certificado'] || '').toString().trim()) return false;
     const patenta = (row['Patenta?'] || '').toString().trim().toUpperCase();
     if (patenta === 'MAIPU' && !exc.has('geac') && !(opt && opt.sinDominio)){
       const geac = (row['Fecha Entrega Tramite a GEAC'] || '').toString().trim();
@@ -8279,6 +8281,7 @@
     {k:'ubicacion', label:'📍 No en DQ (reparación / exhibición)'},
     {k:'otraubic', label:'📦 Otra ubicación (traslado / depósito)'},
     {k:'dominio', label:'🏛️ Sin dominio cargado'},
+    {k:'certificado', label:'📄 Sin certificado arribado'},
     {k:'turno', label:'📅 Ya tiene turno asignado'}
   ];
   function patMotivosNoOk(row, opt){
@@ -8306,6 +8309,7 @@
       else if (!m.length) add('otraubic');
     }
     if (up('Dominio') === '' && !(opt && opt.sinDominio)) m.push('dominio');
+    if (opt && opt.sinDominio && up('Fecha Arribo Certificado') === '') m.push('certificado');
     if (up('Fecha Turno Entrega') !== '') m.push('turno');
     const exc = patExc(row);
     if (!exc.size) return m;
