@@ -2561,6 +2561,29 @@
           <div class="ent-obj" id="entObjBox"></div>
         </div>
 
+        <div class="panel" id="entTextoPanel">
+          <div class="panel-head">
+            <h3>🧾 Cuánto demoró cada área, en palabras</h3>
+            <div class="hint">Sobre los autos entregados fuera de plazo con los filtros de arriba · "días por auto demorado" = días que esa área corrió la entrega, en promedio, en cada auto que demoró · clic en una línea para ver esos autos</div>
+          </div>
+          <div id="entTextoBox"></div>
+        </div>
+
+        <div class="panel" id="entSpcPanel">
+          <div class="panel-head">
+            <h3>📈 Control estadístico del proceso</h3>
+            <div class="hint">Promedio de días de la instancia elegida por período (fecha de entrega) · línea central = promedio general · límites = promedio ± 3 desvíos (según la cantidad de autos de cada período) · los puntos en rojo están fuera de control</div>
+          </div>
+          <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:10px;">
+            <label class="hint" for="spcEtapa">Instancia</label><select id="spcEtapa" class="month-select"></select>
+            <label class="hint" for="spcMarca">Marca</label><select id="spcMarca" class="month-select"></select>
+            <label class="hint" for="spcPeriodo">Período</label>
+            <select id="spcPeriodo" class="month-select"><option value="semana">Semana</option><option value="mes">Mes</option></select>
+          </div>
+          <div style="position:relative; height:320px;"><canvas id="spcChart"></canvas></div>
+          <div id="spcResumen" class="hint" style="margin-top:8px;"></div>
+        </div>
+
         <div class="panel" id="entPromPanel">
           <div class="panel-head">
             <h3>⏱️ Días promedio de cada instancia</h3>
@@ -9603,6 +9626,8 @@
         </div>`;
       }).join('');
       }).join('');
+    try { entRenderTexto(rank, tarde); } catch(e){ console.error('entRenderTexto', e); }
+    try { ENT_SPC_BASE = base; entRenderSpc(); } catch(e){ console.error('entRenderSpc', e); }
     $('entRanking').querySelectorAll('[data-rsort]').forEach(el => el.addEventListener('click', ev => {
       ev.stopPropagation();
       const k = el.dataset.rsort;
@@ -9819,6 +9844,101 @@
       if (ENT_STATE.promOrden === c) ENT_STATE.promAsc = !ENT_STATE.promAsc; else { ENT_STATE.promOrden = c; ENT_STATE.promAsc = false; }
       entRenderPromedios(base);
     }));
+  }
+
+  // ---- En palabras: cuántos autos demoró cada área y cuántos días sumó ----
+  function entRenderTexto(rank, tarde){
+    const el = $('entTextoBox'); if (!el) return;
+    const f1 = v => v.toFixed(1).replace('.', ',');
+    const n = v => v.toLocaleString('es-AR');
+    const lista = rank.filter(x => x.n > 0).slice().sort((a, b) => b.dias - a.dias);
+    if (!lista.length){ el.innerHTML = '<div class="hint">Sin entregas fuera de plazo con estos filtros 🎉</div>'; return; }
+    const totDias = lista.reduce((s2, x) => s2 + x.dias, 0) || 1;
+    el.innerHTML = `<div style="display:flex; flex-direction:column; gap:6px;">${lista.map(x => {
+      const a = ENT_AREAS[x.k];
+      return `<div class="ent-texto ${ENT_STATE.area === x.k ? 'sel' : ''}" data-area="${x.k}" style="padding:8px 10px; border-radius:8px; border:1px solid var(--border); background:var(--surface-2); cursor:pointer; font-size:13px; line-height:1.5;">
+        ${a.icon} <b>${escapeHtml(a.label)}</b> demoró la entrega de <b>${n(x.n)}</b> auto${x.n === 1 ? '' : 's'} (${Math.round(x.n / tarde.length * 100)}% de los fuera de plazo)
+        y sumó <b>${n(x.dias)} días hábiles</b> de atraso (${Math.round(x.dias / totDias * 100)}% del total):
+        <b style="color:${a.color};">${f1(x.dias / x.n)} días por cada auto que demoró</b>.
+        <span class="hint">Fue la causa principal en ${n(x.inv)}.</span></div>`;
+    }).join('')}</div>`;
+    el.querySelectorAll('[data-area]').forEach(d => d.addEventListener('click', () => {
+      ENT_STATE.area = ENT_STATE.area === d.dataset.area ? null : d.dataset.area;
+      renderEntregasAcelSection();
+      if (ENT_STATE.area) document.getElementById('entTable').scrollIntoView({behavior:'smooth', block:'start'});
+    }));
+  }
+
+  // ---- Control estadístico del proceso (gráfico de medias con límites ±3σ) ----
+  let ENT_SPC_BASE = [], spcChartInst = null;
+  function entRenderSpc(){
+    const selE = $('spcEtapa'), selM = $('spcMarca'), selP = $('spcPeriodo');
+    if (!selE) return;
+    if (!selE.dataset.bound){
+      selE.dataset.bound = '1';
+      [selE, selM, selP].forEach(x => x.addEventListener('change', entRenderSpc));
+    }
+    const base = ENT_SPC_BASE || [];
+    // Instancias disponibles
+    const nombres = new Set(); base.forEach(u => u.etapas.forEach(e => { if (entTardo(e) !== null) nombres.add(entColEtapa(e)); }));
+    const ops = ['__total'].concat(ENT_COL_ORDEN.filter(x => nombres.has(x)), [...nombres].filter(x => !ENT_COL_ORDEN.includes(x)));
+    const prevE = selE.value || 'Carpeta GEAC';
+    selE.innerHTML = ops.map(o => `<option value="${escapeHtml(o)}">${o === '__total' ? 'Total: venta → entrega' : escapeHtml(o)}</option>`).join('');
+    selE.value = ops.includes(prevE) ? prevE : ops[0];
+    const marcas = [...new Set(base.map(u => u.marca))].sort();
+    const prevM = selM.value || 'todas';
+    selM.innerHTML = '<option value="todas">Todas</option>' + marcas.map(m => `<option value="${m}">${escapeHtml(PATENTADOS_BRAND_LABELS[m] || m)}</option>`).join('');
+    selM.value = prevM === 'todas' || marcas.includes(prevM) ? prevM : 'todas';
+    const etapaSel = selE.value, marcaSel = selM.value, per = selP.value;
+    // Valores individuales (auto → días de la instancia) con su fecha de entrega
+    const pts = [];
+    let objs = new Set(), corr = false;
+    base.forEach(u => {
+      if (marcaSel !== 'todas' && u.marca !== marcaSel) return;
+      if (!u.E) return;
+      if (etapaSel === '__total'){ if (u.fv) pts.push({d: u.E, v: diasHabilesSLA(u.fv, u.E) || 0}); return; }
+      u.etapas.forEach(e => { if (entColEtapa(e) !== etapaSel) return; const t = entTardo(e); if (t === null) return; pts.push({d: u.E, v: t}); if (e.obj !== null && e.obj !== undefined) objs.add(e.obj); if (e.corridos) corr = true; });
+    });
+    const unidad = corr ? 'días' : 'dh';
+    if (pts.length < 5){ if (spcChartInst){ spcChartInst.destroy(); spcChartInst = null; } $('spcResumen').textContent = 'Muy pocos datos para el control estadístico con esta selección.'; return; }
+    const keyOf = d => { if (per === 'mes') return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+      const x = new Date(d); x.setHours(0,0,0,0); x.setDate(x.getDate() - ((x.getDay() + 6) % 7)); return agKey(x); };
+    const grupos = {}; pts.forEach(p => { const k = keyOf(p.d); (grupos[k] = grupos[k] || []).push(p.v); });
+    const keys = Object.keys(grupos).sort();
+    const all = pts.map(p => p.v), N = all.length;
+    const media = all.reduce((a, b) => a + b, 0) / N;
+    const sd = Math.sqrt(all.reduce((a, b) => a + (b - media) ** 2, 0) / Math.max(1, N - 1));
+    const medias = keys.map(k => grupos[k].reduce((a, b) => a + b, 0) / grupos[k].length);
+    const ucl = keys.map(k => media + 3 * sd / Math.sqrt(grupos[k].length));
+    const lcl = keys.map(k => Math.max(0, media - 3 * sd / Math.sqrt(grupos[k].length)));
+    const fuera = medias.map((m, i) => m > ucl[i] || m < lcl[i]);
+    const obj = objs.size === 1 ? [...objs][0] : null;
+    const lbl = k => per === 'mes' ? (() => { const [y, m] = k.split('-').map(Number); return new Date(y, m - 1, 1).toLocaleDateString('es-AR', {month:'short', year:'2-digit'}); })() : 'Sem ' + entFmt(agFromKey(k)).slice(0, 5);
+    const css = getComputedStyle(document.documentElement);
+    const col = v => css.getPropertyValue(v).trim() || '#888';
+    if (spcChartInst) spcChartInst.destroy();
+    spcChartInst = new Chart($('spcChart').getContext('2d'), {
+      type: 'line',
+      data: { labels: keys.map(lbl), datasets: [
+        {label: 'Promedio del período', data: medias, borderColor: col('--blue'), backgroundColor: col('--blue'), tension: 0, pointRadius: medias.map((m, i) => fuera[i] ? 6 : 3), pointBackgroundColor: fuera.map(f => f ? col('--red') : col('--blue')), pointBorderColor: fuera.map(f => f ? col('--red') : col('--blue'))},
+        {label: 'Línea central (promedio)', data: keys.map(() => media), borderColor: col('--green'), borderWidth: 1.5, pointRadius: 0},
+        {label: 'Límite superior (+3σ)', data: ucl, borderColor: col('--red'), borderDash: [6, 4], borderWidth: 1.2, pointRadius: 0, stepped: 'middle'},
+        {label: 'Límite inferior (−3σ)', data: lcl, borderColor: col('--red'), borderDash: [6, 4], borderWidth: 1.2, pointRadius: 0, stepped: 'middle'},
+        ...(obj !== null ? [{label: 'Objetivo', data: keys.map(() => obj), borderColor: col('--amber'), borderDash: [2, 3], borderWidth: 1.5, pointRadius: 0}] : [])
+      ]},
+      options: { responsive: true, maintainAspectRatio: false, interaction: {mode: 'index', intersect: false},
+        plugins: { legend: {labels: {color: col('--text-dim'), boxWidth: 14}},
+          tooltip: {callbacks: {label: c => `${c.dataset.label}: ${c.parsed.y.toFixed(1).replace('.', ',')} ${unidad}` + (c.datasetIndex === 0 ? ` (${grupos[keys[c.dataIndex]].length} autos)` : '')}} },
+        scales: { x: {ticks: {color: col('--text-dim')}, grid: {color: 'rgba(128,128,128,.12)'}},
+          y: {beginAtZero: true, title: {display: true, text: unidad, color: col('--text-dim')}, ticks: {color: col('--text-dim')}, grid: {color: 'rgba(128,128,128,.12)'}} } }
+    });
+    const f1 = v => v.toFixed(1).replace('.', ',');
+    const nf = fuera.filter(Boolean).length;
+    const sobreObj = obj !== null ? Math.round(all.filter(v => v > obj).length / N * 100) : null;
+    $('spcResumen').innerHTML = `Promedio <b>${f1(media)} ${unidad}</b> · desvío <b>${f1(sd)}</b> · ${N.toLocaleString('es-AR')} autos en ${keys.length} ${per === 'mes' ? 'meses' : 'semanas'}` +
+      (obj !== null ? ` · objetivo ${obj} ${unidad}: ${sobreObj}% de los autos lo superó` : '') +
+      ` · <b style="color:${nf ? 'var(--red)' : 'var(--green)'};">${nf ? nf + ' período' + (nf > 1 ? 's' : '') + ' fuera de control' : 'proceso bajo control'}</b>` +
+      (nf ? ': ' + keys.filter((k, i) => fuera[i]).map(k => `${lbl(k)} (${f1(medias[keys.indexOf(k)])})`).join(', ') : '');
   }
 
   // Nombre de columna fijo por etapa (sin la zona / crédito entre paréntesis)
