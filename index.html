@@ -17,7 +17,7 @@
   window.giEnAppsScript = function(){ return /googleusercontent\.com$/.test(location.hostname); };
   window.recargarPagina = function(){
     try { if (window.giEnAppsScript()){ window.top.location.href = window.GI_APPS_URL; return; } } catch(e){}
-    recargarPagina();
+    location.href = location.pathname + '?_v=' + Date.now();
   };
 </script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
