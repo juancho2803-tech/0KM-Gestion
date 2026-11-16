@@ -9529,7 +9529,7 @@
     const top = ordenCausas[0], top2 = ordenCausas[1];
     const kpi = (l, v, s, c) => `<div class="ent-kpi" style="--kc:${c}"><div class="l">${l}</div><div class="v">${v}</div><div class="s">${s}</div></div>`;
     $('entKpis').innerHTML =
-      kpi('🚚 Entregados', base.length.toLocaleString('es-AR'), `según fecha de turno · ${sinTurno.toLocaleString('es-AR')} sin turno cargado (no se analizan)`, 'var(--blue)') +
+      kpi('🚚 Entregados', base.length.toLocaleString('es-AR'), `según fecha de turno · ${sinTurno.toLocaleString('es-AR')} sin turno: no son entregas de Maipú (no se analizan)`, 'var(--blue)') +
       kpi('⏰ Fuera de plazo', `${tarde.length.toLocaleString('es-AR')} · ${pct}%`, `${base.length - tarde.length} en plazo`, pct >= 30 ? 'var(--red)' : 'var(--amber)') +
       kpi('📏 Atraso promedio', tarde.length ? prom.toFixed(1) + ' dh' : '—', 'días hábiles sobre el plazo', 'var(--orange)') +
       kpi('🥇 Área #1', top ? `${ENT_AREAS[top[0]].icon} ${Math.round(top[1] / tarde.length * 100)}%` : '—', top ? `${ENT_AREAS[top[0]].label} · causa principal en ${top[1]} autos` : 'sin entregas tarde', 'var(--red)') +
@@ -9538,7 +9538,7 @@
         const c = k => tarde.filter(u => u.frena === k).length;
         const p = k => tarde.length ? Math.round(c(k) / tarde.length * 100) : 0;
         return kpi('🚦 Qué circuito frenó', tarde.length ? `<span style="font-size:18px; white-space:nowrap;">🔧${p('fisico')}% 📄${p('documental')}% 🔧📄${p('ambos')}%</span>` : '—',
-          tarde.length ? `físico ${c('fisico')} · documental ${c('documental')} · ambos ${c('ambos')} · el resto (${c('turno')}) estuvo listo a tiempo` : '', 'var(--blue)');
+          tarde.length ? `físico ${c('fisico')} · documental ${c('documental')} · ambos ${c('ambos')} · ${c('turno')} estaban listos a tiempo pero igual se demoró la entrega (turno / cliente)` : '', 'var(--blue)');
       })() +
       (() => {
         const ti = base.filter(u => u.tInf && u.tInf.asignado);
