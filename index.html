@@ -1383,6 +1383,14 @@
             <div class="an-sub" id="agPendTitle">Sin turno en la agenda</div>
             <div class="hint" style="margin-bottom:6px; font-size:11px;">Clic en uno para elegirlo y después clic en un casillero libre.</div>
             <div id="agPendientes"></div>
+            <div style="margin-top:14px; border-top:1px solid var(--border); padding-top:12px;">
+              <div class="an-sub" style="margin-bottom:6px;">📥 Entregados del mes</div>
+              <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+                <select id="agEntMes" class="month-select" aria-label="Mes de entrega" style="flex:1; min-width:150px;"></select>
+                <button type="button" class="page-btn" id="agEntXlsx">⬇️ Excel</button>
+              </div>
+              <div class="hint" id="agEntInfo" style="margin-top:6px; font-size:11px;"></div>
+            </div>
           </div>
         </div>
       </div>
@@ -13163,6 +13171,7 @@
     agRenderEstado();
     try { agActualizarBtnSinEntrega(); } catch(e){}
     try { renderSinAviso(); } catch(e){ console.error('renderSinAviso', e); }
+    try { agRenderEntMes(); } catch(e){ console.error('agRenderEntMes', e); }
   }
 
   function agRenderBuscar(){
@@ -14069,6 +14078,60 @@
     $('patExcSave').addEventListener('click', () => patGuardarExc(false));
     $('patExcQuitar').addEventListener('click', () => patGuardarExc(true));
     $('patExcCancel').addEventListener('click', () => { $('patExcModal').style.display = 'none'; });
+  }
+
+  // ---------- Agenda: Excel de todos los autos entregados en un mes ----------
+  // Mismo criterio de "entregado" y de fecha que Informe Germán (aviso de entrega, turno de la
+  // base o turno cumplido en la agenda).
+  function agEntregadosMes(){
+    const out = [];
+    ALL_ROWS.forEach(r => {
+      if (!CAR_BRANDS.includes((r['Marca'] || '').toString().trim().toUpperCase()) || !isEntregado(r)) return;
+      const d = fechaEntregaEfectiva(r); if (!d) return;
+      out.push({r, d, mes: d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0')});
+    });
+    return out;
+  }
+  function agRenderEntMes(){
+    const sel = $('agEntMes'); if (!sel || !ALL_ROWS.length) return;
+    const todos = agEntregadosMes(), cnt = {};
+    todos.forEach(x => { cnt[x.mes] = (cnt[x.mes] || 0) + 1; });
+    const meses = Object.keys(cnt).sort().reverse().slice(0, 24);
+    const prev = sel.value, hoy = new Date(), mk = hoy.getFullYear() + '-' + String(hoy.getMonth() + 1).padStart(2, '0');
+    const lbl = k => { const [y, m] = k.split('-').map(Number); const t = new Date(y, m - 1, 1).toLocaleDateString('es-AR', {month:'long', year:'numeric'}); return t.charAt(0).toUpperCase() + t.slice(1); };
+    sel.innerHTML = meses.map(k => `<option value="${k}">${lbl(k)} (${cnt[k]})</option>`).join('');
+    sel.value = meses.includes(prev) ? prev : (meses.includes(mk) ? mk : (meses[0] || ''));
+    $('agEntInfo').textContent = sel.value ? `${cnt[sel.value]} autos entregados en ${lbl(sel.value).toLowerCase()}` : 'Sin entregas en la base';
+  }
+  if ($('agEntMes')){
+    $('agEntMes').addEventListener('change', agRenderEntMes);
+    $('agEntXlsx').addEventListener('click', () => {
+      const mes = $('agEntMes').value;
+      const rows = agEntregadosMes().filter(x => x.mes === mes).sort((a, b) => a.d - b.d);
+      if (!rows.length){ showToast('No hay entregados en ese mes'); return; }
+      const t = (r, c) => (r[c] || '').toString().trim();
+      const data = rows.map(({r, d}) => {
+        const i = t(r, 'Interno');
+        let tu = null; try { tu = [...AG.data.values()].filter(x => x.estado === 'turno' && agInternos(x.interno).includes(i)).sort((a, b) => a.fecha < b.fecha ? 1 : -1)[0] || null; } catch(e){}
+        const origen = t(r, 'Fecha Entrega Unidad') ? 'Aviso de entrega (col. BS)' : (t(r, 'Fecha Turno Entrega') ? 'Turno de la base' : (agTurnoCumplido(r) ? 'Turno en la agenda de la app' : 'Otro'));
+        const fp = parseDateFlexible(r['Fecha Patentamiento']);
+        return {
+          'Fecha entrega': entFmt(d), 'Dato de entrega': origen,
+          'Hora / entregador (agenda)': tu ? `${tu.hora} · ${tu.entregador}` : '',
+          'Aviso de entrega emitido': t(r, 'Fecha Entrega Unidad') ? 'SI' : 'NO',
+          'Marca': t(r, 'Marca'), 'Interno': i, 'Nro. Operacion': t(r, 'Nro. Operacion'), 'Cliente': t(r, 'Cliente'),
+          'Modelo': t(r, 'Modelo'), 'Color': t(r, 'Color'), 'Dominio': t(r, 'Dominio'), 'Vendedor': t(r, 'Vendedor'), 'Canal': t(r, 'Canal'),
+          'Patenta': t(r, 'Patenta?'), 'Fecha Patentamiento': formatDateDisplay(r['Fecha Patentamiento']),
+          'Mes patentamiento': fp ? fp.toLocaleDateString('es-AR', {month:'short', year:'numeric'}) : '',
+          'Usado en la operacion': esUsado(r) ? 'SI' : 'NO', 'Accesorios': tieneAccesorios(r) ? 'SI' : 'NO',
+          'Nota de entrega': ((OBSERVATIONS.get(obsKey(i, 'notaentrega')) || {}).observacion || '')
+        };
+      });
+      const ws = XLSX.utils.json_to_sheet(data);
+      ws['!cols'] = Object.keys(data[0]).map(k => ({wch: Math.max(12, k.length + 2)}));
+      const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Entregados ' + mes);
+      XLSX.writeFile(wb, `entregados_${mes}_${todayStamp()}.xlsx`);
+    });
   }
 
   // ---------- Entregados sin aviso de entrega (acumulado) ----------
