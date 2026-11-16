@@ -682,7 +682,7 @@
   .ent-kpi .s{font-size:11px; color:var(--text-faint); margin-top:3px;}
   .ent-grid2{display:grid; grid-template-columns:1.1fr 1fr; gap:16px;}
   @media (max-width:1000px){ .ent-grid2{grid-template-columns:1fr;} }
-  .ent-rank-row{display:grid; grid-template-columns:22px minmax(190px,1.3fr) 2fr 150px; gap:10px; align-items:center; padding:7px 6px; border-radius:8px; cursor:pointer;}
+  .ent-rank-row{display:grid; grid-template-columns:22px minmax(190px,1.3fr) 2fr 130px 150px; gap:10px; align-items:center; padding:7px 6px; border-radius:8px; cursor:pointer;}
   .ent-rank-row:hover{background:var(--surface-2);}
   .ent-rank-row.sel{background:var(--surface-3); box-shadow:inset 3px 0 0 var(--amber);}
   .ent-rank-row .pos{font-family:'JetBrains Mono',monospace; color:var(--text-faint); font-size:12px;}
@@ -692,7 +692,7 @@
   .ent-trk{display:inline-block; font-size:11px; opacity:.75; margin-right:4px;}
   .ent-rank-row .fill{height:100%; border-radius:6px; background:var(--red);}
   .ent-rank-row .meta{font-size:11px; color:var(--text-dim); text-align:right; line-height:1.35;}
-  .ent-rank-head{display:grid; grid-template-columns:22px minmax(190px,1.3fr) 2fr 150px; gap:10px; padding:0 6px 6px; font-size:10.5px; text-transform:uppercase; letter-spacing:.6px; color:var(--text-faint);}
+  .ent-rank-head{display:grid; grid-template-columns:22px minmax(190px,1.3fr) 2fr 130px 150px; gap:10px; padding:0 6px 6px; font-size:10.5px; text-transform:uppercase; letter-spacing:.6px; color:var(--text-faint);}
   table.ent-matrix td, table.ent-matrix th{text-align:center; white-space:nowrap;}
   table.ent-matrix td:first-child, table.ent-matrix th:first-child{text-align:left;}
   .ent-cell{display:inline-block; min-width:54px; padding:3px 6px; border-radius:6px; font-family:'JetBrains Mono',monospace; font-size:11.5px;}
@@ -868,6 +868,7 @@
   body.rol-accesorios #aceleracionSubNav .subtab-btn:not([data-subtab="accesorios"]),
   body.rol-accesorios #agSinEntregaBtn,
   body.rol-accesorios #dropZoneLocked { display:none !important; }
+  .ent-sorth{cursor:pointer; user-select:none;} .ent-sorth:hover{color:var(--text);} .ent-sorth.on{color:var(--blue); font-weight:800;}
 </style>
 </head>
 <body data-theme="dark">
@@ -9566,11 +9567,15 @@
       const dias = us.reduce((s,u) => s + (u.aporte[k] || 0), 0);
       const prom = us.length ? dias / us.length : 0;
       return {k, n:us.length, inv:princ, dias, prom};
-    }).filter(x => x.inv > 0).sort((a,b) => b.inv - a.inv || b.n - a.n);
+    }).filter(x => x.inv > 0 || x.dias > 0);
+    // Orden elegible: % causa principal, días aportados o autos en los que aportó (mayor a menor o al revés)
+    const ro = ENT_STATE.rankOrden || 'inv', rdir = ENT_STATE.rankAsc ? -1 : 1;
+    rank.sort((a,b) => rdir * ((b[ro] - a[ro]) || (b.inv - a.inv) || (b.dias - a.dias)));
     const maxN = Math.max(1, ...rank.map(x => x.n));
     const totDias = rank.reduce((s,x) => s + x.dias, 0) || 1;
     $('entRanking').innerHTML = !rank.length ? '<div class="hint">Sin entregas fuera de plazo con estos filtros 🎉</div>' :
-      `<div class="ent-rank-head"><span>#</span><span>Área</span><span>% de los autos fuera de plazo en los que fue la causa principal</span><span style="text-align:right;">Autos · también aportó en</span></div>` +
+      (() => { const h = (k, t, st) => `<span class="ent-sorth ${ro === k ? 'on' : ''}" data-rsort="${k}" style="${st || ''}" title="Clic para ordenar">${t} ${ro === k ? (ENT_STATE.rankAsc ? '▲' : '▼') : '↕'}</span>`;
+        return `<div class="ent-rank-head"><span>#</span><span>Área</span>${h('inv', '% de los autos fuera de plazo en los que fue la causa principal')}${h('dias', 'Días aportados (ponderado)', 'text-align:right;')}${h('n', 'Autos · también aportó en', 'text-align:right;')}</div>`; })() +
       (ENT_STATE.vista === 'junto'
         ? [[null, '']]
         : [['fisico','🔧 Circuito físico'],['documental','📄 Circuito documental'],['turno','📅 Con el auto listo']]
@@ -9593,10 +9598,17 @@
             return `<div class="hint" style="font-size:11px; font-weight:400; margin-top:2px;" title="Días de demora aportados: envío ${dEnv} dh · instalación ${dIns} dh">📦 envío (pedido): ${env} · 🔧 instalación: ${ins}</div>`;
           })() : ''}</span>
           <div class="track"><div class="fill" style="width:${Math.max(p, 1)}%; background:${a.color};"></div><span class="pct">${p}%</span></div>
+          <span class="meta" title="Suma de días que esta área corrió las entregas fuera de plazo · ${Math.round(x.dias / totDias * 100)}% de todos los días de atraso · repartido entre los ${tarde.length} autos fuera de plazo da ${(x.dias / Math.max(1, tarde.length)).toFixed(1)} dh por auto"><b>${x.dias.toLocaleString('es-AR')} dh</b> · ${Math.round(x.dias / totDias * 100)}%<br>${(x.dias / Math.max(1, tarde.length)).toFixed(1).replace('.', ',')} dh por auto</span>
           <span class="meta"><b>${x.inv.toLocaleString('es-AR')}</b> de ${tarde.length.toLocaleString('es-AR')} autos<br>aportó en ${x.n.toLocaleString('es-AR')} (${pp}%)</span>
         </div>`;
       }).join('');
       }).join('');
+    $('entRanking').querySelectorAll('[data-rsort]').forEach(el => el.addEventListener('click', ev => {
+      ev.stopPropagation();
+      const k = el.dataset.rsort;
+      if ((ENT_STATE.rankOrden || 'inv') === k) ENT_STATE.rankAsc = !ENT_STATE.rankAsc; else { ENT_STATE.rankOrden = k; ENT_STATE.rankAsc = false; }
+      renderEntregasAcelSection();
+    }));
     $('entRanking').querySelectorAll('.ent-rank-row').forEach(el => el.addEventListener('click', () => {
       ENT_STATE.area = ENT_STATE.area === el.dataset.area ? null : el.dataset.area;
       ENT_STATE.estado = 'tarde';
@@ -9609,8 +9621,11 @@
     const marcas = ENT_STATE.allBrands.filter(b => ENT_STATE.brands.has(b));
     const tardeMarca = {};
     marcas.forEach(m => { tardeMarca[m] = tarde.filter(u => u.marca === m).length; });
-    const areasMat = rank.map(x => x.k);
-    let mh = `<thead><tr><th>Área</th>${marcas.map(m => `<th>${escapeHtml(brandLabel(m))}<br><span style="font-weight:400; text-transform:none;">${tardeMarca[m]} tarde</span></th>`).join('')}</tr></thead><tbody>`;
+    const areasMat = rank.filter(x => x.inv > 0).map(x => x.k);
+    const mo = ENT_STATE.matOrden || null, mdir = ENT_STATE.matAsc ? -1 : 1;
+    if (mo){ const cnt = (k, m) => tarde.filter(u => (m === '__tot' || u.marca === m) && u.causa === k).length; areasMat.sort((a, b) => mdir * (cnt(b, mo) - cnt(a, mo))); }
+    const mth = (k, t) => `<th class="ent-sorth ${mo === k ? 'on' : ''}" data-msort="${k}" title="Clic para ordenar">${t} ${mo === k ? (ENT_STATE.matAsc ? '▲' : '▼') : '↕'}</th>`;
+    let mh = `<thead><tr>${mth('__tot', 'Área')}${marcas.map(m => mth(m, `${escapeHtml(brandLabel(m))}<br><span style="font-weight:400; text-transform:none;">${tardeMarca[m]} tarde</span>`)).join('')}</tr></thead><tbody>`;
     areasMat.forEach(k => {
       mh += `<tr><td>${ENT_AREAS[k].icon} ${escapeHtml(ENT_AREAS[k].label)}</td>` + marcas.map(m => {
         const n = tarde.filter(u => u.marca === m && u.causa === k).length;
@@ -9624,6 +9639,11 @@
       return `<td><span class="ent-cell" style="background:${entPctColor(p)}"><b>${p}%</b> <small>(${tardeMarca[m]}/${tot})</small></span></td>`;
     }).join('') + '</tr></tbody>';
     $('entMatrix').innerHTML = areasMat.length ? mh : '<tbody><tr><td class="hint">Sin datos</td></tr></tbody>';
+    $('entMatrix').querySelectorAll('[data-msort]').forEach(th => th.addEventListener('click', () => {
+      const k = th.dataset.msort;
+      if (ENT_STATE.matOrden === k) ENT_STATE.matAsc = !ENT_STATE.matAsc; else { ENT_STATE.matOrden = k; ENT_STATE.matAsc = false; }
+      renderEntregasAcelSection();
+    }));
 
     // ---- Evolución mensual ----
     const meses = [...new Set(base.map(u => u.mes))].sort();
@@ -9775,10 +9795,13 @@
     const tot = base.filter(u => u.fv && u.E).map(u => diasHabilesSLA(u.fv, u.E) || 0);
     const prom = tot.length ? (tot.reduce((x, y) => x + y, 0) / tot.length) : null;
     if (!orden.length){ el.innerHTML = '<div class="hint">Sin datos con estos filtros</div>'; return; }
-    const keys = orden.sort((a, b) => (ag[a].track === ag[b].track ? 0 : (ag[a].track === 'fisico' ? -1 : 1)));
+    const po = ENT_STATE.promOrden || null, pdir = ENT_STATE.promAsc ? -1 : 1;
+    const pval = (k, c) => { const a = ag[k]; return c === 'prom' ? a.sum / a.n : c === 'tarde' ? (a.nT ? a.sumT / a.nT : -1) : c === 'exc' ? a.exc / a.n : a.n; };
+    const keys = po ? orden.sort((a, b) => pdir * (pval(b, po) - pval(a, po))) : orden.sort((a, b) => (ag[a].track === ag[b].track ? 0 : (ag[a].track === 'fisico' ? -1 : 1)));
+    const pth = (c, t) => `<th class="ent-sorth ${po === c ? 'on' : ''}" data-psort="${c}" style="text-align:center;" title="Clic para ordenar">${t} ${po === c ? (ENT_STATE.promAsc ? '▲' : '▼') : '↕'}</th>`;
     const f = v => v.toFixed(1).replace('.', ',');
     el.innerHTML = `<div class="table-scroll" style="display:block;"><table class="data-table">
-      <thead><tr><th>Instancia</th><th style="text-align:center;">Promedio</th><th style="text-align:center;">Objetivo</th><th style="text-align:center;">Promedio en los fuera de plazo</th><th style="text-align:center;">% que se pasó del objetivo</th><th style="text-align:center;">Autos</th></tr></thead><tbody>
+      <thead><tr><th>Instancia</th>${pth('prom', 'Promedio')}<th style="text-align:center;">Objetivo</th>${pth('tarde', 'Promedio en los fuera de plazo')}${pth('exc', '% que se pasó del objetivo')}${pth('n', 'Autos')}</tr></thead><tbody>
       ${keys.map(k => { const a = ag[k], p = a.sum / a.n, u = a.corr ? 'días' : 'dh';
         const os = [...a.objs].sort((x, y) => x - y); a.obj = os.length === 1 ? os[0] : null;
         const objTxt = !os.length ? '—' : (os.length === 1 ? os[0] + ' ' + u : `${os[0]} a ${os[os.length - 1]} ${u} (${k.startsWith('gi|') ? 'según crédito' : 'según zona'})`);
@@ -9791,6 +9814,11 @@
           <td style="text-align:center;">${a.n.toLocaleString('es-AR')}</td></tr>`; }).join('')}
       ${prom !== null ? `<tr style="font-weight:700; background:var(--surface-3);"><td>🏁 Total: venta → entrega</td><td style="text-align:center;">${f(prom)} dh</td><td colspan="4" style="color:var(--text-dim); font-weight:400;">promedio de ${tot.length.toLocaleString('es-AR')} autos</td></tr>` : ''}
       </tbody></table></div>`;
+    el.querySelectorAll('[data-psort]').forEach(th => th.addEventListener('click', () => {
+      const c = th.dataset.psort;
+      if (ENT_STATE.promOrden === c) ENT_STATE.promAsc = !ENT_STATE.promAsc; else { ENT_STATE.promOrden = c; ENT_STATE.promAsc = false; }
+      entRenderPromedios(base);
+    }));
   }
 
   // Nombre de columna fijo por etapa (sin la zona / crédito entre paréntesis)
