@@ -2560,6 +2560,14 @@
           <div class="ent-obj" id="entObjBox"></div>
         </div>
 
+        <div class="panel" id="entPromPanel">
+          <div class="panel-head">
+            <h3>⏱️ Días promedio de cada instancia</h3>
+            <div class="hint">Cuánto tardó en promedio cada etapa desde que estuvo disponible (días hábiles, salvo las que se miden en corridos) · sobre los autos entregados con los filtros de arriba · los dos circuitos corren en paralelo, por eso no se suman</div>
+          </div>
+          <div id="entPromBox"></div>
+        </div>
+
         <div class="ent-grid2">
           <div class="panel">
             <div class="panel-head">
@@ -9502,6 +9510,7 @@
     }
     const base = entFiltrar(all);
     const tarde = base.filter(u => u.tarde);
+    try { entRenderPromedios(base); } catch(e){ console.error('entRenderPromedios', e); }
     const sinTurno = ALL_ROWS.filter(r => {
       if (!entSinTurno(r)) return false;
       const m = (r['Marca'] || '').toString().trim().toUpperCase();
@@ -9745,6 +9754,51 @@
     </div>`;
   }
 
+  // Días que tardó una etapa desde que estuvo disponible (hábiles, o corridos si se mide así)
+  function entTardo(e){
+    if (!e || !e.start || !e.end || e.end < e.start) return null;
+    return e.corridos ? Math.round((e.end - e.start) / 86400000) : (diasHabilesSLA(e.start, e.end) || 0);
+  }
+  function entRenderPromedios(base){
+    const el = $('entPromBox'); if (!el) return;
+    const ag = {}, orden = [];
+    base.forEach(u => u.etapas.forEach(e => {
+      const t = entTardo(e); if (t === null) return;
+      // Se agrupa por etapa + área (ej.: el patentamiento lo hace la gestoría externa o el cliente)
+      const gk = e.key + '|' + e.area;
+      const lbl = e.key === 'patente' ? (ENT_AREAS[e.area] ? ENT_AREAS[e.area].label : e.label) : e.label.replace(/ \(.*\)$/, '');
+      if (!ag[gk]){ ag[gk] = {label: lbl, track: e.track, objs: new Set(), corr: e.corridos, n:0, sum:0, sumT:0, nT:0, exc:0}; orden.push(gk); }
+      const a = ag[gk]; a.n++; a.sum += t; if (e.exceso > 0) a.exc++;
+      if (e.obj !== null && e.obj !== undefined) a.objs.add(e.obj);
+      if (u.tarde){ a.nT++; a.sumT += t; }
+    }));
+    const tot = base.filter(u => u.fv && u.E).map(u => diasHabilesSLA(u.fv, u.E) || 0);
+    const prom = tot.length ? (tot.reduce((x, y) => x + y, 0) / tot.length) : null;
+    if (!orden.length){ el.innerHTML = '<div class="hint">Sin datos con estos filtros</div>'; return; }
+    const keys = orden.sort((a, b) => (ag[a].track === ag[b].track ? 0 : (ag[a].track === 'fisico' ? -1 : 1)));
+    const f = v => v.toFixed(1).replace('.', ',');
+    el.innerHTML = `<div class="table-scroll" style="display:block;"><table class="data-table">
+      <thead><tr><th>Instancia</th><th style="text-align:center;">Promedio</th><th style="text-align:center;">Objetivo</th><th style="text-align:center;">Promedio en los fuera de plazo</th><th style="text-align:center;">% que se pasó del objetivo</th><th style="text-align:center;">Autos</th></tr></thead><tbody>
+      ${keys.map(k => { const a = ag[k], p = a.sum / a.n, u = a.corr ? 'días' : 'dh';
+        const os = [...a.objs].sort((x, y) => x - y); a.obj = os.length === 1 ? os[0] : null;
+        const objTxt = !os.length ? '—' : (os.length === 1 ? os[0] + ' ' + u : `${os[0]} a ${os[os.length - 1]} ${u} (${k.startsWith('gi|') ? 'según crédito' : 'según zona'})`);
+        const col = a.obj === null || a.obj === undefined ? 'var(--text)' : (p <= a.obj ? 'var(--green)' : (p <= a.obj * 1.5 ? 'var(--amber)' : 'var(--red)'));
+        return `<tr><td>${a.track === 'fisico' ? '🔧' : '📄'} ${escapeHtml(a.label)}</td>
+          <td style="text-align:center; font-weight:700; color:${col};">${f(p)} ${u}</td>
+          <td style="text-align:center;">${objTxt}</td>
+          <td style="text-align:center;">${a.nT ? f(a.sumT / a.nT) + ' ' + u : '—'}</td>
+          <td style="text-align:center;">${Math.round(a.exc / a.n * 100)}%</td>
+          <td style="text-align:center;">${a.n.toLocaleString('es-AR')}</td></tr>`; }).join('')}
+      ${prom !== null ? `<tr style="font-weight:700; background:var(--surface-3);"><td>🏁 Total: venta → entrega</td><td style="text-align:center;">${f(prom)} dh</td><td colspan="4" style="color:var(--text-dim); font-weight:400;">promedio de ${tot.length.toLocaleString('es-AR')} autos</td></tr>` : ''}
+      </tbody></table></div>`;
+  }
+
+  // Nombre de columna fijo por etapa (sin la zona / crédito entre paréntesis)
+  function entColEtapa(e){
+    if (e.key === 'patente') return e.area === 'cliente' ? 'Patentamiento por cliente' : (e.area === 'gestoria' ? 'Gestoría externa' : 'Patentamiento');
+    return e.label.replace(/ \(.*\)$/, '');
+  }
+  const ENT_COL_ORDEN = ['Arribo unidad', 'Alistaje', 'Cierre avería', 'Envío a accesorios', 'Regreso accesorios', 'Accesorios', 'Pago fábrica', 'Certificado', 'Liquidación crédito', 'Gestoría interna', 'Gestoría externa', 'Patentamiento por cliente', 'Patentamiento', 'Carpeta GEAC'];
   function entExportData(){
     const brandLabel = b => (typeof PATENTADOS_BRAND_LABELS !== 'undefined' && PATENTADOS_BRAND_LABELS[b]) || b;
     return ENT_STATE.lastRows.map(u => {
@@ -9758,7 +9812,16 @@
         'Causa principal': u.causa ? ENT_AREAS[u.causa].label : '',
         'Circuito que frenó': ({fisico:'Físico', documental:'Documental', ambos:'Ambos', turno:'Auto listo a tiempo'})[u.frena] || '',
         'Áreas que generaron demora': Object.entries(u.aporte).map(([f, d]) => `${ENT_AREAS[f].label} (+${d} dh)`).join(' | '),
-        ...Object.fromEntries(u.etapas.map(e => [`Exceso ${e.label} (dh)`, e.exceso])),
+        'Dias venta a entrega (dh)': u.fv && u.E ? (diasHabilesSLA(u.fv, u.E) || 0) : '',
+        ...(() => {
+          // Siempre las mismas columnas y en el mismo orden (vacías si la etapa no aplica)
+          const t = {}, x = {};
+          const nombres = ENT_COL_ORDEN.slice(); u.etapas.forEach(e => { const n = entColEtapa(e); if (!nombres.includes(n)) nombres.push(n); });
+          const tk = n => 'Tardó ' + n + (n === 'Certificado' ? ' (días)' : ' (dh)');
+          nombres.forEach(n => { t[tk(n)] = ''; x['Exceso ' + n + ' (dh)'] = ''; });
+          u.etapas.forEach(e => { const n = entColEtapa(e), v = entTardo(e); t[tk(n)] = v === null ? '' : v; x['Exceso ' + n + ' (dh)'] = e.exceso; });
+          return Object.assign(t, x);
+        })(),
         'Fecha arribo unidad': fecha('Fecha Arribo Unidad'), 'Fecha arribo certificado': fecha('Fecha Arribo Certificado'),
         'Fecha pago fábrica': fecha('Fecha Pago Fab'), 'Fecha patentamiento': fecha('Fecha Patentamiento'),
         'Fecha trámite a GEAC': fecha('Fecha Entrega Tramite a GEAC'), 'Fecha avería': fecha('Fecha Averia'),
