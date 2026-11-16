@@ -1375,6 +1375,7 @@
             <div class="table-scroll" style="max-height:none;"><table class="ag-grid" id="agGrid"></table></div>
             <div class="hint" id="agEstado" style="margin-top:8px; font-size:11.5px;"></div>
           </div>
+          <div style="display:flex; flex-direction:column; gap:12px; min-width:0;">
           <div class="ag-side">
             <div class="segmented" id="agPendTabs" style="margin-bottom:8px; width:100%;">
               <button type="button" class="active" data-v="ok">✅ OK para entregar</button>
@@ -1383,7 +1384,9 @@
             <div class="an-sub" id="agPendTitle">Sin turno en la agenda</div>
             <div class="hint" style="margin-bottom:6px; font-size:11px;">Clic en uno para elegirlo y después clic en un casillero libre.</div>
             <div id="agPendientes"></div>
-            <div style="margin-top:14px; border-top:1px solid var(--border); padding-top:12px;">
+          </div>
+            <!-- Fuera del recuadro con scroll: siempre visible debajo de OK / No OK -->
+            <div style="background:var(--surface-2); border:1px solid var(--border); border-radius:10px; padding:10px 12px;">
               <div class="an-sub" style="margin-bottom:6px;">📥 Entregados del mes</div>
               <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
                 <select id="agEntMes" class="month-select" aria-label="Mes de entrega" style="flex:1; min-width:150px;"></select>
