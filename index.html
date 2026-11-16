@@ -9525,15 +9525,15 @@
     const prom = tarde.length ? (tarde.reduce((s,u) => s + u.atraso, 0) / tarde.length) : 0;
     const porCausa = {};
     tarde.forEach(u => { porCausa[u.causa] = (porCausa[u.causa] || 0) + 1; });
-    const top = Object.entries(porCausa).sort((a,b) => b[1] - a[1])[0];
-    const topEvitable = Object.entries(porCausa).filter(([k]) => k !== 'turno').sort((a,b) => b[1] - a[1])[0];
+    const ordenCausas = Object.entries(porCausa).sort((a,b) => b[1] - a[1]);
+    const top = ordenCausas[0], top2 = ordenCausas[1];
     const kpi = (l, v, s, c) => `<div class="ent-kpi" style="--kc:${c}"><div class="l">${l}</div><div class="v">${v}</div><div class="s">${s}</div></div>`;
     $('entKpis').innerHTML =
       kpi('🚚 Entregados', base.length.toLocaleString('es-AR'), `según fecha de turno · ${sinTurno.toLocaleString('es-AR')} sin turno cargado (no se analizan)`, 'var(--blue)') +
       kpi('⏰ Fuera de plazo', `${tarde.length.toLocaleString('es-AR')} · ${pct}%`, `${base.length - tarde.length} en plazo`, pct >= 30 ? 'var(--red)' : 'var(--amber)') +
       kpi('📏 Atraso promedio', tarde.length ? prom.toFixed(1) + ' dh' : '—', 'días hábiles sobre el plazo', 'var(--orange)') +
-      kpi('🥇 Área #1', top ? `${ENT_AREAS[top[0]].icon} ${Math.round(top[1] / tarde.length * 100)}%` : '—', top ? ENT_AREAS[top[0]].label : 'sin entregas tarde', 'var(--red)') +
-      kpi('🔧 Área #1 (sin turno)', topEvitable ? `${ENT_AREAS[topEvitable[0]].icon} ${Math.round(topEvitable[1] / tarde.length * 100)}%` : '—', topEvitable ? ENT_AREAS[topEvitable[0]].label : '—', 'var(--amber)') +
+      kpi('🥇 Área #1', top ? `${ENT_AREAS[top[0]].icon} ${Math.round(top[1] / tarde.length * 100)}%` : '—', top ? `${ENT_AREAS[top[0]].label} · causa principal en ${top[1]} autos` : 'sin entregas tarde', 'var(--red)') +
+      kpi('🥈 Área #2', top2 ? `${ENT_AREAS[top2[0]].icon} ${Math.round(top2[1] / tarde.length * 100)}%` : '—', top2 ? `${ENT_AREAS[top2[0]].label} · causa principal en ${top2[1]} autos` : '—', 'var(--amber)') +
       (() => {
         const c = k => tarde.filter(u => u.frena === k).length;
         const p = k => tarde.length ? Math.round(c(k) / tarde.length * 100) : 0;
