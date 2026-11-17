@@ -9220,7 +9220,7 @@
   //  interna: simple 1 dh / con crédito 2 dh desde facturación, certificado y liquidación (lo último);
   //  externa: desde la entrega al gestor externo hasta el patentamiento — Córdoba 2 · Sur 12 · resto 9 dh.
   const ENT_OBJ_DEFAULT = {giSimple:1, giCredito:2, geCba:2, geOtras:9, geSur:12, plazoEntrega:2, arribo:0, alistaje:2, averia:0, pedidoacc:1, accesorios:2, pagofab:0, certificado:3, geac:2, credito:5, turno:2};
-  const ENT_OBJ_LABELS = {giSimple:'Gestoría interna simple', giCredito:'Gestoría interna con crédito', geCba:'Gestoría externa Córdoba', geOtras:'Gestoría externa otras prov.', geSur:'Gestoría externa Sur', plazoEntrega:'Entrega (desde patentam.)', arribo:'Arribo (desde venta)', alistaje:'Alistaje (desde arribo/venta)', averia:'Avería (0 = todo cuenta)', pedidoacc:'Envío a accesorios (desde alistado)', accesorios:'Accesorios (desde envío)', pagofab:'Pago fábrica (desde venta)', certificado:'Certificado (corridos)', geac:'Carpeta GEAC', credito:'Crédito', turno:'Turno (desde auto listo)'};
+  const ENT_OBJ_LABELS = {giSimple:'Gestoría interna simple', giCredito:'Gestoría interna con crédito', geCba:'Gestoría externa Córdoba', geOtras:'Gestoría externa otras prov.', geSur:'Gestoría externa Sur', plazoEntrega:'Entrega (desde patentam.)', arribo:'Arribo (desde venta)', alistaje:'Alistaje (desde arribo/venta)', averia:'Avería (0 = todo cuenta)', pedidoacc:'Envío a accesorios (desde venta/alistaje, referencia)', accesorios:'Accesorios: envío + instalación (desde venta/alistaje)', pagofab:'Pago fábrica (desde venta)', certificado:'Certificado (corridos)', geac:'Carpeta GEAC', credito:'Crédito', turno:'Turno (desde auto listo)'};
   // v28: los objetivos se guardan en el servidor (hoja Objetivos, marca "OBJ_ENTREGAS"),
   // así son los mismos para todos y no se pierden. Solo un admin los puede cambiar.
   const ENT_OBJ_MARCA = 'OBJ_ENTREGAS';
@@ -9313,10 +9313,12 @@
     const Eacc = up('Enviado a Accesorios') === 'SI' ? ok(dt('Fecha Envio a Accesorios')) : null;
     if (Eacc && Cacc){
       // Envío (pedido) e instalación se miden por separado pero suman a la misma área "Accesorios"
+      // El objetivo de accesorios (2 dh) corre desde la facturación o el alistaje (lo último),
+      // envío + instalación juntos. El envío se muestra aparte con su objetivo, como referencia.
       etapa('pedidoacc', 'accesorios', 'Envío a accesorios', 'fisico', Eacc, iniAcc, OBJ.pedidoacc);
-      etapa('accesorios', 'accesorios', 'Regreso accesorios', 'fisico', Cacc, [{d:Eacc, k:'pedidoacc'}], OBJ.accesorios);
+      etapa('accesorios', 'accesorios', 'Accesorios (envío + instalación)', 'fisico', Cacc, iniAcc, OBJ.accesorios);
     } else {
-      etapa('accesorios', 'accesorios', 'Regreso accesorios', 'fisico', Cacc, iniAcc, OBJ.accesorios);
+      etapa('accesorios', 'accesorios', 'Accesorios (envío + instalación)', 'fisico', Cacc, iniAcc, OBJ.accesorios);
     }
     // Documental
     etapa('pagofab', 'pagofab', 'Pago fábrica', 'documental', pagoFab, [{d:fv}], OBJ.pagofab);
@@ -9327,7 +9329,8 @@
     const patCliente = up('Patenta?') === 'CLIENTE';
     const patMaipu = up('Patenta?') === 'MAIPU';
     const GI = ok(patMaipu ? (dt('Fecha Listo GI') || dt('Fecha Entrega Tramite GE')) : (dt('Fecha Gestoria') || dt('Fecha Listo GI')));
-    const giCands = [{d:fv}, {d:certificado, k:'certificado'}, {d:pagoFab, k:'pagofab'}];
+    // Gestoría interna: desde la facturación, el arribo del certificado o (con crédito) la liquidación, lo último
+    const giCands = [{d:fv}, {d:certificado, k:'certificado'}];
     if (conCred) giCands.push({d:K, k:'credito'});
     if (GI && P && GI <= P){
       etapa('gi', 'gestoriaint', 'Gestoría interna' + (conCred ? ' (con crédito)' : ''), 'documental', GI, giCands, objGI);
@@ -9477,7 +9480,8 @@
       canal:(r['Canal'] || '').toString().trim() || '(sin canal)',
       zona, fv, dPat, D, E, atraso: tarde ? atraso : 0, tarde, causa,
       factores:[...factores], aporte, tl,
-      accDesg: {envio: (S.pedidoacc && S.pedidoacc.aporte) || 0, instal: (S.accesorios && S.accesorios.aporte) || 0}, mes: entMonthKey(E), frena, etapas, OKd, limTurno: limTurnoOut, finFisico, finDoc,
+      accDesg: (() => { const ap = ((S.pedidoacc && S.pedidoacc.aporte) || 0) + ((S.accesorios && S.accesorios.aporte) || 0);
+        const env = Math.min(ap, (S.pedidoacc && S.pedidoacc.exceso) || 0); return {envio: env, instal: ap - env}; })(), mes: entMonthKey(E), frena, etapas, OKd, limTurno: limTurnoOut, finFisico, finDoc,
       tInf, fCont, dCont, dListoCont: (fCont && OKd && fCont >= OKd) ? (diasHabilesSLA(OKd, fCont) || 0) : null
     };
   }
