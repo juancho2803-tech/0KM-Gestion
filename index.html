@@ -9166,6 +9166,7 @@
   const ENT_AREAS = {
     contacto:   {label:'Contactación (demoró en llamar / dar turno)', icon:'📞', color:'#a855f7', track:'turno'},
     agendallena:{label:'Disponibilidad de turno (agenda llena)', icon:'🗓️', color:'#7c3aed', track:'turno'},
+    clientecoord:{label:'Cliente demoró en confirmar el turno', icon:'⏳', color:'#d8b4fe', track:'turno'},
     clienteturno:{label:'Cliente pidió una fecha posterior', icon:'🙋‍♂️', color:'#c084fc', track:'turno'},
     turno:      {label:'Entregas (sin registro de llamado / turno)', icon:'📅', color:'#8b5cf6', track:'turno'},
     geac:       {label:'Carpeta GEAC',                            icon:'📋', color:'#4c8dff', track:'documental'},
@@ -9417,8 +9418,12 @@
             if (n > 0){ aporte[k] = (aporte[k] || 0) + n; resto -= n; }
             if (h > cur) cur = h;
           };
-          tomar('contacto', fA || fC);
-          if (fA || fC) tomar('agendallena', pl);
+          // El llamado es lo primero que se registró (contactación o asignación en la agenda).
+          // Si la agenda se cargó después del llamado, ese tramo es del cliente (confirmó tarde).
+          const fLl = fC && fA ? (fC < fA ? fC : fA) : (fC || fA);
+          tomar('contacto', fLl);
+          if (fA && fLl && fA > fLl) tomar('clientecoord', fA);
+          if (fLl) tomar('agendallena', pl);
           // Si se llamó pero el turno no se dio por la Agenda (no hay primer libre), lo que
           // sigue al llamado se asume fecha acordada con el cliente.
           if (pl || fA || fC) tomar('clienteturno', E);
@@ -9810,7 +9815,7 @@
         <td style="font-weight:700; color:${e.aporte > 0 ? 'var(--red)' : 'var(--text-faint)'};">${e.aporte > 0 ? '+' + e.aporte : '—'}</td><td>${est}</td></tr>`;
     });
     const tT = u.OKd ? dh(u.OKd, u.E) : null;
-    const apT = ['turno','contacto','agendallena'].reduce((t, k) => t + (u.aporte[k] || 0), 0), apCli = u.aporte.clienteturno || 0;
+    const apT = ['turno','contacto','agendallena'].reduce((t, k) => t + (u.aporte[k] || 0), 0), apCli = (u.aporte.clienteturno || 0) + (u.aporte.clientecoord || 0);
     const objT = entObjetivos().turno || 0;
     const exT = tT !== null && tT > objT ? tT - objT : 0;
     filas.push(`<tr><td>📅 Entregas (turno)</td><td>${entFmt(u.OKd)}</td><td>${objT} dh</td><td>${entFmt(u.E)}</td>
@@ -9824,9 +9829,10 @@
         <td>${ini && fin ? dh(ini, fin) + ' dh' : '—'}</td><td style="color:var(--text-faint);">${nota || ''}</td>
         <td style="font-weight:700; color:${(u.aporte[k] || 0) > 0 ? 'var(--red)' : 'var(--text-faint)'};">${(u.aporte[k] || 0) > 0 ? '+' + u.aporte[k] : '—'}</td><td></td></tr>`;
       if (u.OKd){
-        const fLl = fA || u.fCont;
-        filas.push(sub('📞', 'Llamado / turno dado', u.OKd, fLl, 'contacto', fLl ? '' : 'sin registro'));
-        filas.push(sub('🗓️', 'Espera turno libre', fLl, pl, 'agendallena', pl ? '' : 'sin registro'));
+        const fC = u.fCont, fLl = fC && fA ? (fC < fA ? fC : fA) : (fC || fA);
+        filas.push(sub('📞', 'Llamado al cliente', u.OKd, fLl, 'contacto', fLl ? '' : 'sin registro'));
+        if (fA && fLl && fA > fLl) filas.push(sub('⏳', 'Cliente confirmó el turno', fLl, fA, 'clientecoord', 'turno cargado en la agenda'));
+        filas.push(sub('🗓️', 'Espera turno libre', fA || fLl, pl, 'agendallena', pl ? '' : 'sin registro'));
         const iniCli = pl || fLl;
         filas.push(sub('🙋', 'Elección del cliente', iniCli, iniCli ? u.E : null, 'clienteturno', ti && ti.motivo ? escapeHtml(ti.motivo) : (iniCli && !pl ? 'sin agenda: se asume fecha acordada' : '')));
       }
@@ -9919,7 +9925,7 @@
   const SPC_GRUPOS = [
     ['🔧 Circuito físico', ['Arribo unidad', 'Alistaje', 'Cierre avería', 'Envío a accesorios', 'Regreso accesorios', 'Accesorios']],
     ['📄 Circuito documental', ['Pago fábrica', 'Certificado', 'Liquidación crédito', 'Gestoría interna', 'Gestoría externa', 'Patentamiento por cliente', 'Patentamiento (venta → patente)', 'Carpeta GEAC', 'Bloqueo saldo / pago']],
-    ['📅 Entrega (con el auto listo)', ['Entrega: auto listo → entrega', '📞 Contactación (auto listo → turno dado)', '🗓️ Espera de turno libre', '🙋 Elección del cliente']],
+    ['📅 Entrega (con el auto listo)', ['Entrega: auto listo → entrega', '📞 Contactación (auto listo → turno dado)', '⏳ Cliente confirmó el turno', '🗓️ Espera de turno libre', '🙋 Elección del cliente']],
     ['⏱️ Total', ['Total: venta → entrega']]
   ];
   function spcValores(u){
@@ -9932,9 +9938,11 @@
     const OBJ = entObjetivos();
     if (u.OKd && u.E) out['Entrega: auto listo → entrega'] = {v: dh(u.OKd, u.E), obj: OBJ.turno || 0};
     const ti = u.tInf, fA = ti && ti.asignado ? entMid(ti.asignado) : null, pl = ti && ti.primerLibre ? entMid(ti.primerLibre) : null;
-    const fLl = fA || u.fCont;
+    const fLl = u.fCont && fA ? (u.fCont < fA ? u.fCont : fA) : (u.fCont || fA);
+    if (fLl && fA && fA > fLl) out['⏳ Cliente confirmó el turno'] = {v: dh(fLl, fA), obj: null};
     if (u.OKd && fLl) out['📞 Contactación (auto listo → turno dado)'] = {v: fLl > u.OKd ? dh(u.OKd, fLl) : 0, obj: OBJ.turno || 0};
-    if (fLl && pl) out['🗓️ Espera de turno libre'] = {v: pl > fLl ? dh(fLl, pl) : 0, obj: null};
+    const fAg = fA || fLl;
+    if (fAg && pl) out['🗓️ Espera de turno libre'] = {v: pl > fAg ? dh(fAg, pl) : 0, obj: null};
     const iniCli = pl || fLl;
     if (iniCli && u.E) out['🙋 Elección del cliente'] = {v: u.E > iniCli ? dh(iniCli, u.E) : 0, obj: null};
     if (u.fv && u.E) out['Total: venta → entrega'] = {v: dh(u.fv, u.E), obj: u.D ? dh(u.fv, u.D) : null};
