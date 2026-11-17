@@ -10762,7 +10762,14 @@
           <div class="brand-breakdown">${conT} con turno (${semana} en los próximos 7 días) · ${usados.length - conT} sin turno</div>
           <button type="button" class="page-btn" data-usados-xlsx="1" style="margin-top:8px; font-size:12px;">⬇️ Excel de todas las operaciones con usado</button>
         </div>`;
-        return mesCard + usadoCard + (() => {
+        // Turnos dados en la agenda de la app que todavía no figuran en la base (falta cargarlos en TIMM)
+        const conAg = baseRowsConFiltros.map(r => [r, agTurnoPendienteSistema(r)]).filter(([, t]) => t);
+        const agCard = `<div class="pat-brand-card ${patTurnoEntregaFilter === 'agenda' ? 'active' : ''}" data-agtimm="1" title="Clic para ver solo estos autos" style="border-color:var(--blue);">
+          <div class="brand-name">📅 Con turno en la agenda · falta en TIMM</div>
+          <div class="brand-count" style="color:var(--blue)">${conAg.length.toLocaleString('es-AR')}</div>
+          <div class="brand-breakdown">${conAg.length ? conAg.slice().sort((a, b) => (a[1].fecha + a[1].hora) < (b[1].fecha + b[1].hora) ? -1 : 1).slice(0, 6).map(([r, t]) => `${escapeHtml((r['Interno'] || '').toString())} · ${entFmt(agFromKey(t.fecha)).slice(0,5)} ${escapeHtml(t.hora)}`).join('<br>') + (conAg.length > 6 ? `<br>… y ${conAg.length - 6} más` : '') : 'Todos los turnos de la agenda ya figuran en la base'}</div>
+        </div>`;
+        return agCard + mesCard + usadoCard + (() => {
             if (!FAC) return '';
             // Trámite de patentamiento: dónde está cada facturado (sobre los pendientes con filtros, estado y zona)
             const tc = {}; rowsMes.forEach(r => { const k = facTramiteDe(r); tc[k] = (tc[k] || 0) + 1; });
@@ -10986,6 +10993,13 @@
     if (tram){ facTramFilter = facTramFilter === tram.dataset.tram ? null : tram.dataset.tram; patCurrentPage = 1; renderPatentadosSection(); return; }
     const card = e.target.closest('.pat-brand-card');
     if (!card) return;
+    if (card.dataset.agtimm){
+      patTurnoEntregaFilter = patTurnoEntregaFilter === 'agenda' ? 'todos' : 'agenda';
+      setSelectValue('patTurnoEntregaSelect', patTurnoEntregaFilter);
+      patCurrentPage = 1;
+      renderPatentadosSection();
+      return;
+    }
     if (card.dataset.usados){
       patUsadoFilter = patUsadoFilter === 'SI' ? 'todos' : 'SI';
       setSelectValue('patUsadoSelect', patUsadoFilter);
