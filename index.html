@@ -1350,21 +1350,23 @@
           <button type="button" class="page-btn" id="agDiaBloqBtn" style="display:none;"></button>
           <button type="button" class="page-btn" id="agConfigBtn" style="display:none;">⚙️ Horarios y entregadores</button>
         </div>
-        <div class="pill-group" style="margin-top:10px;">
+        <div class="filter-row" style="margin-top:10px; align-items:center;">
+        <div class="pill-group">
           <span class="pill-group-label">Marca</span>
           <div class="pill-list" id="agBrandList"></div>
           <button type="button" class="pill-action" id="agBrandAll">Todas</button>
           <button type="button" class="pill-action" id="agBrandNone">Ninguna</button>
         </div>
-        <div class="segmented" id="agInvSeg" style="margin-top:10px; margin-left:8px; display:inline-flex;">
+        <div class="segmented" id="agInvSeg" style="display:inline-flex;">
           <button type="button" class="active" data-v="todos">Invitado: todos</button>
           <button type="button" data-v="si">Sí</button>
           <button type="button" data-v="no">No</button>
         </div>
-        <div class="segmented" id="agUsadoSeg" style="margin-top:10px; margin-left:8px; display:inline-flex;">
+        <div class="segmented" id="agUsadoSeg" style="display:inline-flex;">
           <button type="button" class="active" data-v="todos">Usado: todos</button>
           <button type="button" data-v="si">Sí</button>
           <button type="button" data-v="no">No</button>
+        </div>
         </div>
         <div id="agUsadoLista"></div>
         <div id="agBuscarRes"></div>
@@ -14876,6 +14878,145 @@
     }
   }
 
+})();
+</script>
+<!-- ===== Menú lateral (mosaico): secciones + subsecciones + filtros de la sección ===== -->
+<style>
+  :root{--nv-w:300px;}
+  body.nv-on{padding-left:var(--nv-w); transition:padding .2s ease;}
+  body.nv-on #tabNav .tab-btn{display:none !important;}
+  body.nv-on .subtab-nav{display:none !important;}
+  body.nv-on .panel:has(> .subtab-nav){display:none;}
+  body.nv-on #tabNav{justify-content:flex-end;}
+  #nvSide{position:fixed; left:0; top:0; bottom:0; width:var(--nv-w); z-index:900; background:var(--surface); border-right:1px solid var(--border); display:none; flex-direction:column; box-shadow:0 0 30px rgba(0,0,0,.15); transition:transform .2s ease;}
+  body.nv-on #nvSide{display:flex;}
+  #nvScroll{flex:1; overflow-y:auto; scrollbar-width:thin;}
+  .nv-brand{display:flex; align-items:center; gap:8px; padding:14px 12px 10px 16px; border-bottom:1px solid var(--border);}
+  .nv-brand div{flex:1; font-family:'Barlow Condensed',sans-serif; font-size:17px; font-weight:700; letter-spacing:.5px; text-transform:uppercase; line-height:1.1;}
+  .nv-brand small{display:block; font-family:Inter,sans-serif; font-size:10.5px; font-weight:400; text-transform:none; color:var(--text-faint); letter-spacing:0;}
+  .nv-x{border:1px solid var(--border); background:var(--surface-2); color:var(--text-dim); border-radius:8px; padding:4px 9px; cursor:pointer; font-size:13px;}
+  .nv-x:hover{color:var(--text);}
+  .nv-h{display:flex; align-items:center; justify-content:space-between; font-size:10.5px; text-transform:uppercase; letter-spacing:1px; color:var(--text-faint); font-weight:700; padding:12px 16px 6px; user-select:none;}
+  .nv-h.tog{cursor:pointer;}
+  .nv-h .n{background:var(--blue); color:#fff; border-radius:9px; padding:0 7px; font-size:10.5px; margin-left:6px;}
+  .nv-h .ar{transition:transform .2s;}
+  .nv-h.closed .ar{transform:rotate(-90deg);}
+  .nv-grid{display:grid; grid-template-columns:repeat(4, 1fr); gap:6px; padding:12px 12px 4px;}
+  .nv-grid div{border:1px solid var(--border); background:var(--surface-2); border-radius:12px; padding:8px 2px; text-align:center; font-size:9.5px; font-weight:600; color:var(--text-dim); cursor:pointer; line-height:1.15; transition:background .15s, border-color .15s;}
+  .nv-grid div:hover{color:var(--text); border-color:var(--text-dim);}
+  .nv-grid div .ic{display:block; font-size:19px; margin-bottom:3px;}
+  .nv-grid div.on{border-color:var(--blue); background:rgba(76,141,255,.16); color:var(--text); box-shadow:inset 0 -3px 0 var(--blue);}
+  .nv-chips{display:flex; flex-wrap:wrap; gap:5px; padding:4px 12px 4px;}
+  .nv-chips div{border:1px solid var(--border); border-radius:16px; padding:5px 10px; font-size:11.5px; color:var(--text-dim); cursor:pointer; background:var(--surface);}
+  .nv-chips div:hover{color:var(--text);}
+  .nv-chips div.on{background:var(--amber); border-color:var(--amber); color:#1a1206; font-weight:700;}
+  #nvFil{padding:4px 14px 30px;}
+  #nvFil.closed{display:none;}
+  #nvFil .fr-block{margin-bottom:12px;}
+  #nvFil .fr-tit{font-size:11px; font-weight:700; color:var(--text); margin:6px 0 8px; padding:5px 8px; border-radius:8px; background:var(--surface-2); border-left:3px solid var(--blue);}
+  #nvFil .fr-block *{max-width:100%; box-sizing:border-box;}
+  #nvFil .filter-row, #nvFil .filter-bar, #nvFil .sla-filters{display:flex !important; flex-direction:column; align-items:stretch; gap:10px; margin:0 !important;}
+  #nvFil .pill-group{display:flex; flex-wrap:wrap; width:100%; box-shadow:none;}
+  #nvFil .pill-group-label{width:100%; margin-bottom:4px;}
+  #nvFil .msdrop{display:block; width:100%;}
+  #nvFil .msdrop-btn{width:100%; justify-content:space-between; box-shadow:none;}
+  #nvFil .msdrop-label{white-space:normal; text-align:left;}
+  #nvFil .msdrop-panel{position:static; margin-top:6px; box-shadow:none; max-height:240px;}
+  #nvFil select, #nvFil input, #nvFil .filter-row > button{width:100% !important;}
+  #nvFil .segmented{display:flex; width:100%;} #nvFil .segmented > *{flex:1;}
+  #nvFil .fr-empty{color:var(--text-faint); font-size:12px; padding:6px 2px;}
+  #nvOpen{display:none; position:fixed; left:10px; top:10px; z-index:899; border:1px solid var(--border); background:var(--surface); color:var(--text); border-radius:10px; padding:8px 12px; font-size:16px; cursor:pointer; box-shadow:0 4px 14px rgba(0,0,0,.25);}
+  #nvShade{display:none; position:fixed; inset:0; background:rgba(0,0,0,.35); z-index:899;}
+  /* Oculto (escritorio) */
+  body.nv-on.nv-hide{padding-left:0;}
+  body.nv-on.nv-hide #nvSide{transform:translateX(-100%);}
+  body.nv-on.nv-hide #nvOpen{display:block;}
+  /* Celular / pantalla angosta: cajón */
+  @media (max-width: 900px){
+    body.nv-on{padding-left:0;}
+    body.nv-on #nvSide{transform:translateX(-100%); width:min(86vw, 320px);}
+    body.nv-on #nvOpen{display:block;}
+    body.nv-on.nv-mob #nvSide{transform:none;}
+    body.nv-on.nv-mob #nvShade{display:block;}
+    body.nv-on .topbar{padding-left:56px;}
+  }
+</style>
+<div id="nvShade"></div>
+<button id="nvOpen" type="button" title="Menú">☰</button>
+<aside id="nvSide"><div id="nvScroll"><div id="nvNav"></div>
+  <div class="nv-h tog" id="nvFilH"><span>🎛️ Filtros<span class="n" id="nvCount">0</span></span><span class="ar">▾</span></div>
+  <div id="nvFil"></div></div></aside>
+<script>
+(function(){
+  const nav = document.getElementById('nvNav'), fil = document.getElementById('nvFil');
+  let moved = [], firma = '';
+  const vis = el => !!(el && (el.offsetWidth || el.offsetHeight || el.getClientRects().length));
+  const split = t => { const m = t.trim().match(/^(\S+)\s+(.*)$/); return m ? [m[1], m[2]] : ['•', t.trim()]; };
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'})[c]);
+  const tabs = () => [...document.querySelectorAll('#tabNav .tab-btn')].filter(b => b.style.display !== 'none');
+  const contOf = t => [...document.querySelectorAll('.tab-content')].find(x => x.id.toLowerCase() === 'tab' + t.dataset.tab.toLowerCase());
+  const subsOf = t => { const c = contOf(t); return c ? [...c.querySelectorAll('.subtab-nav .subtab-btn')].filter(b => b.style.display !== 'none') : []; };
+  const subLbl = b => (b.firstChild && b.firstChild.nodeType === 3 ? b.firstChild.textContent : b.textContent).replace(/\s*\d+\s*$/, '').trim();
+  function render(){
+    const dash = document.getElementById('dashboard');
+    const on = vis(dash);
+    document.body.classList.toggle('nv-on', on);
+    if (!on){ restore(); return; }
+    const ts = tabs(), act = ts.findIndex(t => t.classList.contains('active'));
+    const subs = act >= 0 ? subsOf(ts[act]) : [];
+    const f = ts.map(t => t.dataset.tab + (t.classList.contains('active') ? '*' : '')).join() + '|' + subs.map(s => subLbl(s) + (s.classList.contains('active') ? '*' : '')).join();
+    if (f !== firma){
+      firma = f;
+      nav.innerHTML = '<div class="nv-brand"><div>Gestión Integral Ventas<small>Maipú Automotores</small></div><button class="nv-x" id="nvHide" type="button" title="Ocultar menú">⇤</button></div>' +
+        '<div class="nv-grid">' + ts.map((t, i) => { const [ic, tx] = split(t.textContent); return `<div class="${i === act ? 'on' : ''}" data-t="${i}"><span class="ic">${esc(ic)}</span>${esc(tx)}</div>`; }).join('') + '</div>' +
+        (subs.length ? `<div class="nv-h">${esc(split(ts[act].textContent)[1])}</div><div class="nv-chips">` + subs.map((s, j) => `<div class="${s.classList.contains('active') ? 'on' : ''}" data-t="${act}" data-s="${j}">${esc(subLbl(s))}</div>`).join('') + '</div>' : '');
+    }
+    relocate();
+  }
+  function restore(){ moved.forEach(m => { if (m.ph.parentNode) m.ph.parentNode.replaceChild(m.node, m.ph); }); moved = []; fil.innerHTML = ''; }
+  function relocate(){
+    restore();
+    const cands = [], fb = document.getElementById('filterBar'); if (fb && vis(fb)) cands.push(fb);
+    document.querySelectorAll('.tab-content.active .filter-row, .tab-content.active .filter-bar, .tab-content.active .sla-filters').forEach(el => {
+      if (!vis(el) || el.closest('table, .modal, [id$="Modal"]') || !el.querySelector('.msdrop, .pill-group, select, .segmented, input')) return;
+      if (cands.some(c => c.contains(el))) return; cands.push(el); });
+    // Si hay filtros de varios paneles, cada bloque lleva el título del panel al que filtra
+    const tit = el => { const h = el.closest('.panel') && el.closest('.panel').querySelector('h3'); return h ? h.textContent.trim() : ''; };
+    const titulos = cands.map(tit), conTit = new Set(titulos).size > 1;
+    cands.forEach((el, i) => { const ph = document.createComment('nv'); el.parentNode.replaceChild(ph, el); const w = document.createElement('div'); w.className = 'fr-block';
+      if (conTit && titulos[i]){ const h = document.createElement('div'); h.className = 'fr-tit'; h.textContent = titulos[i]; w.appendChild(h); }
+      w.appendChild(el); fil.appendChild(w); moved.push({node: el, ph}); });
+    if (!cands.length) fil.innerHTML = '<div class="fr-empty">Esta sección no tiene filtros</div>';
+    contar();
+  }
+  function contar(){
+    let n = 0;
+    fil.querySelectorAll('.pill-group').forEach(g => { const a = g.querySelectorAll('.pill-list button').length, o = g.querySelectorAll('.pill-list button.active').length; if (a && o < a) n++; });
+    fil.querySelectorAll('.msdrop-label').forEach(l => { if (!/Todos|Todas/.test(l.textContent)) n++; });
+    fil.querySelectorAll('select').forEach(s => { if (s.selectedIndex > 0) n++; });
+    const c = document.getElementById('nvCount'); c.textContent = n; c.style.display = n ? '' : 'none';
+  }
+  document.getElementById('nvSide').addEventListener('click', e => {
+    if (e.target.closest('#nvHide')){ document.body.classList.add('nv-hide'); document.body.classList.remove('nv-mob'); return; }
+    const x = e.target.closest('[data-t]'); if (!x || x.closest('#nvFil')) return;
+    const t = tabs()[+x.dataset.t]; if (!t) return;
+    if (!t.classList.contains('active')) t.click();
+    if (x.dataset.s !== undefined){ const s = subsOf(t)[+x.dataset.s]; if (s) s.click(); document.body.classList.remove('nv-mob'); }
+    window.scrollTo({top: 0});
+    later(40);
+  });
+  document.getElementById('nvFilH').addEventListener('click', e => { e.currentTarget.classList.toggle('closed'); fil.classList.toggle('closed'); });
+  document.getElementById('nvOpen').addEventListener('click', () => { document.body.classList.remove('nv-hide'); document.body.classList.add('nv-mob'); });
+  document.getElementById('nvShade').addEventListener('click', () => document.body.classList.remove('nv-mob'));
+  let tmr; const later = ms => { clearTimeout(tmr); tmr = setTimeout(render, ms || 100); };
+  document.addEventListener('click', e => { if (e.target.closest('#nvFil')) setTimeout(contar, 50); }, true);
+  document.addEventListener('change', e => { if (e.target.closest('#nvFil')) setTimeout(contar, 50); }, true);
+  // Cambios de sección hechos por código (atajos, ficha, permisos por rol) o al mostrarse el tablero
+  new MutationObserver(muts => { if (muts.some(m => m.target.classList && (m.target.classList.contains('tab-btn') || m.target.classList.contains('subtab-btn') || m.target.classList.contains('tab-content') || m.target.classList.contains('subtab-content')) || m.target.id === 'dashboard')) later(); })
+    .observe(document.body, {attributes: true, attributeFilter: ['class', 'style'], subtree: true});
+  // Los filtros se llenan cuando llega la base
+  setInterval(() => { if (document.body.classList.contains('nv-on') && !fil.querySelector('.fr-block')) render(); else contar(); }, 3000);
+  later(300);
 })();
 </script>
 </body>
