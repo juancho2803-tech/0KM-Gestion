@@ -2573,10 +2573,11 @@
         <div class="panel" id="entSpcPanel">
           <div class="panel-head">
             <h3>📈 Control estadístico del proceso</h3>
-            <div class="hint">Promedio de días de la instancia elegida por período (fecha de entrega) · línea central = promedio general · límites = promedio ± 3 desvíos (según la cantidad de autos de cada período) · los puntos en rojo están fuera de control</div>
+            <div class="hint">Área y Marca filtran también las tablas de abajo · Promedio de días de la instancia elegida por período (fecha de entrega) · línea central = promedio general · límites = promedio ± 3 desvíos (según la cantidad de autos de cada período) · los puntos en rojo están fuera de control</div>
           </div>
           <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:10px;">
             <label class="hint" for="spcEtapa">Instancia</label><select id="spcEtapa" class="month-select"></select>
+            <label class="hint" for="spcArea">Área</label><select id="spcArea" class="month-select"><option value="todas">Todas</option><option value="fisico">🔧 Circuito físico</option><option value="documental">📄 Circuito documental</option><option value="entrega">📅 Entrega (auto listo)</option></select>
             <label class="hint" for="spcMarca">Marca</label><select id="spcMarca" class="month-select"></select>
             <label class="hint" for="spcPeriodo">Período</label>
             <select id="spcPeriodo" class="month-select"><option value="auto">Automático</option><option value="dia">Día</option><option value="semana">Semana</option><option value="mes">Mes</option></select>
@@ -9853,22 +9854,28 @@
     if (!e || !e.start || !e.end || e.end < e.start) return null;
     return e.corridos ? Math.round((e.end - e.start) / 86400000) : (diasHabilesSLA(e.start, e.end) || 0);
   }
+  let ENT_PROM_BASE = [];
   function entRenderPromedios(base){
     const el = $('entPromBox'); if (!el) return;
+    ENT_PROM_BASE = base;
+    const mSel = $('spcMarca') ? $('spcMarca').value : '', aSel = $('spcArea') ? $('spcArea').value : 'todas';
+    if (mSel && mSel !== 'todas') base = base.filter(u => u.marca === mSel);
+    const trOk = e => aSel === 'todas' || e.track === aSel;
     const ag = {}, orden = [];
     base.forEach(u => u.etapas.forEach(e => {
-      const t = entTardo(e); if (t === null) return;
+      const t = entTardo(e); if (t === null || !trOk(e)) return;
       // Se agrupa por etapa + área (ej.: el patentamiento lo hace la gestoría externa o el cliente)
       const gk = e.key + '|' + e.area;
       const lbl = e.key === 'patente' ? (ENT_AREAS[e.area] ? ENT_AREAS[e.area].label : e.label) : e.label.replace(/ \(.*\)$/, '');
       if (!ag[gk]){ ag[gk] = {label: lbl, track: e.track, objs: new Set(), corr: e.corridos, n:0, sum:0, sumT:0, nT:0, exc:0}; orden.push(gk); }
-      const a = ag[gk]; a.n++; a.sum += t; if (e.exceso > 0) a.exc++;
+      // % que se pasó: lo que tardó desde que estuvo disponible vs. su objetivo (igual que la tabla "¿Dónde se nos escapa?")
+      const a = ag[gk]; a.n++; a.sum += t; if (e.obj !== null && e.obj !== undefined && t > e.obj) a.exc++;
       if (e.obj !== null && e.obj !== undefined) a.objs.add(e.obj);
       if (u.tarde){ a.nT++; a.sumT += t; }
     }));
     const tot = base.filter(u => u.fv && u.E).map(u => diasHabilesSLA(u.fv, u.E) || 0);
     const prom = tot.length ? (tot.reduce((x, y) => x + y, 0) / tot.length) : null;
-    if (!orden.length){ el.innerHTML = '<div class="hint">Sin datos con estos filtros</div>'; return; }
+    if (!orden.length){ el.innerHTML = `<div class="hint">${aSel === 'entrega' ? 'Las instancias de la entrega (llamado, agenda, cliente) están en la tabla "¿Dónde se nos escapa?" del gráfico de control.' : 'Sin datos con estos filtros'}</div>`; return; }
     const po = ENT_STATE.promOrden || null, pdir = ENT_STATE.promAsc ? -1 : 1;
     const pval = (k, c) => { const a = ag[k]; return c === 'prom' ? a.sum / a.n : c === 'tarde' ? (a.nT ? a.sumT / a.nT : -1) : c === 'exc' ? a.exc / a.n : a.n; };
     const keys = po ? orden.sort((a, b) => pdir * (pval(b, po) - pval(a, po))) : orden.sort((a, b) => (ag[a].track === ag[b].track ? 0 : (ag[a].track === 'fisico' ? -1 : 1)));
@@ -9955,6 +9962,8 @@
     if (!selE.dataset.bound){
       selE.dataset.bound = '1';
       [selE, selM, selP].forEach(x => x.addEventListener('change', entRenderSpc));
+      [selM, $('spcArea')].forEach(x => x.addEventListener('change', () => { try { entRenderPromedios(ENT_PROM_BASE); } catch(e){ console.error(e); } }));
+      $('spcArea').addEventListener('change', entRenderSpc);
       $('spcTabla').addEventListener('click', ev => { const tr = ev.target.closest('tr[data-et]'); if (!tr) return; selE.value = tr.dataset.et; entRenderSpc(); });
     }
     const base = ENT_SPC_BASE || [];
@@ -9968,11 +9977,14 @@
     const cnt = {}; vals.forEach(({x}) => Object.keys(x).forEach(k => cnt[k] = (cnt[k] || 0) + 1));
     const conocidas = SPC_GRUPOS.flatMap(g => g[1]);
     const extra = Object.keys(cnt).filter(k => !conocidas.includes(k));
+    const areaSel = $('spcArea').value || 'todas';
+    const gIdx = {fisico:0, documental:1, entrega:2}[areaSel];
     const prevE = selE.value || 'Carpeta GEAC';
-    selE.innerHTML = SPC_GRUPOS.map(([g, l], gi) => `<optgroup label="${escapeHtml(g)}">` + l.concat(gi === 1 ? extra : []).map(o =>
+    selE.innerHTML = SPC_GRUPOS.filter((g, gi) => gIdx === undefined || gi === gIdx || gi === 3).map(([g, l]) => [g, l, SPC_GRUPOS.findIndex(x => x[0] === g)]).map(([g, l, gi]) => `<optgroup label="${escapeHtml(g)}">` + l.concat(gi === 1 ? extra : []).map(o =>
       `<option value="${escapeHtml(o)}">${escapeHtml(o)} (${cnt[o] || 0})</option>`).join('') + '</optgroup>').join('');
-    const todasOps = conocidas.concat(extra);
-    selE.value = todasOps.includes(prevE) ? prevE : (prevE === '__total' ? 'Total: venta → entrega' : 'Carpeta GEAC');
+    const enArea = n => gIdx === undefined || (SPC_GRUPOS[gIdx][1].includes(n) || (gIdx === 1 && extra.includes(n)));
+    const todasOps = conocidas.concat(extra).filter(n => enArea(n) || n === 'Total: venta → entrega');
+    selE.value = todasOps.includes(prevE) ? prevE : (todasOps.find(n => n !== 'Total: venta → entrega') || 'Total: venta → entrega');
     const etapaSel = selE.value;
 
     // Tabla "¿dónde se nos escapa?"
