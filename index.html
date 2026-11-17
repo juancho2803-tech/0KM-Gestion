@@ -14094,6 +14094,7 @@
         ${dato('Crédito', fiTxt(r, 'Credito?') && (fiTxt(r, 'Credito?') + (fiTxt(r, 'Estado del Credito') ? ' · ' + fiTxt(r, 'Estado del Credito') : '')))}
         ${dato('Ubicación actual', fiTxt(r, 'Ubicacion'))}${dato('Localidad', [fiTxt(r, 'Localidad'), fiTxt(r, 'Provincia')].filter(Boolean).join(', '))}
         ${dato('Teléfono', fiTxt(r, 'Tel Celular') || fiTxt(r, 'Tel Particular'))}
+        ${dato('Vendedor', fiTxt(r, 'Vendedor'))}${dato('Sucursal', fiTxt(r, 'Sucursal'))}
       </div>
       ${(() => {
         // Elementos entregados con la unidad (cols. CT–CW de la base) — para reclamos
