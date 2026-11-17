@@ -1257,7 +1257,8 @@
           </select>
           <select class="month-select" id="patTurnoEntregaSelect">
             <option value="todos">Turno de entrega: todos</option>
-            <option value="con">Con turno dado</option>
+            <option value="con">Con turno dado (base o agenda)</option>
+            <option value="agenda">Con turno solo en la agenda (falta en TIMM)</option>
             <option value="sin">Sin turno</option>
           </select>
           <select class="month-select" id="patAlistadoSelect">
@@ -8375,6 +8376,14 @@
   function tieneTurnoEntregaDado(row){
     return (row['Fecha Turno Entrega'] || '').toString().trim() !== '';
   }
+  // Turno cargado en la Agenda de la app (hoy o futuro) que todavía no figura en la base (TIMM)
+  function agTurnoPendienteSistema(row){
+    try {
+      if (tieneTurnoEntregaDado(row) || typeof AG === 'undefined' || !AG.data || !AG.data.size) return null;
+      const i = (row['Interno'] || '').toString().trim(); if (!i) return null;
+      return agTurnosDe(i).find(t => t.estado === 'turno' || t.estado === 'reservado' || t.estado === 'ofrecido') || null;
+    } catch(e){ return null; }
+  }
 
   function esUsado(row){
     return (row['Tiene Pago Usado'] || '').toString().trim().toUpperCase() === 'SI';
@@ -10604,8 +10613,9 @@
         const usado = esUsado(r) ? 'SI' : 'NO';
         if (usado !== patUsadoFilter) return false;
       }
-      if (patTurnoEntregaFilter === 'con' && !tieneTurnoEntregaDado(r)) return false;
-      if (patTurnoEntregaFilter === 'sin' && tieneTurnoEntregaDado(r)) return false;
+      if (patTurnoEntregaFilter === 'con' && !tieneTurnoEntregaDado(r) && !agTurnoPendienteSistema(r)) return false;
+      if (patTurnoEntregaFilter === 'agenda' && !agTurnoPendienteSistema(r)) return false;
+      if (patTurnoEntregaFilter === 'sin' && (tieneTurnoEntregaDado(r) || agTurnoPendienteSistema(r))) return false;
       if (patAlistadoFilter === 'si' && !isAlistado(r)) return false;
       if (patAlistadoFilter === 'no' && isAlistado(r)) return false;
       if (patArriboFilter === 'sinArribar' && !isSinArribar(r)) return false;
@@ -10821,15 +10831,17 @@
         const bTitle = bRec ? `Bloqueo marcado el ${formatDateDisplay(bRec.fechaSolucion)}${bloqueoLiberacion(bRec) ? ' · liberado el ' + entFmt(bloqueoLiberacion(bRec)) : ''}` : 'Tildar si el auto tiene bloqueo de saldo o pago (no se puede dar turno hasta que se libere)';
         const bloqueoCheck = `<label class="contact-checkbox-label" title="${escapeHtml(bTitle)}" style="${bActivo ? 'color:var(--red); font-weight:600;' : ''}"><input type="checkbox" class="pat-bloqueo-check" data-interno="${escapeHtml(interno)}" ${bActivo ? 'checked' : ''}> 🔒 Con bloqueo${bActivo ? ` <span style="font-weight:400; font-size:11px;">${formatDateDisplay(bRec.fechaSolucion).slice(0,5)}</span>` : ''}</label>`;
         const sinTurnoNiEntrega = !tieneTurnoEntregaDado(r) && !isEntregado(r);
-        const turnoEntregaCell = isOkParaTurno(r)
+        const tAg = agTurnoPendienteSistema(r);
+        const tAgBadge = tAg ? `<div><span class="badge-entrega pend" style="margin-top:4px; background:rgba(76,141,255,.15); color:var(--blue); border-color:var(--blue);" title="Turno cargado en la Agenda de la app por ${escapeHtml(tAg.usuario || '—')}. Todavía no figura en la base: falta cargarlo en TIMM.">📅 Agenda ${formatDateDisplay(agFromKey(tAg.fecha)).slice(0,5)} ${escapeHtml(tAg.hora)}${tAg.estado !== 'turno' ? ' (' + escapeHtml((AG_ESTADOS[tAg.estado] || {label:tAg.estado}).label.toLowerCase()) + ')' : ''} · falta en TIMM</span></div>` : '';
+        const turnoEntregaCell = (isOkParaTurno(r)
           ? `<label class="contact-checkbox-label"><input type="checkbox" class="contact-bloqueo-check" data-interno="${escapeHtml(interno)}" ${sinBloqueoChecked ? 'checked' : ''}> ✅ Ok para entregar</label>`
           : sinTurnoNiEntrega
-            ? `<span class="badge-entrega bad">Sin turno</span>`
+            ? (tAg ? '' : `<span class="badge-entrega bad">Sin turno</span>`)
             : (tieneTurnoEntregaDado(r)
               ? (isEntregado(r)
                   ? `<span class="badge-entrega ok">✅ Con turno (${formatDateDisplay(r['Fecha Turno Entrega'])})</span>`
                   : `<span class="badge-entrega pend">🕓 Turno agendado (${formatDateDisplay(r['Fecha Turno Entrega'])})</span>`)
-              : `<span class="badge-entrega bad">Sin turno</span>`);
+              : (tAg ? '' : `<span class="badge-entrega bad">Sin turno</span>`))) + tAgBadge;
         const esMaipuGeac = (r['Patenta?'] || '').toString().trim().toUpperCase() === 'MAIPU';
         const geacOk = esMaipuGeac && (r['Fecha Entrega Tramite a GEAC'] || '').toString().trim() !== '';
         const geacTitle = esMaipuGeac
@@ -11214,7 +11226,8 @@
       'Credito': (r['Credito?'] || '').toString().trim().toUpperCase() !== 'SI'
         ? 'No aplica'
         : (tieneCreditoSinLiquidar(r) ? 'Sin liquidar' : 'Liquidado'),
-      'Turno de Entrega': tieneTurnoEntregaDado(r) ? 'CON TURNO' : 'SIN TURNO',
+      'Turno de Entrega': tieneTurnoEntregaDado(r) ? 'CON TURNO' : (agTurnoPendienteSistema(r) ? 'TURNO EN AGENDA (falta en TIMM)' : 'SIN TURNO'),
+      'Turno en agenda': (t => t ? `${entFmt(agFromKey(t.fecha))} ${t.hora} · ${t.entregador}` : '')(agTurnoPendienteSistema(r)),
       'Fecha Turno Entrega': formatDateDisplay(r['Fecha Turno Entrega']),
       'Observacion': (OBSERVATIONS.get(obsKey((r['Interno']||'').toString().trim(), 'patentados')) || {}).observacion || ''
     }));
@@ -13511,7 +13524,9 @@
     // Si cambió quién tiene turno cumplido en la agenda, se actualizan las listas de pendientes
     try {
       agTurnoCumplido({Interno:'__'});
-      const sig = AG._cumpl ? [...AG._cumpl.keys()].sort().join(',') : '';
+      // Cambia si hay nuevos turnos cumplidos o turnos cargados/movidos en la agenda
+      const sig = (AG._cumpl ? [...AG._cumpl.keys()].sort().join(',') : '') + '|' +
+        [...AG.data.values()].filter(t => t.estado !== 'bloqueado' && t.interno).map(t => t.interno + '@' + t.fecha + ' ' + t.hora + t.estado).sort().join(',');
       if (ALL_ROWS.length && sig !== AG._cumplSigVista){
         AG._cumplSigVista = sig;
         renderAccesoriosSection(); renderPatentadosSection(); renderLeBombSection(); renderResumenSection(); renderFueraDQSection(); renderClienteExternoSection();
