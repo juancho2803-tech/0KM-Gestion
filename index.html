@@ -2579,10 +2579,12 @@
             <label class="hint" for="spcEtapa">Instancia</label><select id="spcEtapa" class="month-select"></select>
             <label class="hint" for="spcMarca">Marca</label><select id="spcMarca" class="month-select"></select>
             <label class="hint" for="spcPeriodo">Período</label>
-            <select id="spcPeriodo" class="month-select"><option value="semana">Semana</option><option value="mes">Mes</option></select>
+            <select id="spcPeriodo" class="month-select"><option value="auto">Automático</option><option value="dia">Día</option><option value="semana">Semana</option><option value="mes">Mes</option></select>
           </div>
           <div style="position:relative; height:320px;"><canvas id="spcChart"></canvas></div>
           <div id="spcResumen" class="hint" style="margin-top:8px;"></div>
+          <div style="margin-top:14px;"><div class="hint" style="margin-bottom:6px;"><b>🔎 ¿Dónde se nos escapa?</b> Todas las instancias con los mismos filtros, ordenadas por días excedidos sobre su objetivo · clic en una fila para verla en el gráfico</div>
+            <div style="overflow-x:auto;"><table class="data-table" id="spcTabla"></table></div></div>
         </div>
 
         <div class="panel" id="entPromPanel">
@@ -9909,38 +9911,92 @@
 
   // ---- Control estadístico del proceso (gráfico de medias con límites ±3σ) ----
   let ENT_SPC_BASE = [], spcChartInst = null;
+  // Valores por auto de cada instancia (incluye tramos que no son etapas: patentamiento
+  // completo y el tramo con el auto listo dividido en contactación / agenda / cliente).
+  const SPC_GRUPOS = [
+    ['🔧 Circuito físico', ['Arribo unidad', 'Alistaje', 'Cierre avería', 'Envío a accesorios', 'Regreso accesorios', 'Accesorios']],
+    ['📄 Circuito documental', ['Pago fábrica', 'Certificado', 'Liquidación crédito', 'Gestoría interna', 'Gestoría externa', 'Patentamiento por cliente', 'Patentamiento (venta → patente)', 'Carpeta GEAC', 'Bloqueo saldo / pago']],
+    ['📅 Entrega (con el auto listo)', ['Entrega: auto listo → entrega', '📞 Contactación (auto listo → turno dado)', '🗓️ Espera de turno libre', '🙋 Elección del cliente']],
+    ['⏱️ Total', ['Total: venta → entrega']]
+  ];
+  function spcValores(u){
+    const out = {};
+    const dh = (a, b) => (a && b && b >= a) ? (diasHabilesSLA(a, b) || 0) : null;
+    u.etapas.forEach(e => { const t = entTardo(e); if (t === null) return; const n = entColEtapa(e).replace(/ \(.*\)$/, '');
+      out[n === 'Patentamiento' ? 'Patentamiento (venta → patente)' : n] = {v:t, obj:e.obj, corr:!!e.corridos}; });
+    const P = entMid(parseDateFlexible(u.r['Fecha Patentamiento']));
+    if (u.fv && P && P >= u.fv) out['Patentamiento (venta → patente)'] = {v: dh(u.fv, P), obj: u.dPat ? dh(u.fv, u.dPat) : null};
+    const OBJ = entObjetivos();
+    if (u.OKd && u.E) out['Entrega: auto listo → entrega'] = {v: dh(u.OKd, u.E), obj: OBJ.turno || 0};
+    const ti = u.tInf, fA = ti && ti.asignado ? entMid(ti.asignado) : null, pl = ti && ti.primerLibre ? entMid(ti.primerLibre) : null;
+    const fLl = fA || u.fCont;
+    if (u.OKd && fLl) out['📞 Contactación (auto listo → turno dado)'] = {v: fLl > u.OKd ? dh(u.OKd, fLl) : 0, obj: OBJ.turno || 0};
+    if (fLl && pl) out['🗓️ Espera de turno libre'] = {v: pl > fLl ? dh(fLl, pl) : 0, obj: null};
+    if (pl && u.E) out['🙋 Elección del cliente'] = {v: u.E > pl ? dh(pl, u.E) : 0, obj: null};
+    if (u.fv && u.E) out['Total: venta → entrega'] = {v: dh(u.fv, u.E), obj: u.D ? dh(u.fv, u.D) : null};
+    Object.keys(out).forEach(k => { if (out[k].v === null) delete out[k]; });
+    return out;
+  }
   function entRenderSpc(){
     const selE = $('spcEtapa'), selM = $('spcMarca'), selP = $('spcPeriodo');
     if (!selE) return;
     if (!selE.dataset.bound){
       selE.dataset.bound = '1';
       [selE, selM, selP].forEach(x => x.addEventListener('change', entRenderSpc));
+      $('spcTabla').addEventListener('click', ev => { const tr = ev.target.closest('tr[data-et]'); if (!tr) return; selE.value = tr.dataset.et; entRenderSpc(); });
     }
     const base = ENT_SPC_BASE || [];
-    // Instancias disponibles
-    const nombres = new Set(); base.forEach(u => u.etapas.forEach(e => { if (entTardo(e) !== null) nombres.add(entColEtapa(e)); }));
-    const ops = ['__total'].concat(ENT_COL_ORDEN.filter(x => nombres.has(x)), [...nombres].filter(x => !ENT_COL_ORDEN.includes(x)));
-    const prevE = selE.value || 'Carpeta GEAC';
-    selE.innerHTML = ops.map(o => `<option value="${escapeHtml(o)}">${o === '__total' ? 'Total: venta → entrega' : escapeHtml(o)}</option>`).join('');
-    selE.value = ops.includes(prevE) ? prevE : ops[0];
     const marcas = [...new Set(base.map(u => u.marca))].sort();
     const prevM = selM.value || 'todas';
     selM.innerHTML = '<option value="todas">Todas</option>' + marcas.map(m => `<option value="${m}">${escapeHtml(PATENTADOS_BRAND_LABELS[m] || m)}</option>`).join('');
     selM.value = prevM === 'todas' || marcas.includes(prevM) ? prevM : 'todas';
-    const etapaSel = selE.value, marcaSel = selM.value, per = selP.value;
+    const marcaSel = selM.value;
+    const vals = base.filter(u => u.E && (marcaSel === 'todas' || u.marca === marcaSel)).map(u => ({u, x: spcValores(u)}));
+    // Todas las instancias siempre en el desplegable (con la cantidad de autos)
+    const cnt = {}; vals.forEach(({x}) => Object.keys(x).forEach(k => cnt[k] = (cnt[k] || 0) + 1));
+    const conocidas = SPC_GRUPOS.flatMap(g => g[1]);
+    const extra = Object.keys(cnt).filter(k => !conocidas.includes(k));
+    const prevE = selE.value || 'Carpeta GEAC';
+    selE.innerHTML = SPC_GRUPOS.map(([g, l], gi) => `<optgroup label="${escapeHtml(g)}">` + l.concat(gi === 1 ? extra : []).map(o =>
+      `<option value="${escapeHtml(o)}">${escapeHtml(o)} (${cnt[o] || 0})</option>`).join('') + '</optgroup>').join('');
+    const todasOps = conocidas.concat(extra);
+    selE.value = todasOps.includes(prevE) ? prevE : (prevE === '__total' ? 'Total: venta → entrega' : 'Carpeta GEAC');
+    const etapaSel = selE.value;
+
+    // Tabla "¿dónde se nos escapa?"
+    {
+      const filas = todasOps.map(n => {
+        const vs = vals.map(({x}) => x[n]).filter(Boolean);
+        if (!vs.length) return null;
+        const prom = vs.reduce((a, b) => a + b.v, 0) / vs.length;
+        const conObj = vs.filter(v => v.obj !== null && v.obj !== undefined);
+        const sobre = conObj.filter(v => v.v > v.obj);
+        const exc = sobre.reduce((a, v) => a + (v.v - v.obj), 0);
+        const objs = [...new Set(conObj.map(v => v.obj))];
+        return {n, N: vs.length, prom, obj: objs.length === 1 ? objs[0] : (objs.length ? 'varía' : '—'), pct: conObj.length ? Math.round(sobre.length / conObj.length * 100) : null, exc, corr: vs.some(v => v.corr)};
+      }).filter(Boolean).filter(f => f.n !== 'Total: venta → entrega').sort((a, b) => (b.exc - a.exc) || (b.prom - a.prom));
+      const maxE = Math.max(1, ...filas.map(f => f.exc));
+      const f1 = v => v.toFixed(1).replace('.', ',');
+      $('spcTabla').innerHTML = `<thead><tr><th>#</th><th>Instancia</th><th style="text-align:right;">Autos</th><th style="text-align:right;">Promedio</th><th style="text-align:right;">Objetivo</th><th style="text-align:right;">% sobre objetivo</th><th>Días excedidos (suma)</th></tr></thead><tbody>` +
+        filas.map((f, i) => `<tr data-et="${escapeHtml(f.n)}" style="cursor:pointer;${f.n === etapaSel ? 'outline:2px solid var(--blue);' : ''}"><td>${i + 1}</td><td>${escapeHtml(f.n)}</td><td style="text-align:right;">${f.N}</td>
+          <td style="text-align:right;">${f1(f.prom)} ${f.corr ? 'días' : 'dh'}</td><td style="text-align:right;">${f.obj}</td>
+          <td style="text-align:right; font-weight:700; color:${f.pct === null ? 'var(--text-faint)' : (f.pct >= 50 ? 'var(--red)' : f.pct >= 25 ? 'var(--amber)' : 'var(--green)')};">${f.pct === null ? '—' : f.pct + '%'}</td>
+          <td><div style="display:flex; align-items:center; gap:6px;"><div style="height:8px; width:${Math.round(f.exc / maxE * 140)}px; background:var(--red); border-radius:4px; opacity:.75;"></div><b>${f.exc.toLocaleString('es-AR')}</b></div></td></tr>`).join('') + '</tbody>';
+    }
+
     // Valores individuales (auto → días de la instancia) con su fecha de entrega
     const pts = [];
     let objs = new Set(), corr = false;
-    base.forEach(u => {
-      if (marcaSel !== 'todas' && u.marca !== marcaSel) return;
-      if (!u.E) return;
-      if (etapaSel === '__total'){ if (u.fv) pts.push({d: u.E, v: diasHabilesSLA(u.fv, u.E) || 0}); return; }
-      u.etapas.forEach(e => { if (entColEtapa(e) !== etapaSel) return; const t = entTardo(e); if (t === null) return; pts.push({d: u.E, v: t}); if (e.obj !== null && e.obj !== undefined) objs.add(e.obj); if (e.corridos) corr = true; });
-    });
+    vals.forEach(({u, x}) => { const e = x[etapaSel]; if (!e) return; pts.push({d: u.E, v: e.v}); if (e.obj !== null && e.obj !== undefined) objs.add(e.obj); if (e.corr) corr = true; });
+    // Período: automático = mes si hay 3+ meses, si no semana (3+), si no día
+    const nDist = f => new Set(pts.map(p => f(p.d))).size;
+    const kMes = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+    const kSem = d => { const x = new Date(d); x.setHours(0,0,0,0); x.setDate(x.getDate() - ((x.getDay() + 6) % 7)); return agKey(x); };
+    let per = selP.value;
+    if (per === 'auto') per = nDist(kMes) >= 3 ? 'mes' : (nDist(kSem) >= 3 ? 'semana' : 'dia');
     const unidad = corr ? 'días' : 'dh';
     if (pts.length < 5){ if (spcChartInst){ spcChartInst.destroy(); spcChartInst = null; } $('spcResumen').textContent = 'Muy pocos datos para el control estadístico con esta selección.'; return; }
-    const keyOf = d => { if (per === 'mes') return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
-      const x = new Date(d); x.setHours(0,0,0,0); x.setDate(x.getDate() - ((x.getDay() + 6) % 7)); return agKey(x); };
+    const keyOf = d => per === 'mes' ? kMes(d) : (per === 'semana' ? kSem(d) : agKey(d));
     const grupos = {}; pts.forEach(p => { const k = keyOf(p.d); (grupos[k] = grupos[k] || []).push(p.v); });
     const keys = Object.keys(grupos).sort();
     const all = pts.map(p => p.v), N = all.length;
@@ -9951,7 +10007,7 @@
     const lcl = keys.map(k => Math.max(0, media - 3 * sd / Math.sqrt(grupos[k].length)));
     const fuera = medias.map((m, i) => m > ucl[i] || m < lcl[i]);
     const obj = objs.size === 1 ? [...objs][0] : null;
-    const lbl = k => per === 'mes' ? (() => { const [y, m] = k.split('-').map(Number); return new Date(y, m - 1, 1).toLocaleDateString('es-AR', {month:'short', year:'2-digit'}); })() : 'Sem ' + entFmt(agFromKey(k)).slice(0, 5);
+    const lbl = k => per === 'mes' ? (() => { const [y, m] = k.split('-').map(Number); return new Date(y, m - 1, 1).toLocaleDateString('es-AR', {month:'short', year:'2-digit'}); })() : (per === 'semana' ? 'Sem ' : '') + entFmt(agFromKey(k)).slice(0, 5);
     const css = getComputedStyle(document.documentElement);
     const col = v => css.getPropertyValue(v).trim() || '#888';
     if (spcChartInst) spcChartInst.destroy();
@@ -9973,7 +10029,7 @@
     const f1 = v => v.toFixed(1).replace('.', ',');
     const nf = fuera.filter(Boolean).length;
     const sobreObj = obj !== null ? Math.round(all.filter(v => v > obj).length / N * 100) : null;
-    $('spcResumen').innerHTML = `Promedio <b>${f1(media)} ${unidad}</b> · desvío <b>${f1(sd)}</b> · ${N.toLocaleString('es-AR')} autos en ${keys.length} ${per === 'mes' ? 'meses' : 'semanas'}` +
+    $('spcResumen').innerHTML = `Promedio <b>${f1(media)} ${unidad}</b> · desvío <b>${f1(sd)}</b> · ${N.toLocaleString('es-AR')} autos en ${keys.length} ${per === 'mes' ? 'meses' : (per === 'semana' ? 'semanas' : 'días')}` +
       (obj !== null ? ` · objetivo ${obj} ${unidad}: ${sobreObj}% de los autos lo superó` : '') +
       ` · <b style="color:${nf ? 'var(--red)' : 'var(--green)'};">${nf ? nf + ' período' + (nf > 1 ? 's' : '') + ' fuera de control' : 'proceso bajo control'}</b>` +
       (nf ? ': ' + keys.filter((k, i) => fuera[i]).map(k => `${lbl(k)} (${f1(medias[keys.indexOf(k)])})`).join(', ') : '');
