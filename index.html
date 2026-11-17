@@ -9419,7 +9419,9 @@
           };
           tomar('contacto', fA || fC);
           if (fA || fC) tomar('agendallena', pl);
-          if (pl) tomar('clienteturno', E);
+          // Si se llamó pero el turno no se dio por la Agenda (no hay primer libre), lo que
+          // sigue al llamado se asume fecha acordada con el cliente.
+          if (pl || fA || fC) tomar('clienteturno', E);
           if (resto > 0) aporte.turno = (aporte.turno || 0) + resto;
         }
         frena = Object.keys(aporte).some(k => !ENT_AREAS[k] || ENT_AREAS[k].track !== 'turno') ? circ : 'turno';
@@ -9825,7 +9827,8 @@
         const fLl = fA || u.fCont;
         filas.push(sub('📞', 'Llamado / turno dado', u.OKd, fLl, 'contacto', fLl ? '' : 'sin registro'));
         filas.push(sub('🗓️', 'Espera turno libre', fLl, pl, 'agendallena', pl ? '' : 'sin registro'));
-        filas.push(sub('🙋', 'Elección del cliente', pl, pl ? u.E : null, 'clienteturno', ti && ti.motivo ? escapeHtml(ti.motivo) : ''));
+        const iniCli = pl || fLl;
+        filas.push(sub('🙋', 'Elección del cliente', iniCli, iniCli ? u.E : null, 'clienteturno', ti && ti.motivo ? escapeHtml(ti.motivo) : (iniCli && !pl ? 'sin agenda: se asume fecha acordada' : '')));
       }
     }
     const resumen = Object.entries(u.aporte).sort((a,b) => b[1] - a[1]).map(([k,v]) => `${ENT_AREAS[k].icon} ${ENT_AREAS[k].label.split(' (')[0]} <b>+${v}</b>`).join(' + ');
@@ -9932,7 +9935,8 @@
     const fLl = fA || u.fCont;
     if (u.OKd && fLl) out['📞 Contactación (auto listo → turno dado)'] = {v: fLl > u.OKd ? dh(u.OKd, fLl) : 0, obj: OBJ.turno || 0};
     if (fLl && pl) out['🗓️ Espera de turno libre'] = {v: pl > fLl ? dh(fLl, pl) : 0, obj: null};
-    if (pl && u.E) out['🙋 Elección del cliente'] = {v: u.E > pl ? dh(pl, u.E) : 0, obj: null};
+    const iniCli = pl || fLl;
+    if (iniCli && u.E) out['🙋 Elección del cliente'] = {v: u.E > iniCli ? dh(iniCli, u.E) : 0, obj: null};
     if (u.fv && u.E) out['Total: venta → entrega'] = {v: dh(u.fv, u.E), obj: u.D ? dh(u.fv, u.D) : null};
     Object.keys(out).forEach(k => { if (out[k].v === null) delete out[k]; });
     return out;
