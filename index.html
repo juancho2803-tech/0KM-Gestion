@@ -9806,13 +9806,13 @@
         <td style="font-weight:700; color:${e.aporte > 0 ? 'var(--red)' : 'var(--text-faint)'};">${e.aporte > 0 ? '+' + e.aporte : '—'}</td><td>${est}</td></tr>`;
     });
     const tT = u.OKd ? dh(u.OKd, u.E) : null;
-    const apT = ['turno','contacto','agendallena','clienteturno'].reduce((t, k) => t + (u.aporte[k] || 0), 0);
+    const apT = ['turno','contacto','agendallena'].reduce((t, k) => t + (u.aporte[k] || 0), 0), apCli = u.aporte.clienteturno || 0;
     const objT = entObjetivos().turno || 0;
     const exT = tT !== null && tT > objT ? tT - objT : 0;
     filas.push(`<tr><td>📅 Entregas (turno)</td><td>${entFmt(u.OKd)}</td><td>${objT} dh</td><td>${entFmt(u.E)}</td>
       <td>${tT === null ? '—' : tT + ' dh'}</td><td style="color:${exT > 0 ? 'var(--amber)' : 'var(--green)'};">${exT > 0 ? '+' + exT : '0'}</td>
       <td style="font-weight:700; color:${apT > 0 ? 'var(--red)' : 'var(--text-faint)'};">${apT > 0 ? '+' + apT : '—'}</td>
-      <td>${apT > 0 ? '<span class="ent-tag main">aportó demora</span>' : '<span class="ent-tag" style="color:var(--green);">cumplió</span>'}</td></tr>`);
+      <td>${apT > 0 ? '<span class="ent-tag main">aportó demora</span>' : (apCli > 0 ? '<span class="ent-tag" style="color:#c084fc;">demora del cliente</span>' : '<span class="ent-tag" style="color:var(--green);">cumplió</span>')}</td></tr>`);
     // Detalle del tramo con el auto listo: contactación → asignación → primer libre → entrega
     {
       const ti = u.tInf, fA = ti && ti.asignado ? entMid(ti.asignado) : null, pl = ti && ti.primerLibre ? entMid(ti.primerLibre) : null;
