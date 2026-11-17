@@ -9162,8 +9162,10 @@
   // estaba listo a tiempo y aun así se entregó tarde → coordinación de entrega.
   // =====================================================================
   const ENT_AREAS = {
-    turno:      {label:'Entregas (turno / cliente)', icon:'📅', color:'#8b5cf6', track:'turno'},
+    contacto:   {label:'Contactación (demoró en llamar / dar turno)', icon:'📞', color:'#a855f7', track:'turno'},
+    agendallena:{label:'Disponibilidad de turno (agenda llena)', icon:'🗓️', color:'#7c3aed', track:'turno'},
     clienteturno:{label:'Cliente pidió una fecha posterior', icon:'🙋‍♂️', color:'#c084fc', track:'turno'},
+    turno:      {label:'Entregas (sin registro de llamado / turno)', icon:'📅', color:'#8b5cf6', track:'turno'},
     geac:       {label:'Carpeta GEAC',                            icon:'📋', color:'#4c8dff', track:'documental'},
     averia:     {label:'Averías',                                   icon:'⚠️', color:'#ff5c4d', track:'fisico'},
     accesorios: {label:'Accesorios',                                icon:'🎒', color:'#ff8a3d', track:'fisico'},
@@ -9395,16 +9397,30 @@
         const desdeT = limT > D ? limT : D;
         const post = E > desdeT ? (diasHabilesSLA(desdeT, E) || 0) : 0;
         if (post > 0){
-          // Si al dar el turno había uno libre antes y el cliente eligió una fecha posterior,
-          // esos días son del cliente, no de Entregas.
+          // Se reparte en 3 tramos con lo registrado en la app:
+          //  📞 Contactación: desde que vence el objetivo hasta que se llamó / se asignó el turno
+          //  🗓️ Agenda llena: desde la asignación hasta el primer turno libre que había
+          //  🙋 Cliente: desde ese primer libre hasta la entrega (eligió una fecha posterior)
+          // Lo que no tenga registro (contactación / turno de la agenda) queda en Entregas.
           const ti = turnoInfo(r);
+          const dhb = (a, b) => (a && b && b > a) ? (diasHabilesSLA(a, b) || 0) : 0;
+          const fC = entMid(fechaContactacion(r));
+          const fA = ti && ti.asignado ? entMid(ti.asignado) : null;
           const pl = ti && ti.primerLibre ? entMid(ti.primerLibre) : null;
-          const espCli = pl && E > pl ? (diasHabilesSLA(pl > desdeT ? pl : desdeT, E) || 0) : 0;
-          const cli = Math.min(post, espCli);
-          if (cli > 0) aporte.clienteturno = cli;
-          if (post - cli > 0) aporte.turno = post - cli;
+          let cur = desdeT, resto = post;
+          const tomar = (k, hasta) => {
+            if (!hasta || resto <= 0) return;
+            const h = hasta < E ? hasta : E;
+            const n = Math.min(resto, dhb(cur, h));
+            if (n > 0){ aporte[k] = (aporte[k] || 0) + n; resto -= n; }
+            if (h > cur) cur = h;
+          };
+          tomar('contacto', fA || fC);
+          if (fA || fC) tomar('agendallena', pl);
+          if (pl) tomar('clienteturno', E);
+          if (resto > 0) aporte.turno = (aporte.turno || 0) + resto;
         }
-        frena = Object.keys(aporte).some(k => k !== 'turno' && k !== 'clienteturno') ? circ : 'turno';
+        frena = Object.keys(aporte).some(k => !ENT_AREAS[k] || ENT_AREAS[k].track !== 'turno') ? circ : 'turno';
       } else {
         frena = 'turno';
         aporte.turno = atraso;
@@ -9790,13 +9806,26 @@
         <td style="font-weight:700; color:${e.aporte > 0 ? 'var(--red)' : 'var(--text-faint)'};">${e.aporte > 0 ? '+' + e.aporte : '—'}</td><td>${est}</td></tr>`;
     });
     const tT = u.OKd ? dh(u.OKd, u.E) : null;
-    const apT = u.aporte.turno || 0;
+    const apT = ['turno','contacto','agendallena','clienteturno'].reduce((t, k) => t + (u.aporte[k] || 0), 0);
     const objT = entObjetivos().turno || 0;
     const exT = tT !== null && tT > objT ? tT - objT : 0;
     filas.push(`<tr><td>📅 Entregas (turno)</td><td>${entFmt(u.OKd)}</td><td>${objT} dh</td><td>${entFmt(u.E)}</td>
       <td>${tT === null ? '—' : tT + ' dh'}</td><td style="color:${exT > 0 ? 'var(--amber)' : 'var(--green)'};">${exT > 0 ? '+' + exT : '0'}</td>
       <td style="font-weight:700; color:${apT > 0 ? 'var(--red)' : 'var(--text-faint)'};">${apT > 0 ? '+' + apT : '—'}</td>
       <td>${apT > 0 ? '<span class="ent-tag main">aportó demora</span>' : '<span class="ent-tag" style="color:var(--green);">cumplió</span>'}</td></tr>`);
+    // Detalle del tramo con el auto listo: contactación → asignación → primer libre → entrega
+    {
+      const ti = u.tInf, fA = ti && ti.asignado ? entMid(ti.asignado) : null, pl = ti && ti.primerLibre ? entMid(ti.primerLibre) : null;
+      const sub = (ic, lab, ini, fin, k, nota) => `<tr style="font-size:11.5px;"><td style="padding-left:22px;">↳ ${ic} ${lab}</td><td>${entFmt(ini)}</td><td>—</td><td>${fin ? entFmt(fin) : '—'}</td>
+        <td>${ini && fin ? dh(ini, fin) + ' dh' : '—'}</td><td style="color:var(--text-faint);">${nota || ''}</td>
+        <td style="font-weight:700; color:${(u.aporte[k] || 0) > 0 ? 'var(--red)' : 'var(--text-faint)'};">${(u.aporte[k] || 0) > 0 ? '+' + u.aporte[k] : '—'}</td><td></td></tr>`;
+      if (u.OKd){
+        const fLl = fA || u.fCont;
+        filas.push(sub('📞', 'Llamado / turno dado', u.OKd, fLl, 'contacto', fLl ? '' : 'sin registro'));
+        filas.push(sub('🗓️', 'Espera turno libre', fLl, pl, 'agendallena', pl ? '' : 'sin registro'));
+        filas.push(sub('🙋', 'Elección del cliente', pl, pl ? u.E : null, 'clienteturno', ti && ti.motivo ? escapeHtml(ti.motivo) : ''));
+      }
+    }
     const resumen = Object.entries(u.aporte).sort((a,b) => b[1] - a[1]).map(([k,v]) => `${ENT_AREAS[k].icon} ${ENT_AREAS[k].label.split(' (')[0]} <b>+${v}</b>`).join(' + ');
     const fis = u.finFisico ? entFmt(u.finFisico) : '—', doc = u.finDoc ? entFmt(u.finDoc) : '—';
     return `<div class="ent-desg">
