@@ -14978,8 +14978,14 @@
   function relocate(){
     restore();
     const cands = [], fb = document.getElementById('filterBar'); if (fb && vis(fb)) cands.push(fb);
+    // Solo los filtros generales de la sección (los del primer panel). Los que son de un
+    // cuadro puntual (gráfico, tabla de objetivos, etc.) quedan dentro de ese cuadro.
+    // (el cuadro del primer bloque de filtros que aparece en la sección)
+    let primerPanel;
     document.querySelectorAll('.tab-content.active .filter-row, .tab-content.active .filter-bar, .tab-content.active .sla-filters').forEach(el => {
       if (!vis(el) || el.closest('table, .modal, [id$="Modal"]') || !el.querySelector('.msdrop, .pill-group, select, .segmented, input')) return;
+      const pn = el.closest('.panel') || null;
+      if (primerPanel === undefined) primerPanel = pn; else if (pn !== primerPanel) return;
       if (cands.some(c => c.contains(el))) return; cands.push(el); });
     // Si hay filtros de varios paneles, cada bloque lleva el título del panel al que filtra
     const tit = el => { const h = el.closest('.panel') && el.closest('.panel').querySelector('h3'); return h ? h.textContent.trim() : ''; };
