@@ -4657,6 +4657,7 @@
   // Tarjetas: cada una es un filtro (se combinan entre sí)
   const STK_CARDS = [
     {k:'averia',  t:'⚠️ Con avería abierta', c:'var(--red)',    f:r => hasAveria(r)},
+    {k:'arribado', t:'🏁 Arribados (stock físico)', c:'var(--green)', f:r => !!stkTxt(r, 'Fecha Arribo Unidad')},
     {k:'arribo',  t:'🚛 Sin arribar',        c:'var(--gray)',   f:r => !stkTxt(r, 'Fecha Arribo Unidad')},
     {k:'alistaje',t:'🧹 Arribados sin alistar', c:'var(--amber)', f:r => !!stkTxt(r, 'Fecha Arribo Unidad') && !isAlistado(r)},
     {k:'pago',    t:'🏭 Sin pago a fábrica', c:'var(--orange)', f:r => !stkTxt(r, 'Fecha Pago Fab')},
@@ -4689,7 +4690,7 @@
         'Interno': stkTxt(r, 'Interno'), 'Marca': stkTxt(r, 'Marca'), 'Modelo': stkTxt(r, 'Modelo'), 'Cliente': stkTxt(r, 'Cliente'), 'Canal': stkTxt(r, 'Canal'),
         'Estado': STK_EST_LBL[categorize(r)].replace(/^\S+\s/, ''), 'Dias en el estado': stkDias(r) ?? '', 'Ubicacion': stkTxt(r, 'Ubicacion'), 'Dominio': stkTxt(r, 'Dominio'),
         'Fecha Reserva': formatDateDisplay(r['Fecha Reserva']), 'Fecha Venta': formatDateDisplay(r['Fecha Venta']), 'Fecha Patentamiento': formatDateDisplay(r['Fecha Patentamiento']),
-        'Pendientes': STK_CARDS.filter(c => c.k !== 'turno' && c.k !== 'mas30' && c.k !== 'usado' && c.f(r)).map(c => c.t.replace(/^\S+\s/, '')).join(' · ')
+        'Pendientes': STK_CARDS.filter(c => c.k !== 'turno' && c.k !== 'mas30' && c.k !== 'usado' && c.k !== 'arribado' && c.f(r)).map(c => c.t.replace(/^\S+\s/, '')).join(' · ')
       }));
       if (!data.length) return;
       const ws = XLSX.utils.json_to_sheet(data), wb = XLSX.utils.book_new();
@@ -4733,7 +4734,7 @@
     const filtros = [...STK.cards].map(k => STK_CARDS.find(c => c.k === k).t);
     if (STK.cell) filtros.push((STK.cell.e ? STK_EST_LBL[STK.cell.e] : 'Todos los estados') + ' · ' + (STK.cell.m ? lblM(STK.cell.m) : 'todas las marcas'));
     $('stkHint').textContent = `${rows.length.toLocaleString('es-AR')} autos${filtros.length ? ' · ' + filtros.join(' + ') : ''}${rows.length > 500 ? ' · se muestran los 500 con más días (el Excel trae todos)' : ''} · ordenados por días en el estado`;
-    const chips = r => STK_CARDS.filter(c => !['turno', 'mas30', 'patsinturno'].includes(c.k) && c.f(r)).map(c => `<span class="stk-chip">${c.t}</span>`).join('');
+    const chips = r => STK_CARDS.filter(c => !['turno', 'mas30', 'patsinturno', 'arribado'].includes(c.k) && c.f(r)).map(c => `<span class="stk-chip">${c.t}</span>`).join('');
     $('stkTabla').innerHTML = `<thead><tr><th>Interno</th><th>Marca</th><th>Modelo</th><th>Cliente</th><th>Estado</th><th style="text-align:right;">Días</th><th>Ubicación</th><th>Turno</th><th>Pendientes</th></tr></thead><tbody>` +
       (rows.length ? rows.slice(0, 500).map(r => { const d = stkDias(r), tp = agTurnoPendienteSistema(r);
         return `<tr data-i="${escapeHtml(stkTxt(r, 'Interno'))}" style="cursor:pointer;"><td><b>${escapeHtml(stkTxt(r, 'Interno'))}</b></td><td>${escapeHtml(lblM(stkTxt(r, 'Marca').toUpperCase()))}</td><td>${escapeHtml(stkTxt(r, 'Modelo'))}</td><td>${escapeHtml(stkTxt(r, 'Cliente') || '—')}</td>
