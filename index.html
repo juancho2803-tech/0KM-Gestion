@@ -675,6 +675,17 @@
   .ent-filters .ent-search{margin:0 0 0 auto !important; width:300px;}
   .ent-filters .ent-search input{border:2px solid var(--blue);}
   @media (max-width:700px){ .ent-filters .ent-search{width:100%;} }
+  .stk-cards{display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:8px; margin:12px 0;}
+  .stk-card{background:var(--surface-2); border:1px solid var(--border); border-left:3px solid var(--kc,var(--blue)); border-radius:10px; padding:9px 11px; cursor:pointer; transition:transform .1s, border-color .15s;}
+  .stk-card:hover{transform:translateY(-1px); border-color:var(--text-dim);}
+  .stk-card.on{background:rgba(76,141,255,.16); border-color:var(--blue); box-shadow:inset 0 0 0 1px var(--blue);}
+  .stk-card .t{font-size:11px; color:var(--text-dim); font-weight:600;}
+  .stk-card .v{font-size:22px; font-weight:800; font-family:'JetBrains Mono',monospace; line-height:1.2;}
+  .stk-card .s{font-size:10.5px; color:var(--text-faint);}
+  .stk-mx td.c{cursor:pointer; text-align:right;}
+  .stk-mx td.c:hover{background:var(--surface-2);}
+  .stk-mx td.sel{background:rgba(76,141,255,.20); font-weight:800;}
+  .stk-chip{display:inline-block; font-size:10.5px; border:1px solid var(--border); border-radius:10px; padding:0 6px; margin:1px 2px 1px 0; color:var(--text-dim); white-space:nowrap;}
   .ent-kpis{display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:10px;}
   .ent-kpi{background:var(--surface-2); border:1px solid var(--border); border-left:3px solid var(--kc,var(--amber)); border-radius:10px; padding:11px 13px;}
   .ent-kpi .l{font-family:'Barlow Condensed',sans-serif; font-size:11.5px; text-transform:uppercase; letter-spacing:.8px; color:var(--text-dim); font-weight:600;}
@@ -1039,6 +1050,7 @@
 
     <div class="tab-nav" id="tabNav">
       <button class="tab-btn active" data-tab="aceleracion" type="button">🚀 Aceleración</button>
+      <button class="tab-btn" data-tab="stock" type="button">📦 Stock sin entregar</button>
       <button class="tab-btn" data-tab="lebomb" type="button">💣 Le Bomb</button>
       <button class="tab-btn" data-tab="ventas" type="button">🏷️ Ventas</button>
       <button class="tab-btn" data-tab="analisis" type="button">📊 Análisis</button>
@@ -1049,6 +1061,32 @@
       <div class="fi-search">
         <input type="text" id="fiInput" placeholder="🔎 Buscar interno, dominio, VIN o cliente…" autocomplete="off">
         <button type="button" class="page-btn" id="fiBtn">Ver ficha</button>
+      </div>
+    </div>
+
+    <div class="tab-content" id="tabStock">
+      <div class="panel">
+        <div class="panel-head">
+          <h3>📦 Stock sin entregar</h3>
+          <div class="hint">Todos los autos (Audi · VW · Ford · Chevrolet) que todavía no se entregaron, por estado · las tarjetas filtran la tabla (se pueden combinar) · clic en una celda del cuadro para ver esos autos · clic en un auto para abrir su ficha</div>
+        </div>
+        <div class="filter-row">
+          <div class="pill-group"><span class="pill-group-label">Marca</span><div class="pill-list" id="stkMarca"></div></div>
+          <div class="pill-group"><span class="pill-group-label">Estado</span><div class="pill-list" id="stkEstado"></div></div>
+          <div class="pill-group"><span class="pill-group-label">Canal</span><div class="pill-list" id="stkCanal"></div></div>
+          <button class="page-btn" id="stkLimpiar" type="button">🧹 Limpiar filtros</button>
+          <div class="table-search"><input type="text" id="stkBuscar" placeholder="Buscar interno, cliente, modelo o dominio…" autocomplete="off"></div>
+        </div>
+        <div class="stk-cards" id="stkCards"></div>
+        <div style="overflow-x:auto;"><table class="data-table stk-mx" id="stkMatriz"></table></div>
+      </div>
+      <div class="panel">
+        <div class="panel-head">
+          <h3>📋 Detalle</h3>
+          <div class="hint" id="stkHint"></div>
+          <div class="export-group"><button class="page-btn" id="stkExcel" type="button">⬇️ Excel</button></div>
+        </div>
+        <div class="table-scroll" style="max-height:620px;"><table class="data-table" id="stkTabla"></table></div>
       </div>
     </div>
 
@@ -4609,6 +4647,101 @@
     html += `</tbody></table></div>`;
     return html;
   }
+
+  // ================= 📦 Stock sin entregar =================
+  const STK_ESTADOS = ['Sin operacion', 'Reservado', 'Facturado', 'Patentado'];
+  const STK_EST_LBL = {'Sin operacion':'🔵 Sin operación', Reservado:'🟡 Reservado', Facturado:'🟠 Facturado', Patentado:'🔴 Patentado'};
+  const STK_EST_FECHA = {'Sin operacion':'Fecha Arribo Unidad', Reservado:'Fecha Reserva', Facturado:'Fecha Venta', Patentado:'Fecha Patentamiento'};
+  const stkTxt = (r, c) => (r[c] || '').toString().trim();
+  const stkDias = r => { const d = parseDateFlexible(r[STK_EST_FECHA[categorize(r)]]); if (!d) return null; const h = new Date(); return Math.max(0, Math.floor((new Date(h.getFullYear(), h.getMonth(), h.getDate()) - new Date(d.getFullYear(), d.getMonth(), d.getDate())) / 864e5)); };
+  // Tarjetas: cada una es un filtro (se combinan entre sí)
+  const STK_CARDS = [
+    {k:'averia',  t:'⚠️ Con avería abierta', c:'var(--red)',    f:r => hasAveria(r)},
+    {k:'arribo',  t:'🚛 Sin arribar',        c:'var(--gray)',   f:r => !stkTxt(r, 'Fecha Arribo Unidad')},
+    {k:'alistaje',t:'🧹 Arribados sin alistar', c:'var(--amber)', f:r => !!stkTxt(r, 'Fecha Arribo Unidad') && !isAlistado(r)},
+    {k:'pago',    t:'🏭 Sin pago a fábrica', c:'var(--orange)', f:r => !stkTxt(r, 'Fecha Pago Fab')},
+    {k:'cert',    t:'📄 Sin certificado',    c:'var(--orange)', f:r => !stkTxt(r, 'Fecha Arribo Certificado')},
+    {k:'credito', t:'💳 Crédito sin liquidar', c:'var(--amber)', f:r => stkTxt(r, 'Credito?').toUpperCase() === 'SI' && !stkTxt(r, 'Fecha Liquidacion Credito')},
+    {k:'acc',     t:'🎒 Accesorios pendientes', c:'var(--amber)', f:r => tieneAccesorios(r) && !accesoriosListos(r)},
+    {k:'patsinturno', t:'📅 Patentados sin turno', c:'var(--blue)', f:r => categorize(r) === 'Patentado' && !tieneTurnoEntregaDado(r) && !agTurnoPendienteSistema(r)},
+    {k:'turno',   t:'✅ Con turno de entrega', c:'var(--green)', f:r => tieneTurnoEntregaDado(r) || !!agTurnoPendienteSistema(r)},
+    {k:'usado',   t:'🚗 Con usado en la operación', c:'var(--orange)', f:r => esUsado(r)},
+    {k:'mas30',   t:'⏳ Más de 30 días en su estado', c:'var(--red)', f:r => { const d = stkDias(r); return d !== null && d > 30; }}
+  ];
+  const STK = {init:false, marcas:new Set(), estados:new Set(STK_ESTADOS), canales:new Set(), allCanales:[], cards:new Set(), cell:null, q:''};
+  function stkPills(id, vals, set, lbl){
+    $(id).innerHTML = vals.map(v => `<button type="button" class="${set.has(v) ? 'active' : ''}" data-v="${escapeHtml(v)}">${escapeHtml(lbl ? lbl(v) : v)}</button>`).join('');
+  }
+  function stkInit(){
+    if (STK.init) return; STK.init = true;
+    CAR_BRANDS.forEach(b => STK.marcas.add(b));
+    const bind = (id, set) => $(id).addEventListener('click', e => { const b = e.target.closest('button[data-v]'); if (!b) return;
+      const v = b.dataset.v; if (set.has(v)) set.delete(v); else set.add(v); STK.cell = null; renderStockSection(); });
+    bind('stkMarca', STK.marcas); bind('stkEstado', STK.estados); bind('stkCanal', STK.canales);
+    $('stkCards').addEventListener('click', e => { const c = e.target.closest('[data-k]'); if (!c) return; const k = c.dataset.k; if (STK.cards.has(k)) STK.cards.delete(k); else STK.cards.add(k); renderStockSection(); });
+    $('stkMatriz').addEventListener('click', e => { const c = e.target.closest('td[data-e]'); if (!c) return;
+      const nv = {e:c.dataset.e, m:c.dataset.m}; STK.cell = (STK.cell && STK.cell.e === nv.e && STK.cell.m === nv.m) ? null : nv; renderStockSection(); });
+    $('stkLimpiar').addEventListener('click', () => { CAR_BRANDS.forEach(b => STK.marcas.add(b)); STK_ESTADOS.forEach(x => STK.estados.add(x)); STK.allCanales.forEach(x => STK.canales.add(x)); STK.cards.clear(); STK.cell = null; STK.q = ''; $('stkBuscar').value = ''; renderStockSection(); });
+    let t; $('stkBuscar').addEventListener('input', e => { clearTimeout(t); t = setTimeout(() => { STK.q = e.target.value.trim().toLowerCase(); renderStockSection(); }, 200); });
+    $('stkTabla').addEventListener('click', e => { const tr = e.target.closest('tr[data-i]'); if (tr && typeof fiAbrir === 'function') fiAbrir(tr.dataset.i); });
+    $('stkExcel').addEventListener('click', () => {
+      const data = (STK.ult || []).map(r => ({
+        'Interno': stkTxt(r, 'Interno'), 'Marca': stkTxt(r, 'Marca'), 'Modelo': stkTxt(r, 'Modelo'), 'Cliente': stkTxt(r, 'Cliente'), 'Canal': stkTxt(r, 'Canal'),
+        'Estado': STK_EST_LBL[categorize(r)].replace(/^\S+\s/, ''), 'Dias en el estado': stkDias(r) ?? '', 'Ubicacion': stkTxt(r, 'Ubicacion'), 'Dominio': stkTxt(r, 'Dominio'),
+        'Fecha Reserva': formatDateDisplay(r['Fecha Reserva']), 'Fecha Venta': formatDateDisplay(r['Fecha Venta']), 'Fecha Patentamiento': formatDateDisplay(r['Fecha Patentamiento']),
+        'Pendientes': STK_CARDS.filter(c => c.k !== 'turno' && c.k !== 'mas30' && c.k !== 'usado' && c.f(r)).map(c => c.t.replace(/^\S+\s/, '')).join(' · ')
+      }));
+      if (!data.length) return;
+      const ws = XLSX.utils.json_to_sheet(data), wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Stock sin entregar');
+      XLSX.writeFile(wb, `stock_sin_entregar_${todayStamp()}.xlsx`);
+    });
+  }
+  function renderStockSection(){
+    if (!$('tabStock') || !ALL_ROWS.length) return;
+    stkInit();
+    const pend = ALL_ROWS.filter(r => !isEntregado(r));
+    const canales = [...new Set(pend.map(r => stkTxt(r, 'Canal') || '(sin canal)'))].sort();
+    canales.forEach(c => { if (!STK.allCanales.includes(c)){ STK.allCanales.push(c); STK.canales.add(c); } });
+    const lblM = b => (typeof PATENTADOS_BRAND_LABELS !== 'undefined' && PATENTADOS_BRAND_LABELS[b]) || b;
+    stkPills('stkMarca', CAR_BRANDS, STK.marcas, lblM);
+    stkPills('stkEstado', STK_ESTADOS, STK.estados, e => STK_EST_LBL[e]);
+    stkPills('stkCanal', canales, STK.canales);
+    const q = STK.q;
+    // Base: filtros de arriba + búsqueda
+    const base = pend.filter(r => STK.marcas.has(stkTxt(r, 'Marca').toUpperCase()) && STK.estados.has(categorize(r)) && STK.canales.has(stkTxt(r, 'Canal') || '(sin canal)') &&
+      (!q || ['Interno', 'Cliente', 'Modelo', 'Dominio'].some(c => stkTxt(r, c).toLowerCase().includes(q))));
+    // Tarjetas (cuentan sobre la base + las otras tarjetas activas)
+    const pasaCards = (r, salvo) => [...STK.cards].every(k => k === salvo || STK_CARDS.find(c => c.k === k).f(r));
+    $('stkCards').innerHTML = STK_CARDS.map(c => { const n = base.filter(r => pasaCards(r, c.k) && c.f(r)).length;
+      return `<div class="stk-card ${STK.cards.has(c.k) ? 'on' : ''}" data-k="${c.k}" style="--kc:${c.c};"><div class="t">${c.t}</div><div class="v">${n.toLocaleString('es-AR')}</div><div class="s">${base.length ? Math.round(n / base.length * 100) : 0}% del stock filtrado</div></div>`; }).join('');
+    const conCards = base.filter(r => pasaCards(r));
+    // Cuadro estado × marca
+    const marcas = CAR_BRANDS.filter(b => STK.marcas.has(b));
+    const cnt = (e, m) => conCards.filter(r => (!e || categorize(r) === e) && (!m || stkTxt(r, 'Marca').toUpperCase() === m)).length;
+    const cel = (e, m, n, bold) => `<td class="c ${STK.cell && STK.cell.e === (e || '') && STK.cell.m === (m || '') ? 'sel' : ''}" data-e="${e || ''}" data-m="${m || ''}">${bold ? '<b>' : ''}${n.toLocaleString('es-AR')}${bold ? '</b>' : ''}</td>`;
+    const ests = STK_ESTADOS.filter(e => STK.estados.has(e));
+    $('stkMatriz').innerHTML = `<thead><tr><th>Estado</th>${marcas.map(m => `<th style="text-align:right;">${escapeHtml(lblM(m))}</th>`).join('')}<th style="text-align:right;">Total</th><th style="text-align:right;">Prom. días en el estado</th></tr></thead><tbody>` +
+      ests.map(e => { const rs = conCards.filter(r => categorize(r) === e).map(stkDias).filter(d => d !== null);
+        return `<tr><td>${STK_EST_LBL[e]}</td>${marcas.map(m => cel(e, m, cnt(e, m))).join('')}${cel(e, '', cnt(e, ''), true)}<td style="text-align:right;" class="hint">${rs.length ? Math.round(rs.reduce((a, b) => a + b, 0) / rs.length) + ' d' : '—'}</td></tr>`; }).join('') +
+      `<tr style="border-top:2px solid var(--border);"><td><b>Total</b></td>${marcas.map(m => cel('', m, cnt('', m), true)).join('')}${cel('', '', conCards.length, true)}<td></td></tr></tbody>`;
+    // Detalle
+    let rows = conCards;
+    if (STK.cell) rows = rows.filter(r => (!STK.cell.e || categorize(r) === STK.cell.e) && (!STK.cell.m || stkTxt(r, 'Marca').toUpperCase() === STK.cell.m));
+    rows = rows.slice().sort((a, b) => (stkDias(b) ?? -1) - (stkDias(a) ?? -1));
+    STK.ult = rows;
+    const filtros = [...STK.cards].map(k => STK_CARDS.find(c => c.k === k).t);
+    if (STK.cell) filtros.push((STK.cell.e ? STK_EST_LBL[STK.cell.e] : 'Todos los estados') + ' · ' + (STK.cell.m ? lblM(STK.cell.m) : 'todas las marcas'));
+    $('stkHint').textContent = `${rows.length.toLocaleString('es-AR')} autos${filtros.length ? ' · ' + filtros.join(' + ') : ''}${rows.length > 500 ? ' · se muestran los 500 con más días (el Excel trae todos)' : ''} · ordenados por días en el estado`;
+    const chips = r => STK_CARDS.filter(c => !['turno', 'mas30', 'patsinturno'].includes(c.k) && c.f(r)).map(c => `<span class="stk-chip">${c.t}</span>`).join('');
+    $('stkTabla').innerHTML = `<thead><tr><th>Interno</th><th>Marca</th><th>Modelo</th><th>Cliente</th><th>Estado</th><th style="text-align:right;">Días</th><th>Ubicación</th><th>Turno</th><th>Pendientes</th></tr></thead><tbody>` +
+      (rows.length ? rows.slice(0, 500).map(r => { const d = stkDias(r), tp = agTurnoPendienteSistema(r);
+        return `<tr data-i="${escapeHtml(stkTxt(r, 'Interno'))}" style="cursor:pointer;"><td><b>${escapeHtml(stkTxt(r, 'Interno'))}</b></td><td>${escapeHtml(lblM(stkTxt(r, 'Marca').toUpperCase()))}</td><td>${escapeHtml(stkTxt(r, 'Modelo'))}</td><td>${escapeHtml(stkTxt(r, 'Cliente') || '—')}</td>
+          <td>${STK_EST_LBL[categorize(r)]}</td><td style="text-align:right; font-weight:700; color:${d > 30 ? 'var(--red)' : d > 15 ? 'var(--amber)' : 'var(--text)'};">${d ?? '—'}</td><td>${escapeHtml(stkTxt(r, 'Ubicacion') || '—')}</td>
+          <td>${tieneTurnoEntregaDado(r) ? formatDateDisplay(r['Fecha Turno Entrega']) : (tp ? '📅 agenda ' + entFmt(agFromKey(tp.fecha)) : '—')}</td><td>${chips(r) || '<span class="hint">—</span>'}</td></tr>`; }).join('')
+      : '<tr><td colspan="9" class="table-empty">Sin autos con estos filtros</td></tr>') + '</tbody>';
+  }
+  if ($('tabStock')) document.querySelector('.tab-btn[data-tab="stock"]').addEventListener('click', () => { try { renderStockSection(); } catch(e){ console.error('renderStockSection', e); } });
 
   function renderVentasSection(){
     let universo = ventasUniverso();
@@ -9150,7 +9283,7 @@
   });
 
   // ---------- Tabs ----------
-  const TAB_TARGETS = {general:'tabGeneral', lebomb:'tabLeBomb', ventas:'tabVentas', entregas:'tabEntregas', gestoria:'tabGestoria', aceleracion:'tabAceleracion', auditoria:'tabAuditoria', usuarios:'tabUsuarios', analisis:'tabAnalisis'};
+  const TAB_TARGETS = {stock:'tabStock', general:'tabGeneral', lebomb:'tabLeBomb', ventas:'tabVentas', entregas:'tabEntregas', gestoria:'tabGestoria', aceleracion:'tabAceleracion', auditoria:'tabAuditoria', usuarios:'tabUsuarios', analisis:'tabAnalisis'};
   document.querySelectorAll('.tab-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       if (typeof rolVista === 'function' && rolVista() && !rolVista().tabs.includes(btn.dataset.tab)) return;
@@ -11956,6 +12089,7 @@
     safeStep(() => renderAccesoriosSection(), 'renderAccesoriosSection');
     safeStep(() => populateVenBrandFilter(rows), 'populateVenBrandFilter');
     safeStep(() => renderVentasSection(), 'renderVentasSection');
+    safeStep(() => renderStockSection(), 'renderStockSection');
     safeStep(() => populateGesBrandFilter(rows), 'populateGesBrandFilter');
     safeStep(() => renderGestoriaSection(), 'renderGestoriaSection');
     safeStep(() => populateObjFilters(), 'populateObjFilters');
@@ -12156,6 +12290,7 @@
             safeStep(() => renderContactacionSection(), 'renderContactacionSection (post-extra)');
             safeStep(() => renderLeBombSection(), 'renderLeBombSection (post-extra)');
             safeStep(() => renderVentasSection(), 'renderVentasSection (post-extra)');
+            safeStep(() => renderStockSection(), 'renderStockSection (post-extra)');
             safeStep(() => renderAnalisisSection(), 'renderAnalisisSection (post-extra)');
             safeStep(() => renderFueraDQSection(), 'renderFueraDQSection (post-extra)');
             safeStep(() => populateResumenFilters(), 'populateResumenFilters (post-extra)');
