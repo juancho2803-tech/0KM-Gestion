@@ -9938,7 +9938,7 @@
   const SPC_GRUPOS = [
     ['🔧 Circuito físico', ['Arribo unidad', 'Alistaje', 'Cierre avería', 'Envío a accesorios', 'Regreso accesorios', 'Accesorios']],
     ['📄 Circuito documental', ['Pago fábrica', 'Certificado', 'Liquidación crédito', 'Gestoría interna', 'Gestoría externa', 'Patentamiento por cliente', 'Patentamiento (venta → patente)', 'Carpeta GEAC', 'Bloqueo saldo / pago']],
-    ['📅 Entrega (con el auto listo)', ['Entrega: auto listo → entrega', '📞 Contactación (auto listo → turno dado)', '⏳ Cliente confirmó el turno', '🗓️ Espera de turno libre', '🙋 Elección del cliente']],
+    ['📅 Entrega', ['Patentamiento → entrega', 'Entrega: auto listo → entrega', '📞 Contactación (auto listo → turno dado)', '⏳ Cliente confirmó el turno', '🗓️ Espera de turno libre', '🙋 Elección del cliente']],
     ['⏱️ Total', ['Total: venta → entrega']]
   ];
   function spcValores(u){
@@ -9949,6 +9949,7 @@
     const P = entMid(parseDateFlexible(u.r['Fecha Patentamiento']));
     if (u.fv && P && P >= u.fv) out['Patentamiento (venta → patente)'] = {v: dh(u.fv, P), obj: u.dPat ? dh(u.fv, u.dPat) : null};
     const OBJ = entObjetivos();
+    if (P && u.E && u.E >= P) out['Patentamiento → entrega'] = {v: dh(P, u.E), obj: OBJ.plazoEntrega || 0};
     if (u.OKd && u.E) out['Entrega: auto listo → entrega'] = {v: dh(u.OKd, u.E), obj: OBJ.turno || 0};
     const ti = u.tInf, fA = ti && ti.asignado ? entMid(ti.asignado) : null, pl = ti && ti.primerLibre ? entMid(ti.primerLibre) : null;
     const fLl = u.fCont && fA ? (u.fCont < fA ? u.fCont : fA) : (u.fCont || fA);
