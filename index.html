@@ -868,6 +868,10 @@
   body.rol-accesorios #aceleracionSubNav .subtab-btn:not([data-subtab="accesorios"]),
   body.rol-accesorios #agSinEntregaBtn,
   body.rol-accesorios #dropZoneLocked { display:none !important; }
+  /* Rol Call: da turnos — solo facturados, patentados, contactación, agenda y la ficha */
+  body.rol-call #tabNav .tab-btn:not([data-tab="entregas"]),
+  body.rol-call #entregasSubNav .subtab-btn:not([data-subtab="facturados"]):not([data-subtab="patentados"]):not([data-subtab="contactacion"]):not([data-subtab="agenda"]),
+  body.rol-call #dropZoneLocked { display:none !important; }
   .ent-sorth{cursor:pointer; user-select:none;} .ent-sorth:hover{color:var(--text);} .ent-sorth.on{color:var(--blue); font-weight:800;}
 </style>
 </head>
@@ -2930,6 +2934,7 @@
             <option value="entregas">Entregas</option>
             <option value="usados">Usados (solo ve la agenda)</option>
             <option value="accesorios">Accesorios (accesorios + agenda)</option>
+            <option value="call">Call (da turnos: facturados, patentados, contactación, agenda y ficha)</option>
             <option value="admin">Administrador</option>
           </select>
           <button type="submit" class="page-btn">Crear usuario</button>
@@ -2976,6 +2981,7 @@
           <option value="entregas">Entregas</option>
           <option value="usados">Usados (solo ve la agenda)</option>
             <option value="accesorios">Accesorios (accesorios + agenda)</option>
+            <option value="call">Call (da turnos: facturados, patentados, contactación, agenda y ficha)</option>
           <option value="admin">Administrador</option>
         </select>
       </label>
@@ -3494,7 +3500,7 @@
     // que después haya que revertir, y para avisar al toque por qué no se guardó.
     if (CURRENT_SESSION && CURRENT_SESSION.role === 'usados') return Promise.reject(new Error('Tu rol solo puede consultar la agenda.'));
     if (CURRENT_SESSION && CURRENT_SESSION.role === 'accesorios' && seccion !== 'accesorios') return Promise.reject(new Error('Tu rol solo puede cargar observaciones de accesorios.'));
-    if (CURRENT_SESSION && CURRENT_SESSION.role === 'entregas' && seccion !== 'contactacion' && seccion !== 'contactacionfinalizado' && seccion !== 'bloqueosaldo' && seccion !== 'clienteexterno' && seccion !== 'excepcion' && seccion !== 'turnoinfo' && seccion !== 'notaentrega' && !seccion.startsWith('snapshot_')){
+    if (CURRENT_SESSION && (CURRENT_SESSION.role === 'entregas' || CURRENT_SESSION.role === 'call') && seccion !== 'contactacion' && seccion !== 'contactacionfinalizado' && seccion !== 'bloqueosaldo' && seccion !== 'clienteexterno' && seccion !== 'excepcion' && seccion !== 'turnoinfo' && seccion !== 'notaentrega' && !seccion.startsWith('snapshot_')){
       showToast('⚠️ Tu rol (entregas) solo puede editar Contactación.', true);
       return Promise.reject(new Error('Rol sin permiso de edición para esta sección'));
     }
@@ -10744,7 +10750,7 @@
   const CONTACT_ALERT_INTERVAL_MS = 60 * 60 * 1000; // 1 hora
   let lastContactAlertPopupAt = 0;
   function maybeShowContactAlertPopup(sinResolver){
-    if (!CURRENT_SESSION || (CURRENT_SESSION.role !== 'entregas' && CURRENT_SESSION.role !== 'admin')) return;
+    if (!CURRENT_SESSION || !['entregas','admin','call'].includes(CURRENT_SESSION.role)) return;
     if (!sinResolver || sinResolver <= 0) return;
     const now = Date.now();
     if (now - lastContactAlertPopupAt < CONTACT_ALERT_INTERVAL_MS) return;
@@ -10773,7 +10779,7 @@
   let PAT_SNAP_ULT = {};
   function patSnapGuardar(baseRows, FAC){
     try {
-      if (!CURRENT_SESSION || !['admin','entregas','usuario'].includes(CURRENT_SESSION.role)) return;
+      if (!CURRENT_SESSION || !['admin','entregas','usuario','call'].includes(CURRENT_SESSION.role)) return;
       if (!ALL_ROWS.length || !obsConfigured()) return;
       const sec = patSnapSeccion(), hoy = agKey(new Date());
       // Solo con la base del día (una PC con base vieja no pisa la foto de hoy)
@@ -12468,9 +12474,11 @@
   //  accesorios  → Entregas › Accesorios y Agenda · Aceleración › Accesorios
   const ROL_VISTAS = {
     usados:     {tabs:['entregas'], entregas:['agenda'], acel:[], inicio:['entregas','agenda']},
-    accesorios: {tabs:['entregas','aceleracion'], entregas:['accesorios','agenda'], acel:['accesorios'], inicio:['entregas','accesorios']}
+    accesorios: {tabs:['entregas','aceleracion'], entregas:['accesorios','agenda'], acel:['accesorios'], inicio:['entregas','accesorios']},
+    call:       {tabs:['entregas'], entregas:['facturados','patentados','contactacion','agenda'], acel:[], inicio:['entregas','contactacion']}
   };
   function rolVista(){ return (CURRENT_SESSION && ROL_VISTAS[CURRENT_SESSION.role]) || null; }
+  window.rolVista = rolVista; // lo usa el menú lateral
   function esRolUsados(){ return !!rolVista(); } // (nombre histórico: cualquier rol de vista limitada)
   function aplicarVistaUsados(){
     Object.keys(ROL_VISTAS).forEach(r => document.body.classList.toggle('rol-' + r, !!(CURRENT_SESSION && CURRENT_SESSION.role === r)));
@@ -12493,7 +12501,7 @@
 
   // El rol "usuario" no debe ver la subpestaña Contactación (queda para admin/entregas).
   function updateContactacionAccess(){
-    const puedeVerContactacion = !!(CURRENT_SESSION && (CURRENT_SESSION.role === 'admin' || CURRENT_SESSION.role === 'entregas'));
+    const puedeVerContactacion = !!(CURRENT_SESSION && ['admin','entregas','call'].includes(CURRENT_SESSION.role));
     const btn = document.querySelector('#entregasSubNav .subtab-btn[data-subtab="contactacion"]');
     if (btn) btn.style.display = puedeVerContactacion ? '' : 'none';
     if (!puedeVerContactacion && $('tabContactacion') && $('tabContactacion').classList.contains('active')){
@@ -13367,7 +13375,7 @@
   const agFromKey = k => { const [y,m,d] = k.split('-').map(Number); return new Date(y, m-1, d); };
   const agSlot = (f, h, e) => f + '|' + h + '|' + e;
   const agHoraMin = h => { const [a,b] = h.split(':').map(Number); return (a || 0) * 60 + (b || 0); };
-  function agCanEdit(){ return !!(CURRENT_SESSION && (CURRENT_SESSION.role === 'admin' || CURRENT_SESSION.role === 'entregas')); }
+  function agCanEdit(){ return !!(CURRENT_SESSION && ['admin','entregas','call'].includes(CURRENT_SESSION.role)); }
   function agCfg(){ return AG.cfg || AG_CFG_DEFAULT; }
   function agPlantilla(d){
     const dow = d.getDay();
@@ -14344,7 +14352,7 @@
         const nr = OBSERVATIONS.get(obsKey(i, 'notaentrega')) || {};
         const txt = (nr.observacion || '').toString();
         const quien = nr.estadoAveria ? `${escapeHtml(nr.estadoAveria)}${nr.fechaSolucion ? ' · ' + escapeHtml(nr.fechaSolucion) : ''}` : '';
-        const puede = !!(CURRENT_SESSION && ['admin','entregas','usuario'].includes(CURRENT_SESSION.role));
+        const puede = !!(CURRENT_SESSION && ['admin','entregas','usuario','call'].includes(CURRENT_SESSION.role));
         if (!puede && !txt) return '';
         return `<div style="margin-top:12px; border:1px solid ${txt ? 'var(--amber)' : 'var(--border)'}; border-radius:10px; padding:10px 12px; background:var(--surface-2);">
           <div class="an-sub" style="margin:0 0 6px;">📝 Nota de entrega ${quien ? `<span class="hint" style="text-transform:none; letter-spacing:0; font-weight:400;">— ${quien}</span>` : ''}</div>
@@ -14905,7 +14913,7 @@
   // toque nada en la pantalla, cada una hora se vuelve a evaluar si hay casos sin
   // trabajar/sin respuesta del cliente y, si los hay, se muestra el popup de nuevo.
   setInterval(() => {
-    if (CURRENT_SESSION && (CURRENT_SESSION.role === 'entregas' || CURRENT_SESSION.role === 'admin') && typeof renderContactacionSection === 'function'){
+    if (CURRENT_SESSION && ['entregas','admin','call'].includes(CURRENT_SESSION.role) && typeof renderContactacionSection === 'function'){
       renderContactacionSection();
     }
   }, 60 * 60 * 1000);
@@ -15086,9 +15094,11 @@
   const vis = el => !!(el && (el.offsetWidth || el.offsetHeight || el.getClientRects().length));
   const split = t => { const m = t.trim().match(/^(\S+)\s+(.*)$/); return m ? [m[1], m[2]] : ['•', t.trim()]; };
   const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'})[c]);
-  const tabs = () => [...document.querySelectorAll('#tabNav .tab-btn')].filter(b => b.style.display !== 'none');
+  const rv = () => (typeof rolVista === 'function' && rolVista()) || null;
+  const tabs = () => [...document.querySelectorAll('#tabNav .tab-btn')].filter(b => b.style.display !== 'none' && (!rv() || rv().tabs.includes(b.dataset.tab)));
   const contOf = t => [...document.querySelectorAll('.tab-content')].find(x => x.id.toLowerCase() === 'tab' + t.dataset.tab.toLowerCase());
-  const subsOf = t => { const c = contOf(t); return c ? [...c.querySelectorAll('.subtab-nav .subtab-btn')].filter(b => b.style.display !== 'none') : []; };
+  const subsOf = t => { const c = contOf(t); const v = rv(); const lim = v ? (t.dataset.tab === 'entregas' ? v.entregas : t.dataset.tab === 'aceleracion' ? v.acel : null) : null;
+    return c ? [...c.querySelectorAll('.subtab-nav .subtab-btn')].filter(b => b.style.display !== 'none' && (!lim || lim.includes(b.dataset.subtab))) : []; };
   const subLbl = b => (b.firstChild && b.firstChild.nodeType === 3 ? b.firstChild.textContent : b.textContent).replace(/\s*\d+\s*$/, '').trim();
   function render(){
     const dash = document.getElementById('dashboard');
