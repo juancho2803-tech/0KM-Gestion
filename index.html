@@ -14943,7 +14943,7 @@
   .nv-it.on{background:rgba(76,141,255,.14); color:var(--text);}
   .nv-it .ic{width:22px; text-align:center; font-size:16px;}
   .nv-it .ch{margin-left:auto; font-size:10px; opacity:.6; transition:transform .2s;}
-  .nv-it.on .ch{transform:rotate(90deg);}
+  .nv-it.ab .ch{transform:rotate(90deg);}
   .nv-sub{margin:2px 8px 8px 36px; border-left:2px solid var(--border); padding-left:6px;}
   .nv-sub div{padding:6px 10px; border-radius:8px; font-size:12.5px; color:var(--text-dim); cursor:pointer; position:relative;}
   .nv-sub div:hover{background:var(--surface-2); color:var(--text);}
@@ -14989,7 +14989,8 @@
 <script>
 (function(){
   const nav = document.getElementById('nvNav'), fil = document.getElementById('nvFil');
-  let moved = [], firma = '';
+  let moved = [], firma = '', ultAct = null;
+  const abiertos = new Set(); // sección desplegada en el menú (una a la vez; se abre / cierra con clic)
   const vis = el => !!(el && (el.offsetWidth || el.offsetHeight || el.getClientRects().length));
   const split = t => { const m = t.trim().match(/^(\S+)\s+(.*)$/); return m ? [m[1], m[2]] : ['•', t.trim()]; };
   const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'})[c]);
@@ -15004,13 +15005,15 @@
     if (!on){ restore(); return; }
     const ts = tabs(), act = ts.findIndex(t => t.classList.contains('active'));
     const subs = act >= 0 ? subsOf(ts[act]) : [];
-    const f = ts.map(t => t.dataset.tab + (t.classList.contains('active') ? '*' : '')).join() + '|' + subs.map(s => subLbl(s) + (s.classList.contains('active') ? '*' : '')).join();
+    // Al cambiar de sección por código (atajos, ficha) se despliega la nueva
+    if (act >= 0 && ts[act].dataset.tab !== ultAct){ ultAct = ts[act].dataset.tab; abiertos.clear(); abiertos.add(ultAct); }
+    const f = [...abiertos].join() + '#' + ts.map(t => t.dataset.tab + (t.classList.contains('active') ? '*' : '')).join() + '|' + subs.map(s => subLbl(s) + (s.classList.contains('active') ? '*' : '')).join();
     if (f !== firma){
       firma = f;
       nav.innerHTML = '<div class="nv-brand"><div>Gestión Integral Ventas<small>Maipú Automotores</small></div><button class="nv-x" id="nvHide" type="button" title="Ocultar menú">⇤</button></div>' +
-        '<div class="nv-h">Secciones</div>' + ts.map((t, i) => { const [ic, tx] = split(t.textContent); const sb = i === act ? subs : subsOf(t);
-          return `<div class="nv-it ${i === act ? 'on' : ''}" data-t="${i}"><span class="ic">${esc(ic)}</span>${esc(tx)}${sb.length ? '<span class="ch">▶</span>' : ''}</div>` +
-            (i === act && subs.length ? '<div class="nv-sub">' + subs.map((s, j) => `<div class="${s.classList.contains('active') ? 'on' : ''}" data-t="${act}" data-s="${j}">${esc(subLbl(s))}</div>`).join('') + '</div>' : ''); }).join('');
+        '<div class="nv-h">Secciones</div>' + ts.map((t, i) => { const [ic, tx] = split(t.textContent); const sb = subsOf(t), ab = sb.length && abiertos.has(t.dataset.tab);
+          return `<div class="nv-it ${i === act ? 'on' : ''} ${ab ? 'ab' : ''}" data-t="${i}"><span class="ic">${esc(ic)}</span>${esc(tx)}${sb.length ? '<span class="ch">▶</span>' : ''}</div>` +
+            (ab ? '<div class="nv-sub">' + sb.map((s, j) => `<div class="${i === act && s.classList.contains('active') ? 'on' : ''}" data-t="${i}" data-s="${j}">${esc(subLbl(s))}</div>`).join('') + '</div>' : ''); }).join('');
     }
     relocate();
   }
@@ -15047,6 +15050,12 @@
     if (e.target.closest('#nvHide')){ document.body.classList.add('nv-hide'); document.body.classList.remove('nv-mob'); return; }
     const x = e.target.closest('[data-t]'); if (!x || x.closest('#nvFil')) return;
     const t = tabs()[+x.dataset.t]; if (!t) return;
+    // Clic en una sección con subsecciones: despliega / colapsa (y si no estaba activa, la abre)
+    if (x.dataset.s === undefined && subsOf(t).length){
+      const k = t.dataset.tab;
+      if (abiertos.has(k) && t.classList.contains('active')){ abiertos.delete(k); firma = ''; render(); return; }
+      abiertos.clear(); abiertos.add(k); firma = '';
+    }
     if (!t.classList.contains('active')) t.click();
     if (x.dataset.s !== undefined){ const s = subsOf(t)[+x.dataset.s]; if (s) s.click(); document.body.classList.remove('nv-mob'); }
     window.scrollTo({top: 0});
