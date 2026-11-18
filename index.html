@@ -2575,12 +2575,19 @@
         <div class="panel" id="entSpcPanel">
           <div class="panel-head">
             <h3>📈 Control estadístico del proceso</h3>
-            <div class="hint">Área y Marca filtran también las tablas de abajo · Promedio de días de la instancia elegida por período (fecha de entrega) · línea central = promedio general · límites = promedio ± 3 desvíos (según la cantidad de autos de cada período) · los puntos en rojo están fuera de control</div>
+            <div class="hint">Área, Marca y Mes filtran también las tablas de abajo · Promedio de días de la instancia elegida por período (fecha de entrega) · línea central = promedio general · límites = promedio ± 3 desvíos (según la cantidad de autos de cada período) · los puntos en rojo están fuera de control</div>
           </div>
           <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:10px;">
             <label class="hint" for="spcEtapa">Instancia</label><select id="spcEtapa" class="month-select"></select>
             <label class="hint" for="spcArea">Área</label><select id="spcArea" class="month-select"><option value="todas">Todas</option><option value="fisico">🔧 Circuito físico</option><option value="documental">📄 Circuito documental</option><option value="entrega">📅 Entrega (auto listo)</option></select>
             <label class="hint" for="spcMarca">Marca</label><select id="spcMarca" class="month-select"></select>
+            <div class="msdrop" id="spcMesDrop">
+              <button type="button" class="msdrop-btn"><span class="msdrop-label">Mes de entrega: Todos</span><span class="msdrop-arrow">▾</span></button>
+              <div class="msdrop-panel">
+                <div class="msdrop-actions"><button type="button" class="pill-action" id="spcMesAll">Todos</button><button type="button" class="pill-action" id="spcMesNone">Ninguno</button></div>
+                <div class="msdrop-list" id="spcMesList"></div>
+              </div>
+            </div>
             <label class="hint" for="spcPeriodo">Período</label>
             <select id="spcPeriodo" class="month-select"><option value="auto">Automático</option><option value="dia">Día</option><option value="semana">Semana</option><option value="mes">Mes</option></select>
           </div>
@@ -9860,12 +9867,15 @@
     if (!e || !e.start || !e.end || e.end < e.start) return null;
     return e.corridos ? Math.round((e.end - e.start) / 86400000) : (diasHabilesSLA(e.start, e.end) || 0);
   }
+  // Meses de entrega elegidos en el gráfico de control (se mantiene la elección al refrescar)
+  const SPC_MES = {all: [], sel: new Set(), firma: ''};
   let ENT_PROM_BASE = [];
   function entRenderPromedios(base){
     const el = $('entPromBox'); if (!el) return;
     ENT_PROM_BASE = base;
     const mSel = $('spcMarca') ? $('spcMarca').value : '', aSel = $('spcArea') ? $('spcArea').value : 'todas';
     if (mSel && mSel !== 'todas') base = base.filter(u => u.marca === mSel);
+    if (SPC_MES.all.length) base = base.filter(u => !u.E || SPC_MES.sel.has(spcMesDe(u)));
     const trOk = e => aSel === 'todas' || e.track === aSel;
     const ag = {}, orden = [];
     base.forEach(u => u.etapas.forEach(e => {
@@ -9963,6 +9973,19 @@
     Object.keys(out).forEach(k => { if (out[k].v === null) delete out[k]; });
     return out;
   }
+  const spcMesDe = u => u.E ? u.E.getFullYear() + '-' + String(u.E.getMonth() + 1).padStart(2, '0') : '';
+  function spcSyncMeses(base){
+    const all = [...new Set(base.map(spcMesDe).filter(Boolean))].sort().reverse();
+    const f = all.join();
+    if (f === SPC_MES.firma) return;
+    const antes = new Set(SPC_MES.all), habia = SPC_MES.all.length > 0;
+    all.forEach(m => { if (!habia || !antes.has(m)) SPC_MES.sel.add(m); });
+    [...SPC_MES.sel].forEach(m => { if (!all.includes(m)) SPC_MES.sel.delete(m); });
+    SPC_MES.all = all; SPC_MES.firma = f;
+    spcMesDrop();
+  }
+  function spcRefrescarTodo(){ entRenderSpc(); try { entRenderPromedios(ENT_PROM_BASE); } catch(e){ console.error(e); } }
+  function spcMesDrop(){ renderGenMonthDropdown('spcMesDrop', 'spcMesList', SPC_MES.all, SPC_MES.sel, 'Mes de entrega', spcRefrescarTodo); }
   function entRenderSpc(){
     const selE = $('spcEtapa'), selM = $('spcMarca'), selP = $('spcPeriodo');
     if (!selE) return;
@@ -9971,9 +9994,13 @@
       [selE, selM, selP].forEach(x => x.addEventListener('change', entRenderSpc));
       [selM, $('spcArea')].forEach(x => x.addEventListener('change', () => { try { entRenderPromedios(ENT_PROM_BASE); } catch(e){ console.error(e); } }));
       $('spcArea').addEventListener('change', entRenderSpc);
+      const setMes = on => { SPC_MES.sel.clear(); if (on) SPC_MES.all.forEach(m => SPC_MES.sel.add(m)); spcMesDrop(); spcRefrescarTodo(); };
+      $('spcMesAll').addEventListener('click', () => setMes(true));
+      $('spcMesNone').addEventListener('click', () => setMes(false));
       $('spcTabla').addEventListener('click', ev => { const tr = ev.target.closest('tr[data-et]'); if (!tr) return; selE.value = tr.dataset.et; entRenderSpc(); });
     }
-    const base = ENT_SPC_BASE || [];
+    spcSyncMeses(ENT_SPC_BASE || []);
+    const base = (ENT_SPC_BASE || []).filter(u => SPC_MES.sel.has(spcMesDe(u)));
     const marcas = [...new Set(base.map(u => u.marca))].sort();
     const prevM = selM.value || 'todas';
     selM.innerHTML = '<option value="todas">Todas</option>' + marcas.map(m => `<option value="${m}">${escapeHtml(PATENTADOS_BRAND_LABELS[m] || m)}</option>`).join('');
