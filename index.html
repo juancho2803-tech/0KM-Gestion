@@ -9232,7 +9232,13 @@
   function entFechaEntrega(r){
     const hoy = entMid(new Date());
     const ft = entMid(parseDateFlexible(r['Fecha Turno Entrega']));
-    return (ft && ft <= hoy) ? ft : null;
+    if (ft) return ft <= hoy ? ft : null;
+    // Audi no usa turno de entrega en el sistema: se toma la Fecha Entrega Unidad
+    if ((r['Marca'] || '').toString().trim().toUpperCase() === 'AUDI'){
+      const fe = entMid(parseDateFlexible(r['Fecha Entrega Unidad']));
+      return (fe && fe <= hoy) ? fe : null;
+    }
+    return null;
   }
   // Entregados (según la app) que no tienen turno cargado: quedan fuera del análisis.
   function entSinTurno(r){
