@@ -2564,6 +2564,19 @@
           <div class="ent-obj" id="entObjBox"></div>
         </div>
 
+        <div class="panel" id="entFacIndPanel">
+          <div class="panel-head">
+            <h3>🧾 Indicadores sobre lo facturado en el mes</h3>
+            <div class="hint">Autos facturados en cada mes (fecha de venta) con los filtros de marca y canal · "posterior" = la fecha es después de la factura (los que no tienen fecha cargada no se cuentan) · más bajo es mejor</div>
+          </div>
+          <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:10px;">
+            <label class="hint" for="facIndMes">Mes del informe</label><select id="facIndMes" class="month-select"></select>
+            <button class="page-btn" id="facIndCopy" type="button">📋 Copiar texto</button>
+          </div>
+          <div id="facIndTexto" style="font-size:14px; line-height:1.55; padding:12px 14px; border:1px solid var(--border); border-radius:12px; background:var(--surface-2); margin-bottom:12px;"></div>
+          <div style="overflow-x:auto;"><table class="data-table" id="facIndTabla"></table></div>
+        </div>
+
         <div class="panel" id="entSpcPanel">
           <div class="panel-head">
             <h3>📈 Control estadístico del proceso</h3>
@@ -9676,6 +9689,7 @@
       }).join('');
     try { entRenderTexto(rank, tarde); } catch(e){ console.error('entRenderTexto', e); }
     try { ENT_SPC_BASE = base; entRenderSpc(); } catch(e){ console.error('entRenderSpc', e); }
+    try { entRenderFacInd(); } catch(e){ console.error('entRenderFacInd', e); }
     $('entRanking').querySelectorAll('[data-rsort]').forEach(el => el.addEventListener('click', ev => {
       ev.stopPropagation();
       const k = el.dataset.rsort;
@@ -9943,6 +9957,81 @@
 
   // ---- Control estadístico del proceso (gráfico de medias con límites ±3σ) ----
   let ENT_SPC_BASE = [], spcChartInst = null;
+  // ---- Indicadores sobre lo facturado en el mes (para el informe de aceleración) ----
+  const FAC_IND = [
+    {k:'pago', txt:'se pagaron posterior a la factura', lbl:'💰 Pago a fábrica posterior a la factura', col:'Fecha Pago Fab'},
+    {k:'arribo', txt:'arribaron después de la fecha factura', lbl:'🚛 Arribo posterior a la factura', col:'Fecha Arribo Unidad'},
+    {k:'averia', txt:'tuvieron averías (estéticas, de funcionamiento, etc.)', lbl:'⚠️ Con avería'},
+    {k:'cert', txt:'arribaron posterior a la facturación del cliente', lbl:'📄 Certificado posterior a la factura', col:'Fecha Arribo Certificado'}
+  ];
+  function entRenderFacInd(){
+    const sel = $('facIndMes'); if (!sel) return;
+    const g = {};
+    ALL_ROWS.forEach(r => {
+      if (!esAutoValidoSLA(r)) return;
+      const fv = entMid(parseDateFlexible(r['Fecha Venta'])); if (!fv) return;
+      const m = (r['Marca'] || '').toString().trim().toUpperCase();
+      const canal = (r['Canal'] || '').toString().trim() || '(sin canal)';
+      if (ENT_STATE.allBrands.length && !ENT_STATE.brands.has(m)) return;
+      if (ENT_STATE.allCanal.length && !ENT_STATE.canal.has(canal)) return;
+      const k = entMonthKey(fv);
+      const x = g[k] || (g[k] = {n:0, pago:0, arribo:0, averia:0, cert:0, pend:{pago:0, arribo:0, cert:0}, base:{pago:0, arribo:0, cert:0}});
+      x.n++;
+      FAC_IND.forEach(ind => {
+        if (ind.k === 'averia'){ if (tuvoAveria(r)) x.averia++; return; }
+        const d = entMid(parseDateFlexible(r[ind.col]));
+        // Sin fecha cargada no se cuenta (ni arriba ni abajo): se informa aparte
+        if (!d){ x.pend[ind.k]++; return; }
+        x.base[ind.k]++; if (d > fv) x[ind.k]++;
+      });
+    });
+    const meses = Object.keys(g).filter(k => g[k].n >= 5).sort();
+    if (!meses.length){ $('facIndTexto').textContent = 'Sin autos facturados con estos filtros'; $('facIndTabla').innerHTML = ''; return; }
+    // Por defecto: el último mes completo (el anterior al último con facturas)
+    const prev = sel.value;
+    sel.innerHTML = meses.slice().reverse().map(k => `<option value="${k}">${escapeHtml(monthLabel(k))}</option>`).join('');
+    sel.value = meses.includes(prev) ? prev : meses[Math.max(0, meses.length - 2)];
+    if (!sel.dataset.bound){
+      sel.dataset.bound = '1';
+      sel.addEventListener('change', entRenderFacInd);
+      $('facIndCopy').addEventListener('click', () => {
+        const t = $('facIndFrase') ? $('facIndFrase').innerText : '';
+        (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(() => { $('facIndCopy').textContent = '✅ Copiado'; setTimeout(() => $('facIndCopy').textContent = '📋 Copiar texto', 1500); })
+          .catch(() => { const r = document.createRange(); r.selectNodeContents($('facIndFrase')); const s2 = getSelection(); s2.removeAllRanges(); s2.addRange(r); document.execCommand('copy'); });
+      });
+    }
+    const pct = (x, k) => { const d = k === 'averia' ? x.n : x.base[k]; return d ? x[k] / d * 100 : 0; };
+    const f2 = v => v.toFixed(2).replace('.', ',') + '%';
+    const mk = sel.value, x = g[mk], iA = meses.indexOf(mk), ant = iA > 0 ? meses[iA - 1] : null, y = ant ? g[ant] : null;
+    // Texto como en el informe
+    const frases = [
+      `${f2(pct(x, 'pago'))} de los autos facturados se pagaron posterior a la factura.`,
+      `El ${f2(pct(x, 'arribo'))} de los autos arribaron después de la fecha factura.`,
+      `El ${f2(pct(x, 'averia'))} de los vehículos tuvieron averías (estéticas, de funcionamiento, etc.).`,
+      `El ${f2(pct(x, 'cert'))} de los certificados arribaron posterior a la facturación del cliente.`
+    ];
+    let cierre = '';
+    if (y){
+      const mejor = FAC_IND.filter(i => pct(x, i.k) < pct(y, i.k)), peor = FAC_IND.filter(i => pct(x, i.k) > pct(y, i.k));
+      const mesAnt = monthLabel(ant).split(' ')[0].toLowerCase();
+      const nom = i => ({pago:'pago a fábrica', arribo:'arribos', averia:'averías', cert:'certificados'})[i.k];
+      if (!peor.length) cierre = `Se mejoró respecto al mes de ${mesAnt}.`;
+      else if (!mejor.length) cierre = `Empeoró respecto al mes de ${mesAnt}.`;
+      else { const lista = a => a.length > 1 ? a.slice(0, -1).join(', ') + ' y ' + a[a.length - 1] : a[0];
+        cierre = `Respecto al mes de ${mesAnt} se mejoró en ${lista(mejor.map(nom))}, pero empeoró en ${lista(peor.map(nom))}.`; }
+    }
+    $('facIndTexto').innerHTML = '<span id="facIndFrase">' + escapeHtml(frases.join(' ') + (cierre ? ' ' + cierre : '')) + '</span>' +
+      `<div class="hint" style="margin-top:6px;">${x.n.toLocaleString('es-AR')} autos facturados en ${escapeHtml(monthLabel(mk))}` +
+      (x.pend.pago + x.pend.arribo + x.pend.cert ? ` · sin fecha cargada (no se cuentan): pago ${x.pend.pago}, arribo ${x.pend.arribo}, certificado ${x.pend.cert}` : '') + '</div>';
+    // Tabla: últimos 6 meses con variación vs el mes anterior
+    const ult = meses.slice(-6);
+    const celda = (k, i, mm) => { const v = pct(g[mm], k), j = meses.indexOf(mm), pv = j > 0 ? pct(g[meses[j - 1]], k) : null;
+      const d = pv === null ? null : v - pv;
+      return `<td style="text-align:right; ${mm === mk ? 'background:rgba(76,141,255,.10);' : ''}"><b>${f2(v)}</b>${d === null ? '' : `<div style="font-size:11px; color:${d < 0 ? 'var(--green)' : d > 0 ? 'var(--red)' : 'var(--text-faint)'};">${d < 0 ? '▼' : d > 0 ? '▲' : '='} ${Math.abs(d).toFixed(1).replace('.', ',')} pp</div>`}</td>`; };
+    $('facIndTabla').innerHTML = `<thead><tr><th>Indicador</th>${ult.map(mm => `<th style="text-align:right;">${escapeHtml(monthLabel(mm))}</th>`).join('')}</tr></thead><tbody>` +
+      FAC_IND.map(i => `<tr><td>${i.lbl}</td>${ult.map(mm => celda(i.k, 0, mm)).join('')}</tr>`).join('') +
+      `<tr><td class="hint">Autos facturados</td>${ult.map(mm => `<td style="text-align:right;" class="hint">${g[mm].n.toLocaleString('es-AR')}</td>`).join('')}</tr></tbody>`;
+  }
   // Valores por auto de cada instancia (incluye tramos que no son etapas: patentamiento
   // completo y el tramo con el auto listo dividido en contactación / agenda / cliente).
   const SPC_GRUPOS = [
