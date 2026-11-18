@@ -2567,7 +2567,7 @@
         <div class="panel" id="entSpcPanel">
           <div class="panel-head">
             <h3>📈 Control estadístico del proceso</h3>
-            <div class="hint">Área, Marca y Mes filtran también las tablas de abajo · Promedio de días de la instancia elegida por período (fecha de entrega) · línea central = promedio general · límites = promedio ± 3 desvíos (según la cantidad de autos de cada período) · los puntos en rojo están fuera de control</div>
+            <div class="hint">Área, Marca y Mes filtran también las tablas de abajo · Promedio de días de la instancia elegida por período (fecha de entrega) · línea central = promedio general · límites fijos = promedio ± 3 desvíos (con la cantidad promedio de autos por período) · los puntos en rojo están fuera de control</div>
           </div>
           <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:10px;">
             <label class="hint" for="spcEtapa">Instancia</label><select id="spcEtapa" class="month-select"></select>
@@ -10061,8 +10061,11 @@
     const media = all.reduce((a, b) => a + b, 0) / N;
     const sd = Math.sqrt(all.reduce((a, b) => a + (b - media) ** 2, 0) / Math.max(1, N - 1));
     const medias = keys.map(k => grupos[k].reduce((a, b) => a + b, 0) / grupos[k].length);
-    const ucl = keys.map(k => media + 3 * sd / Math.sqrt(grupos[k].length));
-    const lcl = keys.map(k => Math.max(0, media - 3 * sd / Math.sqrt(grupos[k].length)));
+    // Límites fijos para todos los períodos: se calculan con la cantidad promedio de autos por período
+    const nProm = keys.reduce((a, k) => a + grupos[k].length, 0) / Math.max(1, keys.length);
+    const uFijo = media + 3 * sd / Math.sqrt(nProm), lFijo = Math.max(0, media - 3 * sd / Math.sqrt(nProm));
+    const ucl = keys.map(() => uFijo);
+    const lcl = keys.map(() => lFijo);
     const fuera = medias.map((m, i) => m > ucl[i] || m < lcl[i]);
     const obj = objs.size === 1 ? [...objs][0] : null;
     const lbl = k => per === 'mes' ? (() => { const [y, m] = k.split('-').map(Number); return new Date(y, m - 1, 1).toLocaleDateString('es-AR', {month:'short', year:'2-digit'}); })() : (per === 'semana' ? 'Sem ' : '') + entFmt(agFromKey(k)).slice(0, 5);
