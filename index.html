@@ -9254,7 +9254,7 @@
   //  interna: simple 1 dh / con crédito 2 dh desde facturación, certificado y liquidación (lo último);
   //  externa: desde la entrega al gestor externo hasta el patentamiento — Córdoba 2 · Sur 12 · resto 9 dh.
   const ENT_OBJ_DEFAULT = {giSimple:1, giCredito:2, geCba:2, geOtras:9, geSur:12, plazoEntrega:2, arribo:0, alistaje:2, averia:0, pedidoacc:1, accesorios:2, pagofab:0, certificado:3, geac:2, credito:5, turno:2};
-  const ENT_OBJ_LABELS = {giSimple:'Gestoría interna simple', giCredito:'Gestoría interna con crédito', geCba:'Gestoría externa Córdoba', geOtras:'Gestoría externa otras prov.', geSur:'Gestoría externa Sur', plazoEntrega:'Entrega (desde patentam.)', arribo:'Arribo (desde venta)', alistaje:'Alistaje (desde arribo/venta)', averia:'Avería (0 = todo cuenta)', pedidoacc:'Envío a accesorios (desde venta/alistaje, referencia)', accesorios:'Accesorios: envío + instalación (desde venta/alistaje)', pagofab:'Pago fábrica (desde venta)', certificado:'Certificado (corridos)', geac:'Carpeta GEAC', credito:'Crédito', turno:'Turno (desde auto listo)'};
+  const ENT_OBJ_LABELS = {giSimple:'Gestoría interna simple', giCredito:'Gestoría interna con crédito', geCba:'Gestoría externa Córdoba', geOtras:'Gestoría externa otras prov.', geSur:'Gestoría externa Sur', plazoEntrega:'Entrega (desde patentam. o auto arribado/alistado, lo último)', arribo:'Arribo (desde venta)', alistaje:'Alistaje (desde arribo/venta)', averia:'Avería (0 = todo cuenta)', pedidoacc:'Envío a accesorios (desde venta/alistaje, referencia)', accesorios:'Accesorios: envío + instalación (desde venta/alistaje)', pagofab:'Pago fábrica (desde venta)', certificado:'Certificado (corridos)', geac:'Carpeta GEAC', credito:'Crédito', turno:'Turno (desde auto listo)'};
   // v28: los objetivos se guardan en el servidor (hoja Objetivos, marca "OBJ_ENTREGAS"),
   // así son los mismos para todos y no se pierden. Solo un admin los puede cambiar.
   const ENT_OBJ_MARCA = 'OBJ_ENTREGAS';
@@ -9283,7 +9283,10 @@
     const slaPat = objGI + objGE;
     const dPat = addBusinessDaysSLA(fv, slaPat);
     // Plazo real de entrega: 48 hs (2 dh) desde el patentamiento — editable en objetivos
-    const D = addBusinessDaysSLA(dPat, entObjetivos().plazoEntrega);
+    // v36: los 2 dh de entrega corren desde el plazo de patentamiento o desde que el auto
+    // quedó arribado y alistado, lo que ocurra último (si el auto no estaba listo, el plazo se corre).
+    const fListo = [r['Fecha Arribo Unidad'], r['Fecha Alistaje']].map(v => entMid(parseDateFlexible(v))).filter(d => d && d <= E).reduce((m, d) => (!m || d > m) ? d : m, null);
+    const D = addBusinessDaysSLA(fListo && fListo > dPat ? fListo : dPat, entObjetivos().plazoEntrega);
     const atraso = diasHabilesSLA(D, E) || 0;
     const tarde = E > D && atraso >= 1;
     const zona = zonaGE;
@@ -9495,7 +9498,7 @@
     const fEnvAcc = dt('Fecha Envio a Accesorios');
     if (fEnvAcc && up('Enviado a Accesorios') === 'SI') tl.push({k:'Envío accesorios', d:fEnvAcc, cls:'ref'});
     tl.push({k:'Plazo patentam.', d:dPat, cls:'ref', n:slaPat + ' dh desde venta'});
-    tl.push({k:'Plazo entrega', d:D, cls:'ref', n:`+${OBJ.plazoEntrega} dh desde patentam.`});
+    tl.push({k:'Plazo entrega', d:D, cls:'ref', n:`+${OBJ.plazoEntrega} dh desde patentam. o auto listo (lo último)`});
     const dListo = OKd ? (diasHabilesSLA(OKd, E) || 0) : null;
     const fCont = entMid(fechaContactacion(r));
     const dCont = fCont && fCont <= E ? (diasHabilesSLA(fCont, E) || 0) : null;
