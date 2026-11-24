@@ -10024,7 +10024,10 @@
   function entDesglose(u){
     if (!u.tarde) return '';
     const dh = (a,b) => (a && b && b > a) ? (diasHabilesSLA(a,b) || 0) : 0;
-    const filas = u.etapas.slice().sort((a,b) => a.end - b.end).map(e => {
+    const items = u.etapas.map(e => ({d: e.end, e}));
+    if (u.fv) items.push({d: u.fv, venta: true});
+    const filas = items.sort((a, b) => a.d - b.d || (a.venta ? -1 : b.venta ? 1 : 0)).map(({e, venta}) => {
+      if (venta) return `<tr style="background:rgba(76,141,255,.08);"><td>🧾 <b>Venta (facturación)</b></td><td>—</td><td>—</td><td><b>${entFmt(u.fv)}</b></td><td>—</td><td>—</td><td>—</td><td><span class="hint">inicio del circuito</span></td></tr>`;
       const icon = e.track === 'fisico' ? '🔧' : '📄';
       const tardo = e.start && e.end >= e.start ? dh(e.start, e.end) : null; // desde que estuvo disponible
       const obj = e.obj === null || e.obj === undefined ? '—' : `${e.obj} ${e.corridos ? 'días' : 'dh'}`;
