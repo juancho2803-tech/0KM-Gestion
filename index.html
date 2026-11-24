@@ -9496,11 +9496,9 @@
       let limite = null, exceso = 0;
       if (start && obj !== null && obj !== undefined){
         limite = corridos ? addDays(start, obj) : addBusinessDaysSLA(start, obj);
-        // "se pasó": solo lo posterior a la venta (antes no puede demorar la entrega).
-        // En el circuito FÍSICO, además, solo desde el patentamiento: antes de tener
-        // dominio el auto igual no se podía entregar.
-        let desde = limite > fv ? limite : fv;
-        if (track === 'fisico' && P && P > desde) desde = P;
+        // "se pasó": lo que tardó más allá de su objetivo (solo lo posterior a la venta).
+        // Lo documental no frena lo físico: cada circuito se mide por su cuenta.
+        const desde = limite > fv ? limite : fv;
         if (end > desde) exceso = diasHabilesSLA(desde, end) || 0;
       }
       const e = {key, area, label, track, end, start, pred: st && st.k ? st.k : null, obj, corridos, limite, exceso, aporte:0};
