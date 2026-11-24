@@ -10026,7 +10026,11 @@
     const dh = (a,b) => (a && b && b > a) ? (diasHabilesSLA(a,b) || 0) : 0;
     const items = u.etapas.map(e => ({d: e.end, e}));
     if (u.fv) items.push({d: u.fv, venta: true});
-    const filas = items.sort((a, b) => a.d - b.d || (a.venta ? -1 : b.venta ? 1 : 0)).map(({e, venta}) => {
+    const fPat = entMid(parseDateFlexible(u.r['Fecha Patentamiento']));
+    if (fPat) items.push({d: fPat, pat: true});
+    const ord = x => x.venta ? 0 : x.pat ? 2 : 1;
+    const filas = items.sort((a, b) => a.d - b.d || ord(a) - ord(b)).map(({e, venta, pat}) => {
+      if (pat) return `<tr style="background:rgba(34,197,94,.08);"><td>🏁 <b>Patentamiento</b>${u.r['Dominio'] ? ' · ' + escapeHtml(String(u.r['Dominio'])) : ''}</td><td>—</td><td>—</td><td><b>${entFmt(fPat)}</b></td><td>${u.fv && fPat >= u.fv ? dh(u.fv, fPat) + ' dh desde la venta' : '—'}</td><td>—</td><td>—</td><td><span class="hint">plazo de patentam.: ${u.dPat ? entFmt(u.dPat) : '—'}</span></td></tr>`;
       if (venta) return `<tr style="background:rgba(76,141,255,.08);"><td>🧾 <b>Venta (facturación)</b></td><td>—</td><td>—</td><td><b>${entFmt(u.fv)}</b></td><td>—</td><td>—</td><td>—</td><td><span class="hint">inicio del circuito</span></td></tr>`;
       const icon = e.track === 'fisico' ? '🔧' : '📄';
       const tardo = e.start && e.end >= e.start ? dh(e.start, e.end) : null; // desde que estuvo disponible
