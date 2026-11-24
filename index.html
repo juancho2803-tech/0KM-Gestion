@@ -9510,7 +9510,7 @@
     etapa('alistaje', 'alistaje', 'Alistaje', 'fisico', L, [{d:fv}, {d:A, k:'arribo'}], OBJ.alistaje);
     // Avería: no es esperable → sin margen (objetivo 0)
     // Cierre de avería: el objetivo corre desde la fecha de venta
-    etapa('averia', 'averia', 'Cierre avería', 'fisico', Vc, [{d:fv}], OBJ.averia);
+    etapa('averia', 'averia', 'Cierre avería (objetivo desde la venta)', 'fisico', Vc, [{d:fv}], OBJ.averia);
     const iniAcc = [{d:fv}, {d:A, k:'arribo'}, {d:L, k:'alistaje'}]; // venta, arribo o alistaje: lo último
     if ((r['Marca'] || '').toString().trim().toUpperCase() === 'FORD') iniAcc.push({d:Vc, k:'averia'});
     // Accesorios en dos pasos: el PEDIDO (envío del auto a accesorios, desde que está
@@ -10012,8 +10012,13 @@
     if (u.fv) items.push({d: u.fv, venta: true});
     const fPat = entMid(parseDateFlexible(u.r['Fecha Patentamiento']));
     if (fPat) items.push({d: fPat, pat: true});
-    const ord = x => x.venta ? 0 : x.pat ? 2 : 1;
-    const filas = items.sort((a, b) => a.d - b.d || ord(a) - ord(b)).map(({e, venta, pat}) => {
+    // Fecha en que se cargó la avería (siempre visible si el auto tuvo avería)
+    const fAvC = tuvoAveria(u.r) ? entMid(parseDateFlexible(u.r['Fecha Averia'])) : null;
+    if (fAvC) items.push({d: fAvC, av: true});
+    const ord = x => x.venta ? 0 : x.av ? 1 : x.pat ? 3 : 2;
+    const filas = items.sort((a, b) => a.d - b.d || ord(a) - ord(b)).map(({e, venta, pat, av}) => {
+      if (av){ const desc = (u.r['Descripcion Averia'] || '').toString().trim();
+        return `<tr style="background:rgba(255,92,77,.08);"><td>⚠️ <b>Avería cargada</b></td><td>—</td><td>—</td><td><b>${entFmt(fAvC)}</b></td><td>${u.fv ? (fAvC < u.fv ? 'antes de la venta' : dh(u.fv, fAvC) + ' dh después de la venta') : '—'}</td><td>—</td><td>—</td><td><span class="hint" title="${escapeHtml(desc)}">${escapeHtml(desc.length > 40 ? desc.slice(0, 40) + '…' : desc) || 'fecha de carga de la avería'}</span></td></tr>`; }
       if (pat) return `<tr style="background:rgba(34,197,94,.08);"><td>🏁 <b>Patentamiento</b>${u.r['Dominio'] ? ' · ' + escapeHtml(String(u.r['Dominio'])) : ''}</td><td>—</td><td>—</td><td><b>${entFmt(fPat)}</b></td><td>${u.fv && fPat >= u.fv ? dh(u.fv, fPat) + ' dh desde la venta' : '—'}</td><td>—</td><td>—</td><td><span class="hint">plazo de patentam.: ${u.dPat ? entFmt(u.dPat) : '—'}</span></td></tr>`;
       if (venta) return `<tr style="background:rgba(76,141,255,.08);"><td>🧾 <b>Venta (facturación)</b></td><td>—</td><td>—</td><td><b>${entFmt(u.fv)}</b></td><td>—</td><td>—</td><td>—</td><td><span class="hint">inicio del circuito</span></td></tr>`;
       const icon = e.track === 'fisico' ? '🔧' : '📄';
