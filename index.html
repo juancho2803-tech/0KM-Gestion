@@ -2238,7 +2238,7 @@
         <div class="panel">
           <div class="panel-head">
             <h3>🎒 Accesorios</h3>
-            <div class="hint">Desde facturación o alistaje (lo último que ocurra) hasta el regreso de accesorios · objetivo: 2 días hábiles · en Ford se considera también la resolución de avería — se excluyen los casos frenados por otra causa (sin arribar o sin alistar) · usá los segmentadores de Alistaje/Avería para aislar qué autos están frenados por cada motivo</div>
+            <div class="hint">Desde facturación, arribo o alistaje (lo último que ocurra) hasta el regreso de accesorios · objetivo: 2 días hábiles · en Ford se considera también la resolución de avería — se excluyen los casos frenados por otra causa (sin arribar o sin alistar) · usá los segmentadores de Alistaje/Avería para aislar qué autos están frenados por cada motivo</div>
           </div>
           <div class="filter-row" style="margin-bottom:14px;">
             <div class="pill-group" id="acelAccesoriosBrandWrap">
@@ -6135,10 +6135,10 @@
     return false;
   }
 
-  // Accesorios: inicio = lo último que ocurra entre facturación y alistaje.
+  // Accesorios: inicio = lo último que ocurra entre facturación, arribo y alistaje.
   // En Ford, si hubo avería, también se considera la fecha de resolución (cierre de avería).
   function acelInicioAccesorios(r){
-    const fechas = [parseDateFlexible(r['Fecha Venta']), parseDateFlexible(r['Fecha Alistaje'])].filter(Boolean);
+    const fechas = [parseDateFlexible(r['Fecha Venta']), parseDateFlexible(r['Fecha Arribo Unidad']), parseDateFlexible(r['Fecha Alistaje'])].filter(Boolean);
     const marca = (r['Marca'] || '').toString().trim().toUpperCase();
     if (marca === 'FORD'){
       const cierreAv = parseDateFlexible(r['Fecha Cierre Averia']);
@@ -9401,7 +9401,7 @@
   //  interna: simple 1 dh / con crédito 2 dh desde facturación, certificado y liquidación (lo último);
   //  externa: desde la entrega al gestor externo hasta el patentamiento — Córdoba 2 · Sur 12 · resto 9 dh.
   const ENT_OBJ_DEFAULT = {giSimple:1, giCredito:2, geCba:2, geOtras:9, geSur:12, plazoEntrega:2, arribo:0, alistaje:1, averia:2, pedidoacc:1, accesorios:2, pagofab:0, certificado:3, geac:2, credito:5, turno:2};
-  const ENT_OBJ_LABELS = {giSimple:'Gestoría interna simple', giCredito:'Gestoría interna con crédito', geCba:'Gestoría externa Córdoba', geOtras:'Gestoría externa otras prov.', geSur:'Gestoría externa Sur', plazoEntrega:'Entrega (desde patentam. o auto arribado/alistado, lo último)', arribo:'Arribo (desde venta)', alistaje:'Alistaje (desde arribo/venta)', averia:'Cierre avería (desde venta)', pedidoacc:'Envío a accesorios', accesorios:'Accesorios (desde venta/alistaje)', pagofab:'Pago fábrica (desde venta)', certificado:'Certificado (corridos)', geac:'Carpeta GEAC', credito:'Crédito', turno:'Turno (desde auto listo)'};
+  const ENT_OBJ_LABELS = {giSimple:'Gestoría interna simple', giCredito:'Gestoría interna con crédito', geCba:'Gestoría externa Córdoba', geOtras:'Gestoría externa otras prov.', geSur:'Gestoría externa Sur', plazoEntrega:'Entrega (desde patentam. o auto arribado/alistado, lo último)', arribo:'Arribo (desde venta)', alistaje:'Alistaje (desde arribo/venta)', averia:'Cierre avería (desde venta)', pedidoacc:'Envío a accesorios', accesorios:'Accesorios (desde venta/arribo/alistaje)', pagofab:'Pago fábrica (desde venta)', certificado:'Certificado (corridos)', geac:'Carpeta GEAC', credito:'Crédito', turno:'Turno (desde auto listo)'};
   // v28: los objetivos se guardan en el servidor (hoja Objetivos, marca "OBJ_ENTREGAS"),
   // así son los mismos para todos y no se pierden. Solo un admin los puede cambiar.
   const ENT_OBJ_MARCA = 'OBJ_ENTREGAS';
@@ -9413,7 +9413,7 @@
       ['arribo', 'dh', 'Si el auto ya estaba en la concesionaria al facturar (0 = arribado antes o el día de la factura cumple).', 'Fecha de venta', 'Fecha Arribo Unidad'],
       ['alistaje', 'dh', 'Alistaje: 1 día desde la venta si el auto ya estaba arribado; si arribó después de la venta, 1 día desde el arribo.', 'Fecha de venta o arribo, lo último', 'Fecha Alistaje'],
       ['averia', 'dh', 'Tiempo para cerrar una avería (solo autos con avería).', 'Fecha de venta', 'Fecha Cierre Avería'],
-      ['accesorios', 'dh', 'Accesorios de punta a punta (envío, instalación y regreso): una sola demora.', 'Fecha de venta o alistaje, lo último (Ford con avería: también el cierre)', 'Fecha Regreso de Accesorios']]],
+      ['accesorios', 'dh', 'Accesorios de punta a punta (envío, instalación y regreso): una sola demora.', 'Fecha de venta, arribo o alistaje, lo último (Ford con avería: también el cierre)', 'Fecha Regreso de Accesorios']]],
     ['📄 Circuito documental', [
       ['pagofab', 'dh', 'Si el auto estaba pagado a fábrica al facturar (0 = tiene que estar pago al facturar).', 'Fecha de venta', 'Fecha Pago Fab'],
       ['certificado', 'días corridos', 'Cuánto tarda en llegar el certificado una vez pagado a fábrica.', 'Fecha Pago Fab', 'Fecha Arribo Certificado'],
@@ -9513,7 +9513,7 @@
     // Avería: no es esperable → sin margen (objetivo 0)
     // Cierre de avería: el objetivo corre desde la fecha de venta
     etapa('averia', 'averia', 'Cierre avería', 'fisico', Vc, [{d:fv}], OBJ.averia);
-    const iniAcc = [{d:fv}, {d:L, k:'alistaje'}];
+    const iniAcc = [{d:fv}, {d:A, k:'arribo'}, {d:L, k:'alistaje'}]; // venta, arribo o alistaje: lo último
     if ((r['Marca'] || '').toString().trim().toUpperCase() === 'FORD') iniAcc.push({d:Vc, k:'averia'});
     // Accesorios en dos pasos: el PEDIDO (envío del auto a accesorios, desde que está
     // alistado) y la INSTALACIÓN (desde el envío hasta el regreso).
