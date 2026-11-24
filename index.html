@@ -9400,8 +9400,8 @@
   // v34: el patentamiento se mide en dos tramos (parámetros de gestoría):
   //  interna: simple 1 dh / con crédito 2 dh desde facturación, certificado y liquidación (lo último);
   //  externa: desde la entrega al gestor externo hasta el patentamiento — Córdoba 2 · Sur 12 · resto 9 dh.
-  const ENT_OBJ_DEFAULT = {giSimple:1, giCredito:2, geCba:2, geOtras:9, geSur:12, plazoEntrega:2, arribo:0, alistaje:2, averia:0, pedidoacc:1, accesorios:2, pagofab:0, certificado:3, geac:2, credito:5, turno:2};
-  const ENT_OBJ_LABELS = {giSimple:'Gestoría interna simple', giCredito:'Gestoría interna con crédito', geCba:'Gestoría externa Córdoba', geOtras:'Gestoría externa otras prov.', geSur:'Gestoría externa Sur', plazoEntrega:'Entrega (desde patentam. o auto arribado/alistado, lo último)', arribo:'Arribo (desde venta)', alistaje:'Alistaje (desde arribo/venta)', averia:'Avería (0 = todo cuenta)', pedidoacc:'Envío a accesorios (desde venta/alistaje, referencia)', accesorios:'Accesorios: envío + instalación (desde venta/alistaje)', pagofab:'Pago fábrica (desde venta)', certificado:'Certificado (corridos)', geac:'Carpeta GEAC', credito:'Crédito', turno:'Turno (desde auto listo)'};
+  const ENT_OBJ_DEFAULT = {giSimple:1, giCredito:2, geCba:2, geOtras:9, geSur:12, plazoEntrega:2, arribo:0, alistaje:2, averia:2, pedidoacc:1, accesorios:2, pagofab:0, certificado:3, geac:2, credito:5, turno:2};
+  const ENT_OBJ_LABELS = {giSimple:'Gestoría interna simple', giCredito:'Gestoría interna con crédito', geCba:'Gestoría externa Córdoba', geOtras:'Gestoría externa otras prov.', geSur:'Gestoría externa Sur', plazoEntrega:'Entrega (desde patentam. o auto arribado/alistado, lo último)', arribo:'Arribo (desde venta)', alistaje:'Alistaje (desde arribo/venta)', averia:'Cierre avería (desde venta)', pedidoacc:'Envío a accesorios (desde venta/alistaje, referencia)', accesorios:'Accesorios: envío + instalación (desde venta/alistaje)', pagofab:'Pago fábrica (desde venta)', certificado:'Certificado (corridos)', geac:'Carpeta GEAC', credito:'Crédito', turno:'Turno (desde auto listo)'};
   // v28: los objetivos se guardan en el servidor (hoja Objetivos, marca "OBJ_ENTREGAS"),
   // así son los mismos para todos y no se pierden. Solo un admin los puede cambiar.
   const ENT_OBJ_MARCA = 'OBJ_ENTREGAS';
@@ -9412,7 +9412,7 @@
     ['🔧 Circuito físico', [
       ['arribo', 'dh', 'Si el auto ya estaba en la concesionaria al facturar (0 = tiene que estar arribado al facturar).', 'Fecha de venta', 'Fecha Arribo Unidad'],
       ['alistaje', 'dh', 'Cuánto tarda el alistaje una vez que se puede alistar.', 'Fecha de venta o arribo, lo último', 'Fecha Alistaje'],
-      ['averia', 'dh', 'Tiempo para cerrar una avería (0 = cualquier día con avería abierta cuenta como demora).', 'Fecha de la avería (si no está, el arribo)', 'Fecha Cierre Avería'],
+      ['averia', 'dh', 'Tiempo para cerrar una avería (solo autos con avería).', 'Fecha de venta', 'Fecha Cierre Avería'],
       ['pedidoacc', 'dh', 'Solo referencia: cuánto tarda en salir el auto a accesorios. Se muestra aparte, no corre el plazo.', 'Fecha de venta o alistaje, lo último (Ford con avería: también el cierre)', 'Fecha Envío a Accesorios'],
       ['accesorios', 'dh', 'Accesorios completo: envío + instalación + regreso.', 'Fecha de venta o alistaje, lo último (Ford con avería: también el cierre)', 'Fecha Regreso de Accesorios']]],
     ['📄 Circuito documental', [
@@ -9512,7 +9512,8 @@
     // Alistaje: corre desde lo último entre arribo y venta
     etapa('alistaje', 'alistaje', 'Alistaje', 'fisico', L, [{d:fv}, {d:A, k:'arribo'}], OBJ.alistaje);
     // Avería: no es esperable → sin margen (objetivo 0)
-    etapa('averia', 'averia', 'Cierre avería', 'fisico', Vc, [{d: fAv || A}], OBJ.averia);
+    // Cierre de avería: el objetivo corre desde la fecha de venta
+    etapa('averia', 'averia', 'Cierre avería', 'fisico', Vc, [{d:fv}], OBJ.averia);
     const iniAcc = [{d:fv}, {d:L, k:'alistaje'}];
     if ((r['Marca'] || '').toString().trim().toUpperCase() === 'FORD') iniAcc.push({d:Vc, k:'averia'});
     // Accesorios en dos pasos: el PEDIDO (envío del auto a accesorios, desde que está
