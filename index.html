@@ -2560,7 +2560,7 @@
         <div class="panel">
           <div class="panel-head">
             <h3>🚚 Entregas fuera de plazo</h3>
-            <div class="hint">Plazo = Fecha venta + gestoría interna (simple 1 dh · con crédito 2 dh) + gestoría externa (Córdoba 2 · Sur 12 · resto 9 dh) + 48 hs hasta la entrega (todos editables abajo, en objetivos) · fecha de entrega = fecha del turno (col. BR), no la del aviso · solo autos con chasis válido y turno ya cumplido</div>
+            <div class="hint">Plazo = plazo de patentamiento (gestoría interna + externa) o auto arribado/alistado, lo último, + 2 dh hasta la entrega (objetivos editables) · fecha de entrega = fecha del turno (col. BR), no la del aviso · solo autos con chasis válido y turno ya cumplido</div>
           </div>
           <div class="filter-row ent-filters">
             <div class="pill-group">
@@ -2597,6 +2597,7 @@
                 <button type="button" class="active" data-v="no">No</button>
               </div>
             </div>
+            <div class="pill-group"><span class="pill-group-label">Área (instancias)</span><select id="spcArea" class="month-select"><option value="todas">Todas</option><option value="fisico">🔧 Circuito físico</option><option value="documental">📄 Circuito documental</option><option value="entrega">📅 Entrega (auto listo)</option></select></div>
             <button class="page-btn" id="entClearBtn" type="button">🧹 Limpiar filtros</button>
             <div class="table-search ent-search">
               <input type="text" id="entSearchInput" placeholder="Buscar interno, cliente, modelo o dominio…" autocomplete="off">
@@ -2619,30 +2620,26 @@
           <div style="overflow-x:auto;"><table class="data-table" id="facIndTabla"></table></div>
         </div>
 
-        <div class="panel" id="entSpcPanel">
+        <div class="panel">
           <div class="panel-head">
-            <h3>📈 Control estadístico del proceso</h3>
-            <div class="hint">Área, Marca y Mes filtran también las tablas de abajo · Promedio de días de la instancia elegida por período (fecha de entrega) · línea central = promedio general · límites fijos = promedio ± 3 desvíos (con la cantidad promedio de autos por período) · los puntos en rojo están fuera de control</div>
-          </div>
-          <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:10px;">
-            <label class="hint" for="spcEtapa">Instancia</label><select id="spcEtapa" class="month-select"></select>
-            <label class="hint" for="spcArea">Área</label><select id="spcArea" class="month-select"><option value="todas">Todas</option><option value="fisico">🔧 Circuito físico</option><option value="documental">📄 Circuito documental</option><option value="entrega">📅 Entrega (auto listo)</option></select>
-            <label class="hint" for="spcMarca">Marca</label><select id="spcMarca" class="month-select"></select>
-            <div class="msdrop" id="spcMesDrop">
-              <button type="button" class="msdrop-btn"><span class="msdrop-label">Mes de entrega: Todos</span><span class="msdrop-arrow">▾</span></button>
-              <div class="msdrop-panel">
-                <div class="msdrop-actions"><button type="button" class="pill-action" id="spcMesAll">Todos</button><button type="button" class="pill-action" id="spcMesNone">Ninguno</button></div>
-                <div class="msdrop-list" id="spcMesList"></div>
-              </div>
+            <h3>🏆 Ranking de áreas que demoran la entrega</h3>
+            <div class="segmented" id="entVistaSeg">
+              <button class="active" data-v="separado" type="button">🔧📄 Por circuito</button>
+              <button data-v="junto" type="button">Todo junto</button>
             </div>
-            <label class="hint" for="spcPeriodo">Período</label>
-            <select id="spcPeriodo" class="month-select"><option value="auto">Automático</option><option value="dia">Día</option><option value="semana">Semana</option><option value="mes">Mes</option></select>
+            <div class="hint">Causa principal = el área que más días aportó a la demora de cada auto · los % suman 100 · a la derecha, en cuántos autos además aportó algo · clic para filtrar</div>
           </div>
-          <div style="position:relative; height:320px;"><canvas id="spcChart"></canvas></div>
-          <div id="spcResumen" class="hint" style="margin-top:8px;"></div>
-          <div style="margin-top:14px;"><div class="hint" style="margin-bottom:6px;"><b>🔎 ¿Dónde se nos escapa?</b> Todas las instancias con los mismos filtros, ordenadas por días excedidos sobre su objetivo · clic en una fila para verla en el gráfico</div>
-            <div style="overflow-x:auto;"><table class="data-table" id="spcTabla"></table></div></div>
+          <div id="entRanking"></div>
         </div>
+
+        <div class="panel">
+          <div class="panel-head">
+            <h3>🧩 Área × marca</h3>
+            <div class="hint">% de las entregas fuera de plazo de cada marca, según su causa principal</div>
+          </div>
+          <div class="table-scroll"><table class="data-table ent-matrix" id="entMatrix"></table></div>
+        </div>
+      
 
         <div class="panel" id="entPromPanel">
           <div class="panel-head">
@@ -2652,25 +2649,34 @@
           <div id="entPromBox"></div>
         </div>
 
-        <div class="ent-grid2">
-          <div class="panel">
-            <div class="panel-head">
-              <h3>🏆 Ranking de áreas que demoran la entrega</h3>
-              <div class="segmented" id="entVistaSeg">
-                <button class="active" data-v="separado" type="button">🔧📄 Por circuito</button>
-                <button data-v="junto" type="button">Todo junto</button>
+        <div class="panel" id="entEscapaPanel">
+          <div class="panel-head">
+            <h3>🔎 ¿Dónde se nos escapa?</h3>
+            <div class="hint">Todas las instancias con los filtros de la sección, ordenadas por días excedidos sobre su objetivo · clic en una fila para verla en el control estadístico</div>
+          </div>
+          <div style="overflow-x:auto;"><table class="data-table" id="spcTabla"></table></div>
+        </div>
+
+        <div class="panel" id="entSpcPanel">
+          <div class="panel-head">
+            <h3>📈 Control estadístico del proceso</h3>
+            <div class="hint">Usa los filtros de la sección (marca, canal, mes de entrega, área) · Promedio de días de la instancia elegida por período (fecha de entrega) · línea central = promedio general · límites fijos = promedio ± 3 desvíos (con la cantidad promedio de autos por período) · los puntos en rojo están fuera de control</div>
+          </div>
+          <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:10px;">
+            <label class="hint" for="spcEtapa">Instancia</label><select id="spcEtapa" class="month-select"></select>
+            <div style="display:none;"><label class="hint" for="spcMarca">Marca</label><select id="spcMarca" class="month-select"></select>
+            <div class="msdrop" id="spcMesDrop">
+              <button type="button" class="msdrop-btn"><span class="msdrop-label">Mes de entrega: Todos</span><span class="msdrop-arrow">▾</span></button>
+              <div class="msdrop-panel">
+                <div class="msdrop-actions"><button type="button" class="pill-action" id="spcMesAll">Todos</button><button type="button" class="pill-action" id="spcMesNone">Ninguno</button></div>
+                <div class="msdrop-list" id="spcMesList"></div>
               </div>
-              <div class="hint">Causa principal = el área que más días aportó a la demora de cada auto · los % suman 100 · a la derecha, en cuántos autos además aportó algo · clic para filtrar</div>
-            </div>
-            <div id="entRanking"></div>
+            </div></div>
+            <label class="hint" for="spcPeriodo">Período</label>
+            <select id="spcPeriodo" class="month-select"><option value="auto">Automático</option><option value="dia">Día</option><option value="semana">Semana</option><option value="mes">Mes</option></select>
           </div>
-          <div class="panel">
-            <div class="panel-head">
-              <h3>🧩 Área × marca</h3>
-              <div class="hint">% de las entregas fuera de plazo de cada marca, según su causa principal</div>
-            </div>
-            <div class="table-scroll"><table class="data-table ent-matrix" id="entMatrix"></table></div>
-          </div>
+          <div style="position:relative; height:320px;"><canvas id="spcChart"></canvas></div>
+          <div id="spcResumen" class="hint" style="margin-top:8px;"></div>
         </div>
 
         <div class="panel">
@@ -10235,7 +10241,7 @@
       const setMes = on => { SPC_MES.sel.clear(); if (on) SPC_MES.all.forEach(m => SPC_MES.sel.add(m)); spcMesDrop(); spcRefrescarTodo(); };
       $('spcMesAll').addEventListener('click', () => setMes(true));
       $('spcMesNone').addEventListener('click', () => setMes(false));
-      $('spcTabla').addEventListener('click', ev => { const tr = ev.target.closest('tr[data-et]'); if (!tr) return; selE.value = tr.dataset.et; entRenderSpc(); });
+      $('spcTabla').addEventListener('click', ev => { const tr = ev.target.closest('tr[data-et]'); if (!tr) return; selE.value = tr.dataset.et; entRenderSpc(); $('entSpcPanel').scrollIntoView({behavior:'smooth', block:'start'}); });
     }
     spcSyncMeses(ENT_SPC_BASE || []);
     const base = (ENT_SPC_BASE || []).filter(u => SPC_MES.sel.has(spcMesDe(u)));
@@ -10423,6 +10429,7 @@
       $('entInvitadoList').querySelectorAll('button').forEach(b => b.classList.add('active'));
       [['entUsadoSeg','todos'],['entEstadoSeg','tarde']].forEach(([id, v]) =>
         $(id).querySelectorAll('button').forEach(b => b.classList.toggle('active', b.dataset.v === v)));
+      if ($('spcArea')) $('spcArea').value = 'todas';
       renderEntregasAcelSection();
     });
     document.querySelectorAll('#entTable th.sortable').forEach(th => th.addEventListener('click', () => {
