@@ -730,6 +730,13 @@
   .ent-tl .step.warn .d{color:var(--amber);}
   .ent-rank-group{font-family:'Barlow Condensed',sans-serif; text-transform:uppercase; letter-spacing:.7px; font-size:12px; color:var(--text-dim); margin:12px 6px 4px; font-weight:600;}
   .ent-obj{display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-top:12px; font-size:11.5px; color:var(--text-dim);}
+  .ent-obj{display:block;}
+  .ent-obj details summary{cursor:pointer; padding:8px 10px; border:1px solid var(--border); border-radius:10px; background:var(--surface-2); list-style:none;}
+  .ent-obj details summary::-webkit-details-marker{display:none;}
+  .ent-obj details summary::before{content:'▸ '; display:inline-block; transition:transform .15s;}
+  .ent-obj details[open] summary::before{transform:rotate(90deg);}
+  .ent-obj-tab td{vertical-align:top; white-space:normal !important; overflow:visible !important; text-overflow:clip !important; max-width:none !important;}
+  .ent-obj .table-scroll{max-height:none;}
   .ent-obj label{display:flex; align-items:center; gap:4px; background:var(--surface-2); border:1px solid var(--border); border-radius:8px; padding:4px 8px;}
   .ent-obj input{width:44px; background:var(--surface); color:var(--text); border:1px solid var(--border); border-radius:5px; padding:2px 4px; font-family:'JetBrains Mono',monospace;}
   /* ---- Análisis comercial ---- */
@@ -9398,6 +9405,29 @@
   // v28: los objetivos se guardan en el servidor (hoja Objetivos, marca "OBJ_ENTREGAS"),
   // así son los mismos para todos y no se pierden. Solo un admin los puede cambiar.
   const ENT_OBJ_MARCA = 'OBJ_ENTREGAS';
+  // Qué mide cada objetivo y con qué regla (se muestra en el cuadro plegable de objetivos)
+  const ENT_OBJ_INFO = [
+    ['📏 Plazo total de entrega', [
+      ['plazoEntrega', 'dh', 'Los días que tiene Entregas para entregar el auto. Define el plazo con el que se decide si un auto se entregó fuera de plazo.', 'El plazo de patentamiento (gestoría interna + externa) o el día en que el auto quedó arribado y alistado, lo que ocurra último', 'Fecha del turno de entrega (Audi: Fecha Entrega Unidad)']]],
+    ['🔧 Circuito físico', [
+      ['arribo', 'dh', 'Si el auto ya estaba en la concesionaria al facturar (0 = tiene que estar arribado al facturar).', 'Fecha de venta', 'Fecha Arribo Unidad'],
+      ['alistaje', 'dh', 'Cuánto tarda el alistaje una vez que se puede alistar.', 'Fecha de venta o arribo, lo último', 'Fecha Alistaje'],
+      ['averia', 'dh', 'Tiempo para cerrar una avería (0 = cualquier día con avería abierta cuenta como demora).', 'Fecha de la avería (si no está, el arribo)', 'Fecha Cierre Avería'],
+      ['pedidoacc', 'dh', 'Solo referencia: cuánto tarda en salir el auto a accesorios. Se muestra aparte, no corre el plazo.', 'Fecha de venta o alistaje, lo último (Ford con avería: también el cierre)', 'Fecha Envío a Accesorios'],
+      ['accesorios', 'dh', 'Accesorios completo: envío + instalación + regreso.', 'Fecha de venta o alistaje, lo último (Ford con avería: también el cierre)', 'Fecha Regreso de Accesorios']]],
+    ['📄 Circuito documental', [
+      ['pagofab', 'dh', 'Si el auto estaba pagado a fábrica al facturar (0 = tiene que estar pago al facturar).', 'Fecha de venta', 'Fecha Pago Fab'],
+      ['certificado', 'días corridos', 'Cuánto tarda en llegar el certificado una vez pagado a fábrica.', 'Fecha Pago Fab', 'Fecha Arribo Certificado'],
+      ['credito', 'dh', 'Cuánto tarda la liquidación del crédito (solo operaciones con crédito).', 'Fecha de venta', 'Fecha Liquidación Crédito'],
+      ['giSimple', 'dh', 'Gestoría interna en operaciones sin crédito (cliente / invitado / Maipú).', 'Facturación o arribo del certificado, lo último', 'Listo GI / entrega del trámite al gestor externo (cliente: Fecha Gestoría)'],
+      ['giCredito', 'dh', 'Gestoría interna en operaciones con crédito.', 'Facturación, arribo del certificado o liquidación del crédito, lo último', 'Listo GI / entrega del trámite al gestor externo'],
+      ['geCba', 'dh', 'Gestoría externa, trámites de Córdoba (48 hs).', 'Entrega del trámite al gestor externo', 'Fecha Patentamiento'],
+      ['geSur', 'dh', 'Gestoría externa, trámites de provincias del Sur.', 'Entrega del trámite al gestor externo', 'Fecha Patentamiento'],
+      ['geOtras', 'dh', 'Gestoría externa, resto de las provincias.', 'Entrega del trámite al gestor externo', 'Fecha Patentamiento'],
+      ['geac', 'dh', 'Cuánto tarda la carpeta en llegar a GEAC (solo si patenta Maipú).', 'Fecha Patentamiento', 'Fecha Entrega Trámite a GEAC']]],
+    ['📅 Con el auto listo', [
+      ['turno', 'dh', 'Cuánto tarda la entrega una vez que el auto está listo. Lo que pasa de este plazo se reparte en contactación (demora en llamar), agenda llena (no había turno) y cliente (eligió una fecha posterior o tardó en confirmar).', 'Auto listo: el último de todos los pasos anteriores (físico y documental)', 'Fecha del turno de entrega']]]
+  ];
   function entObjetivos(){
     const o = {};
     Object.keys(ENT_OBJ_DEFAULT).forEach(k => {
@@ -9723,9 +9753,16 @@
       const esAdmin = !!(CURRENT_SESSION && CURRENT_SESSION.role === 'admin');
       if (!box.dataset.ready){
         box.dataset.ready = '1';
-        box.innerHTML = '<b style="margin-right:4px;">🎯 Objetivos por etapa (dh):</b>' +
-          Object.keys(ENT_OBJ_LABELS).map(k => `<label>${ENT_OBJ_LABELS[k]} <input type="number" min="0" step="1" data-k="${k}"></label>`).join('') +
-          '<span id="entObjNote" style="font-size:11px; color:var(--text-faint);"></span>';
+        let abierto = false; try { abierto = localStorage.getItem('entObjAbierto') === '1'; } catch(e){}
+        box.innerHTML = `<details id="entObjDet"${abierto ? ' open' : ''}><summary><b>🎯 Objetivos por etapa</b> <span class="hint">— qué mide cada uno y con qué regla · clic para ${abierto ? 'ocultar' : 'ver / editar'}</span></summary>
+          <div class="hint" style="margin:8px 0;">Cada etapa se mide <b>desde que se pudo empezar</b> (la última de las fechas de "Desde") <b>hasta</b> la fecha de "Hasta", en días hábiles (sin sábados, domingos ni feriados) salvo que diga corridos. Si tarda más que su objetivo, "se pasó"; si además eso corrió la entrega más allá del plazo, "aportó demora" y suma en el ranking.</div>
+          <div class="table-scroll"><table class="data-table ent-obj-tab"><thead><tr><th>Objetivo</th><th style="text-align:center;">Valor</th><th>Qué mide</th><th>Desde (lo último que ocurra)</th><th>Hasta</th></tr></thead><tbody>` +
+          ENT_OBJ_INFO.map(([g, filas]) => `<tr><td colspan="5" style="font-weight:700; background:var(--surface-2);">${g}</td></tr>` + filas.map(([k, u, mide, desde, hasta]) =>
+            `<tr><td style="white-space:nowrap;"><b>${escapeHtml(ENT_OBJ_LABELS[k].replace(/ \(.*\)$/, ''))}</b></td><td style="text-align:center; white-space:nowrap;"><input type="number" min="0" step="1" data-k="${k}"> <span class="hint">${u}</span></td>
+              <td style="font-size:12px;">${escapeHtml(mide)}</td><td style="font-size:12px;">${escapeHtml(desde)}</td><td style="font-size:12px;">${escapeHtml(hasta)}</td></tr>`).join('')).join('') +
+          `</tbody></table></div><div id="entObjNote" style="font-size:11px; color:var(--text-faint); margin-top:6px;"></div></details>`;
+        $('entObjDet').addEventListener('toggle', e => { const o = e.target.open; try { localStorage.setItem('entObjAbierto', o ? '1' : '0'); } catch(_){}
+          const h = e.target.querySelector('summary .hint'); if (h) h.textContent = '— qué mide cada uno y con qué regla · clic para ' + (o ? 'ocultar' : 'ver / editar'); });
         box.querySelectorAll('input').forEach(inp => inp.addEventListener('change', () => {
           const k = inp.dataset.k;
           const v = Math.max(0, parseInt(inp.value, 10) || 0);
