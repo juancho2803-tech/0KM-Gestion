@@ -2085,7 +2085,7 @@
         <div class="panel">
           <div class="panel-head">
             <h3>🧹 Alistaje</h3>
-            <div class="hint">Desde arribo o facturación (lo que ocurra último) hasta el alistaje · objetivo: 2 días hábiles · "Pendientes" solo cuenta autos ya arribados — los que faltan arribar se muestran aparte</div>
+            <div class="hint">Desde arribo o facturación (lo que ocurra último) hasta el alistaje · objetivo: 1 día hábil (arribado antes de facturar: 1 día desde la venta · arribó después: 1 día desde el arribo) · "Pendientes" solo cuenta autos ya arribados — los que faltan arribar se muestran aparte</div>
           </div>
           <div class="filter-row" style="margin-bottom:14px;">
             <div class="pill-group" id="acelAlistajeBrandWrap">
@@ -3873,7 +3873,7 @@
     const creditoRes = computeAceleracion(creditoUniverso, r => parseDateFlexible(r['Fecha Venta']), 'Fecha Liquidacion Credito', null);
 
     return [
-      {icon:'🧹', label:'Alistaje', objetivoDias:2, resultado:alistajeRes, subtab:'alistaje'},
+      {icon:'🧹', label:'Alistaje', objetivoDias:1, resultado:alistajeRes, subtab:'alistaje'},
       {icon:'🏭', label:'Pago a fábrica', objetivoDias:3, resultado:pagoFabricaRes, subtab:'pagofabrica'},
       {icon:'🎒', label:'Accesorios', objetivoDias:2, resultado:accesoriosRes, subtab:'accesorios'},
       {icon:'📋', label:'GEAC', objetivoDias:null, resultado:geacRes, subtab:'geac'},
@@ -6626,7 +6626,7 @@
     );
     const alistajeClienteExternoConTurno = alistajeClienteExternoPendienteRows.filter(r => (r['Fecha Turno Alistaje'] || '').toString().trim() !== '').length;
     const alistajeClienteExternoSinTurno = alistajeClienteExternoPendienteRows.length - alistajeClienteExternoConTurno;
-    renderAcelPanel('Alistaje', alistajeResBase, 2, undefined, ACEL_COLS_ALISTAJE, {
+    renderAcelPanel('Alistaje', alistajeResBase, 1, undefined, ACEL_COLS_ALISTAJE, {
       sinArribarCount: alistajeSinArribar.length,
       sinArribarEntries: alistajeSinArribarEntries,
       clienteExternoPendiente: alistajeClienteExternoPendienteRows.length,
@@ -9400,7 +9400,7 @@
   // v34: el patentamiento se mide en dos tramos (parámetros de gestoría):
   //  interna: simple 1 dh / con crédito 2 dh desde facturación, certificado y liquidación (lo último);
   //  externa: desde la entrega al gestor externo hasta el patentamiento — Córdoba 2 · Sur 12 · resto 9 dh.
-  const ENT_OBJ_DEFAULT = {giSimple:1, giCredito:2, geCba:2, geOtras:9, geSur:12, plazoEntrega:2, arribo:0, alistaje:2, averia:2, pedidoacc:1, accesorios:2, pagofab:0, certificado:3, geac:2, credito:5, turno:2};
+  const ENT_OBJ_DEFAULT = {giSimple:1, giCredito:2, geCba:2, geOtras:9, geSur:12, plazoEntrega:2, arribo:0, alistaje:1, averia:2, pedidoacc:1, accesorios:2, pagofab:0, certificado:3, geac:2, credito:5, turno:2};
   const ENT_OBJ_LABELS = {giSimple:'Gestoría interna simple', giCredito:'Gestoría interna con crédito', geCba:'Gestoría externa Córdoba', geOtras:'Gestoría externa otras prov.', geSur:'Gestoría externa Sur', plazoEntrega:'Entrega (desde patentam. o auto arribado/alistado, lo último)', arribo:'Arribo (desde venta)', alistaje:'Alistaje (desde arribo/venta)', averia:'Cierre avería (desde venta)', pedidoacc:'Envío a accesorios', accesorios:'Accesorios (desde venta/alistaje)', pagofab:'Pago fábrica (desde venta)', certificado:'Certificado (corridos)', geac:'Carpeta GEAC', credito:'Crédito', turno:'Turno (desde auto listo)'};
   // v28: los objetivos se guardan en el servidor (hoja Objetivos, marca "OBJ_ENTREGAS"),
   // así son los mismos para todos y no se pierden. Solo un admin los puede cambiar.
@@ -9410,8 +9410,8 @@
     ['📏 Plazo total de entrega', [
       ['plazoEntrega', 'dh', 'Los días que tiene Entregas para entregar el auto. Define el plazo con el que se decide si un auto se entregó fuera de plazo.', 'El plazo de patentamiento (gestoría interna + externa) o el día en que el auto quedó arribado y alistado, lo que ocurra último', 'Fecha del turno de entrega (Audi: Fecha Entrega Unidad)']]],
     ['🔧 Circuito físico', [
-      ['arribo', 'dh', 'Si el auto ya estaba en la concesionaria al facturar (0 = tiene que estar arribado al facturar).', 'Fecha de venta', 'Fecha Arribo Unidad'],
-      ['alistaje', 'dh', 'Cuánto tarda el alistaje una vez que se puede alistar.', 'Fecha de venta o arribo, lo último', 'Fecha Alistaje'],
+      ['arribo', 'dh', 'Si el auto ya estaba en la concesionaria al facturar (0 = arribado antes o el día de la factura cumple).', 'Fecha de venta', 'Fecha Arribo Unidad'],
+      ['alistaje', 'dh', 'Alistaje: 1 día desde la venta si el auto ya estaba arribado; si arribó después de la venta, 1 día desde el arribo.', 'Fecha de venta o arribo, lo último', 'Fecha Alistaje'],
       ['averia', 'dh', 'Tiempo para cerrar una avería (solo autos con avería).', 'Fecha de venta', 'Fecha Cierre Avería'],
       ['accesorios', 'dh', 'Accesorios de punta a punta (envío, instalación y regreso): una sola demora.', 'Fecha de venta o alistaje, lo último (Ford con avería: también el cierre)', 'Fecha Regreso de Accesorios']]],
     ['📄 Circuito documental', [
@@ -14409,16 +14409,16 @@
     if (entregado && !fal) a.push(['warn', 'Entregado sin fecha de alistaje']);
     const faltoEnt = [['Sobre?', 'sobre'], ['Kit de Seguridad?', 'kit de seguridad'], ['Matafuego?', 'matafuego'], ['Alfombras?', 'alfombras']].filter(([c]) => fiTxt(r, c).toUpperCase() === 'NO').map(([, l]) => l);
     if (entregado && faltoEnt.length) a.push(['warn', `Se entregó sin: ${faltoEnt.join(', ')}`]);
-    // Alistaje: objetivo 2 días hábiles desde arribo o facturación (lo último que ocurra)
+    // Alistaje: objetivo 1 día hábil desde arribo o facturación (lo último que ocurra)
     if (fa && fv && !entregado){
       const ini = fa > fv ? fa : fv, desdeTxt = fa > fv ? 'el arribo' : 'la facturación';
       if (!fal){
         const dh = diasHabilesSLA(ini, new Date());
-        if (dh > 2) a.push(['bad', `Sin alistar: ${dh} días hábiles desde ${desdeTxt} (${entFmt(ini)}) · objetivo 2 — el alistaje está demorando la entrega`]);
-        else a.push(['info', `Pendiente de alistar · vence el ${entFmt(addBusinessDaysSLA(ini, 2))} (2 días hábiles desde ${desdeTxt})`]);
+        if (dh > 1) a.push(['bad', `Sin alistar: ${dh} días hábiles desde ${desdeTxt} (${entFmt(ini)}) · objetivo 1 — el alistaje está demorando la entrega`]);
+        else a.push(['info', `Pendiente de alistar · vence el ${entFmt(addBusinessDaysSLA(ini, 1))} (1 día hábil desde ${desdeTxt})`]);
       } else {
         const dh = diasHabilesSLA(ini, fal);
-        if (dh > 2) a.push(['info', `Se alistó ${dh} días hábiles después de ${desdeTxt} (objetivo 2)`]);
+        if (dh > 1) a.push(['info', `Se alistó ${dh} días hábiles después de ${desdeTxt} (objetivo 1)`]);
       }
     }
     if (ft && fp && ft < fp) a.push(['bad', 'El turno de entrega es anterior al patentamiento']);
