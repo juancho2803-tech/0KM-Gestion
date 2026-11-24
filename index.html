@@ -9401,7 +9401,7 @@
   //  interna: simple 1 dh / con crédito 2 dh desde facturación, certificado y liquidación (lo último);
   //  externa: desde la entrega al gestor externo hasta el patentamiento — Córdoba 2 · Sur 12 · resto 9 dh.
   const ENT_OBJ_DEFAULT = {giSimple:1, giCredito:2, geCba:2, geOtras:9, geSur:12, plazoEntrega:2, arribo:0, alistaje:2, averia:2, pedidoacc:1, accesorios:2, pagofab:0, certificado:3, geac:2, credito:5, turno:2};
-  const ENT_OBJ_LABELS = {giSimple:'Gestoría interna simple', giCredito:'Gestoría interna con crédito', geCba:'Gestoría externa Córdoba', geOtras:'Gestoría externa otras prov.', geSur:'Gestoría externa Sur', plazoEntrega:'Entrega (desde patentam. o auto arribado/alistado, lo último)', arribo:'Arribo (desde venta)', alistaje:'Alistaje (desde arribo/venta)', averia:'Cierre avería (desde venta)', pedidoacc:'Envío a accesorios (desde venta/alistaje, referencia)', accesorios:'Accesorios: envío + instalación (desde venta/alistaje)', pagofab:'Pago fábrica (desde venta)', certificado:'Certificado (corridos)', geac:'Carpeta GEAC', credito:'Crédito', turno:'Turno (desde auto listo)'};
+  const ENT_OBJ_LABELS = {giSimple:'Gestoría interna simple', giCredito:'Gestoría interna con crédito', geCba:'Gestoría externa Córdoba', geOtras:'Gestoría externa otras prov.', geSur:'Gestoría externa Sur', plazoEntrega:'Entrega (desde patentam. o auto arribado/alistado, lo último)', arribo:'Arribo (desde venta)', alistaje:'Alistaje (desde arribo/venta)', averia:'Cierre avería (desde venta)', pedidoacc:'Envío a accesorios', accesorios:'Accesorios (desde venta/alistaje)', pagofab:'Pago fábrica (desde venta)', certificado:'Certificado (corridos)', geac:'Carpeta GEAC', credito:'Crédito', turno:'Turno (desde auto listo)'};
   // v28: los objetivos se guardan en el servidor (hoja Objetivos, marca "OBJ_ENTREGAS"),
   // así son los mismos para todos y no se pierden. Solo un admin los puede cambiar.
   const ENT_OBJ_MARCA = 'OBJ_ENTREGAS';
@@ -9413,8 +9413,7 @@
       ['arribo', 'dh', 'Si el auto ya estaba en la concesionaria al facturar (0 = tiene que estar arribado al facturar).', 'Fecha de venta', 'Fecha Arribo Unidad'],
       ['alistaje', 'dh', 'Cuánto tarda el alistaje una vez que se puede alistar.', 'Fecha de venta o arribo, lo último', 'Fecha Alistaje'],
       ['averia', 'dh', 'Tiempo para cerrar una avería (solo autos con avería).', 'Fecha de venta', 'Fecha Cierre Avería'],
-      ['pedidoacc', 'dh', 'Solo referencia: cuánto tarda en salir el auto a accesorios. Se muestra aparte, no corre el plazo.', 'Fecha de venta o alistaje, lo último (Ford con avería: también el cierre)', 'Fecha Envío a Accesorios'],
-      ['accesorios', 'dh', 'Accesorios completo: envío + instalación + regreso.', 'Fecha de venta o alistaje, lo último (Ford con avería: también el cierre)', 'Fecha Regreso de Accesorios']]],
+      ['accesorios', 'dh', 'Accesorios de punta a punta (envío, instalación y regreso): una sola demora.', 'Fecha de venta o alistaje, lo último (Ford con avería: también el cierre)', 'Fecha Regreso de Accesorios']]],
     ['📄 Circuito documental', [
       ['pagofab', 'dh', 'Si el auto estaba pagado a fábrica al facturar (0 = tiene que estar pago al facturar).', 'Fecha de venta', 'Fecha Pago Fab'],
       ['certificado', 'días corridos', 'Cuánto tarda en llegar el certificado una vez pagado a fábrica.', 'Fecha Pago Fab', 'Fecha Arribo Certificado'],
@@ -9519,15 +9518,9 @@
     // Accesorios en dos pasos: el PEDIDO (envío del auto a accesorios, desde que está
     // alistado) y la INSTALACIÓN (desde el envío hasta el regreso).
     const Eacc = up('Enviado a Accesorios') === 'SI' ? ok(dt('Fecha Envio a Accesorios')) : null;
-    if (Eacc && Cacc){
-      // Envío (pedido) e instalación se miden por separado pero suman a la misma área "Accesorios"
-      // El objetivo de accesorios (2 dh) corre desde la facturación o el alistaje (lo último),
-      // envío + instalación juntos. El envío se muestra aparte con su objetivo, como referencia.
-      etapa('pedidoacc', 'accesorios', 'Envío a accesorios', 'fisico', Eacc, iniAcc, OBJ.pedidoacc);
-      etapa('accesorios', 'accesorios', 'Accesorios (envío + instalación)', 'fisico', Cacc, iniAcc, OBJ.accesorios);
-    } else {
-      etapa('accesorios', 'accesorios', 'Accesorios (envío + instalación)', 'fisico', Cacc, iniAcc, OBJ.accesorios);
-    }
+    // Accesorios es una sola etapa: desde la facturación o el alistaje (lo último) hasta el regreso.
+    void Eacc;
+    etapa('accesorios', 'accesorios', 'Accesorios', 'fisico', Cacc, iniAcc, OBJ.accesorios);
     // Documental
     etapa('pagofab', 'pagofab', 'Pago fábrica', 'documental', pagoFab, [{d:fv}], OBJ.pagofab);
     etapa('certificado', 'certificado', 'Certificado', 'documental', certificado, [{d:pagoFab, k:'pagofab'}], OBJ.certificado, true);
@@ -9866,14 +9859,7 @@
         const pp = tarde.length ? Math.round(x.n / tarde.length * 100) : 0;    // aportó
         return `<div class="ent-rank-row ${ENT_STATE.area === x.k ? 'sel' : ''}" data-area="${x.k}" title="Causa principal en ${x.inv} de ${tarde.length} autos fuera de plazo · aportó demora en ${x.n}">
           <span class="pos">${i+1}</span>
-          <span class="name">${tr || x.k === 'turno' ? '' : `<span class="ent-trk">${trIcon(x.k)}</span>`}${a.icon} ${escapeHtml(a.label)}${x.k === 'accesorios' ? (() => {
-            // Desglose: en cuántos autos (con accesorios como causa principal) pesó más el envío o la instalación
-            const us = tarde.filter(u => u.causa === 'accesorios');
-            const env = us.filter(u => u.accDesg && u.accDesg.envio > u.accDesg.instal).length;
-            const ins = us.length - env;
-            const dEnv = us.reduce((s2, u) => s2 + ((u.accDesg && u.accDesg.envio) || 0), 0), dIns = us.reduce((s2, u) => s2 + ((u.accDesg && u.accDesg.instal) || 0), 0);
-            return `<div class="hint" style="font-size:11px; font-weight:400; margin-top:2px;" title="Días de demora aportados: envío ${dEnv} dh · instalación ${dIns} dh">📦 envío (pedido): ${env} · 🔧 instalación: ${ins}</div>`;
-          })() : ''}</span>
+          <span class="name">${tr || x.k === 'turno' ? '' : `<span class="ent-trk">${trIcon(x.k)}</span>`}${a.icon} ${escapeHtml(a.label)}</span>
           <div class="track"><div class="fill" style="width:${Math.max(p, 1)}%; background:${a.color};"></div><span class="pct">${p}%</span></div>
           <span class="meta" title="Suma de días que esta área corrió las entregas fuera de plazo · ${Math.round(x.dias / totDias * 100)}% de todos los días de atraso · repartido entre los ${tarde.length} autos fuera de plazo da ${(x.dias / Math.max(1, tarde.length)).toFixed(1)} dh por auto"><b>${x.dias.toLocaleString('es-AR')} dh</b> · ${Math.round(x.dias / totDias * 100)}%<br>${(x.dias / Math.max(1, tarde.length)).toFixed(1).replace('.', ',')} dh por auto</span>
           <span class="meta"><b>${x.inv.toLocaleString('es-AR')}</b> de ${tarde.length.toLocaleString('es-AR')} autos<br>aportó en ${x.n.toLocaleString('es-AR')} (${pp}%)</span>
@@ -10235,7 +10221,7 @@
   // Valores por auto de cada instancia (incluye tramos que no son etapas: patentamiento
   // completo y el tramo con el auto listo dividido en contactación / agenda / cliente).
   const SPC_GRUPOS = [
-    ['🔧 Circuito físico', ['Arribo unidad', 'Alistaje', 'Cierre avería', 'Envío a accesorios', 'Regreso accesorios', 'Accesorios']],
+    ['🔧 Circuito físico', ['Arribo unidad', 'Alistaje', 'Cierre avería', 'Accesorios']],
     ['📄 Circuito documental', ['Pago fábrica', 'Certificado', 'Liquidación crédito', 'Gestoría interna', 'Gestoría externa', 'Patentamiento por cliente', 'Patentamiento (venta → patente)', 'Carpeta GEAC', 'Bloqueo saldo / pago']],
     ['📅 Entrega', ['Patentamiento → entrega', 'Entrega: auto listo → entrega', '📞 Contactación (auto listo → turno dado)', '⏳ Cliente confirmó el turno', '🗓️ Espera de turno libre', '🙋 Elección del cliente']],
     ['⏱️ Total', ['Total: venta → entrega']]
@@ -10390,7 +10376,7 @@
     if (e.key === 'patente') return e.area === 'cliente' ? 'Patentamiento por cliente' : (e.area === 'gestoria' ? 'Gestoría externa' : 'Patentamiento');
     return e.label.replace(/ \(.*\)$/, '');
   }
-  const ENT_COL_ORDEN = ['Arribo unidad', 'Alistaje', 'Cierre avería', 'Envío a accesorios', 'Regreso accesorios', 'Accesorios', 'Pago fábrica', 'Certificado', 'Liquidación crédito', 'Gestoría interna', 'Gestoría externa', 'Patentamiento por cliente', 'Patentamiento', 'Carpeta GEAC'];
+  const ENT_COL_ORDEN = ['Arribo unidad', 'Alistaje', 'Cierre avería', 'Accesorios', 'Pago fábrica', 'Certificado', 'Liquidación crédito', 'Gestoría interna', 'Gestoría externa', 'Patentamiento por cliente', 'Patentamiento', 'Carpeta GEAC'];
   function entExportData(){
     const brandLabel = b => (typeof PATENTADOS_BRAND_LABELS !== 'undefined' && PATENTADOS_BRAND_LABELS[b]) || b;
     return ENT_STATE.lastRows.map(u => {
