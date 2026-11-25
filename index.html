@@ -882,10 +882,13 @@
   /* Rol "accesorios": Accesorios (Entregas y Aceleración) + Agenda de turnos (sin editar) */
   body.rol-accesorios #tabNav .tab-btn:not([data-tab="entregas"]):not([data-tab="aceleracion"]),
   body.rol-accesorios #tabNav .fi-search,
-  body.rol-accesorios #entregasSubNav .subtab-btn:not([data-subtab="agenda"]):not([data-subtab="accesorios"]),
+  body.rol-accesorios #entregasSubNav .subtab-btn:not([data-subtab="agenda"]):not([data-subtab="accesorios"]):not([data-subtab="facturados"]):not([data-subtab="patentados"]),
   body.rol-accesorios #aceleracionSubNav .subtab-btn:not([data-subtab="accesorios"]),
   body.rol-accesorios #agSinEntregaBtn,
   body.rol-accesorios #dropZoneLocked { display:none !important; }
+  /* Accesorios ve Facturados y Patentados solo para consultar: los controles de edición de la tabla quedan inactivos */
+  body.rol-accesorios #tabPatentados table input, body.rol-accesorios #tabPatentados table textarea,
+  body.rol-accesorios #tabPatentados table select, body.rol-accesorios #tabPatentados table button:not(.sort-btn) { pointer-events:none; opacity:.45; }
   /* Rol Call: da turnos — solo facturados, patentados, contactación, agenda y la ficha */
   body.rol-call #tabNav .tab-btn:not([data-tab="entregas"]),
   body.rol-call #entregasSubNav .subtab-btn:not([data-subtab="facturados"]):not([data-subtab="patentados"]):not([data-subtab="contactacion"]):not([data-subtab="agenda"]),
@@ -2986,7 +2989,7 @@
             <option value="usuario">Usuario</option>
             <option value="entregas">Entregas</option>
             <option value="usados">Usados (solo ve la agenda)</option>
-            <option value="accesorios">Accesorios (accesorios + agenda)</option>
+            <option value="accesorios">Accesorios (accesorios + agenda; facturados y patentados solo lectura)</option>
             <option value="call">Call (da turnos: facturados, patentados, contactación, agenda y ficha)</option>
             <option value="admin">Administrador</option>
           </select>
@@ -3033,7 +3036,7 @@
           <option value="usuario">Usuario</option>
           <option value="entregas">Entregas</option>
           <option value="usados">Usados (solo ve la agenda)</option>
-            <option value="accesorios">Accesorios (accesorios + agenda)</option>
+            <option value="accesorios">Accesorios (accesorios + agenda; facturados y patentados solo lectura)</option>
             <option value="call">Call (da turnos: facturados, patentados, contactación, agenda y ficha)</option>
           <option value="admin">Administrador</option>
         </select>
@@ -3552,7 +3555,10 @@
     // rechaza igual, pero lo cortamos acá antes para no generar un guardado optimista
     // que después haya que revertir, y para avisar al toque por qué no se guardó.
     if (CURRENT_SESSION && CURRENT_SESSION.role === 'usados') return Promise.reject(new Error('Tu rol solo puede consultar la agenda.'));
-    if (CURRENT_SESSION && CURRENT_SESSION.role === 'accesorios' && seccion !== 'accesorios') return Promise.reject(new Error('Tu rol solo puede cargar observaciones de accesorios.'));
+    if (CURRENT_SESSION && CURRENT_SESSION.role === 'accesorios' && seccion !== 'accesorios'){
+      if (!seccion.startsWith('snapshot_')) showToast('⚠️ Tu rol (Accesorios) solo puede consultar esta sección, no modificarla.', true);
+      return Promise.reject(new Error('Tu rol solo puede cargar observaciones de accesorios.'));
+    }
     if (CURRENT_SESSION && (CURRENT_SESSION.role === 'entregas' || CURRENT_SESSION.role === 'call') && seccion !== 'contactacion' && seccion !== 'contactacionfinalizado' && seccion !== 'bloqueosaldo' && seccion !== 'clienteexterno' && seccion !== 'excepcion' && seccion !== 'turnoinfo' && seccion !== 'notaentrega' && !seccion.startsWith('snapshot_')){
       showToast('⚠️ Tu rol (entregas) solo puede editar Contactación.', true);
       return Promise.reject(new Error('Rol sin permiso de edición para esta sección'));
@@ -12672,7 +12678,7 @@
   //  accesorios  → Entregas › Accesorios y Agenda · Aceleración › Accesorios
   const ROL_VISTAS = {
     usados:     {tabs:['entregas'], entregas:['agenda'], acel:[], inicio:['entregas','agenda']},
-    accesorios: {tabs:['entregas','aceleracion'], entregas:['accesorios','agenda'], acel:['accesorios'], inicio:['entregas','accesorios']},
+    accesorios: {tabs:['entregas','aceleracion'], entregas:['facturados','patentados','accesorios','agenda'], acel:['accesorios'], inicio:['entregas','accesorios']},
     call:       {tabs:['entregas'], entregas:['facturados','patentados','contactacion','agenda'], acel:[], inicio:['entregas','contactacion']}
   };
   function rolVista(){ return (CURRENT_SESSION && ROL_VISTAS[CURRENT_SESSION.role]) || null; }
