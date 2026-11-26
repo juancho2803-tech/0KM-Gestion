@@ -1578,7 +1578,7 @@
           <div id="algUbic"></div>
         </div>
         <div class="panel">
-          <div class="panel-head"><h3>📈 Turnos de alistaje</h3><div class="hint">Cuántos turnos había y cuántos se cumplieron (alistado el día del turno o antes) + lo programado · pasá el mouse por cada barra para el detalle</div></div>
+          <div class="panel-head"><h3>📈 Autos alistados por día vs. objetivo</h3><div class="hint">Cuántos autos se alistaron (con o sin turno) contra el objetivo, y cómo se cumplieron los turnos de alistaje · pasá el mouse por cada barra para el detalle</div></div>
           <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:6px;">
             <label class="hint" for="algFecha">Hasta</label><input type="date" id="algFecha" class="month-select" style="padding:5px 8px;">
             <div class="segmented" id="algVista"><button type="button" data-v="dia" class="active">Diaria</button><button type="button" data-v="sem">Semanal</button><button type="button" data-v="mes">Mensual</button></div>
@@ -4861,12 +4861,13 @@
       } else {
         for (let i = -5; i <= 1; i++){ const a = new Date(hoyR.getFullYear(), hoyR.getMonth() + i, 1); const b = new Date(a.getFullYear(), a.getMonth() + 1, 0); per.push({ini:a, fin:b, key:kOf(a), fut:i > 0, actual:i === 0}); }
       }
-      const tur = {}, cum = {}, venc = {}, alis = {}, arr = {}, tarde = {}, pendT = {};
+      const tur = {}, cum = {}, venc = {}, alis = {}, arr = {}, tarde = {}, pendT = {}, aConT = {}, aOtroT = {}, aSinT = {};
       ALL_ROWS.forEach(r => {
         if (!ALG.marcas.has(stkTxt(r, 'Marca').toUpperCase()) || !ALG.canales.has(stkTxt(r, 'Canal') || '(sin canal)')) return;
         const t = entMid(parseDateFlexible(r['Fecha Turno Alistaje'])), fa = entMid(parseDateFlexible(r['Fecha Alistaje'])), fr = entMid(parseDateFlexible(r['Fecha Arribo Unidad']));
         if (t){ const kk = kOf(t); tur[kk] = (tur[kk] || 0) + 1; if (t <= hoyR){ venc[kk] = (venc[kk] || 0) + 1; if (fa && fa <= t) cum[kk] = (cum[kk] || 0) + 1; else if (fa && fa <= hoyR) tarde[kk] = (tarde[kk] || 0) + 1; else pendT[kk] = (pendT[kk] || 0) + 1; } }
-        if (fa && fa <= hoyR) alis[kOf(fa)] = (alis[kOf(fa)] || 0) + 1;
+        if (fa && fa <= hoyR){ const ka = kOf(fa); alis[ka] = (alis[ka] || 0) + 1;
+          if (!t) aSinT[ka] = (aSinT[ka] || 0) + 1; else if (kOf(t) === ka) aConT[ka] = (aConT[ka] || 0) + 1; else aOtroT[ka] = (aOtroT[ka] || 0) + 1; }
         if (fr && fr <= hoyR) arr[kOf(fr)] = (arr[kOf(fr)] || 0) + 1;
       });
       const objDia = Math.max(1, parseInt($('algObj').value, 10) || 24);
@@ -4884,17 +4885,17 @@
         const t = tur[x.key] || 0, tv = venc[x.key] || 0, c = cum[x.key] || 0, a = alis[x.key] || 0, fut = x.fut;
         const pc = tv ? Math.round(c / tv * 100) : null, col = pc === null ? 'var(--text-faint)' : pc >= 90 ? 'var(--green)' : pc >= 70 ? 'var(--amber)' : 'var(--red)';
         const rango = V === 'dia' ? entFmt(x.ini) : `${entFmt(x.ini)} al ${entFmt(x.fin)}`;
-        return `<div style="flex:1; display:flex; flex-direction:column; align-items:center; gap:3px; ${fut ? 'opacity:.75;' : ''}" title="${rango}&#10;${fut ? `${t} turnos de alistaje programados` : `Turnos de alistaje: ${tv}&#10;✔ Alistados a tiempo: ${c}&#10;⏱ Alistados después del turno: ${tarde[x.key] || 0}&#10;✖ Todavía sin alistar: ${pendT[x.key] || 0}${t > tv ? `&#10;Además, ${t - tv} turnos más adelante en el período` : ''}&#10;Autos alistados en total (con y sin turno): ${a}&#10;🎯 Objetivo: ${x.obj} (${objDia} por día hábil) → ${a >= x.obj ? 'cumplido ✅' : 'faltaron ' + (x.obj - a)}`}">
+        return `<div style="flex:1; display:flex; flex-direction:column; align-items:center; gap:3px; ${fut ? 'opacity:.75;' : ''}" title="${rango}&#10;${fut ? `${t} turnos de alistaje programados` : `🧹 AUTOS ALISTADOS: ${a} (objetivo ${x.obj} → ${a >= x.obj ? 'cumplido ✅' : 'faltaron ' + (x.obj - a)})&#10;   · ${aConT[x.key] || 0} tenían turno ${V === 'dia' ? 'ese mismo día' : 'en el período'}&#10;   · ${aOtroT[x.key] || 0} tenían turno para otro ${V === 'dia' ? 'día' : 'período'} (adelantados o atrasados)&#10;   · ${aSinT[x.key] || 0} sin turno de alistaje&#10;&#10;📅 TURNOS DE ALISTAJE ${V === 'dia' ? 'DE ESE DÍA' : 'DEL PERÍODO'}: ${tv}&#10;   ✔ alistados a tiempo: ${c}&#10;   ⏱ alistados después: ${tarde[x.key] || 0}&#10;   ✖ todavía sin alistar: ${pendT[x.key] || 0}${t > tv ? `&#10;   + ${t - tv} turnos más adelante en el período` : ''}`}">
           <div style="position:relative; display:flex; gap:2px; align-items:flex-end; height:120px; padding:0 2px;">
             <div style="width:${V === 'mes' ? 14 : 9}px; height:${Math.round(t / maxR * 114)}px; background:var(--blue); opacity:${fut ? .45 : .55}; border-radius:3px 3px 0 0; ${fut ? 'border:1px dashed var(--blue);' : ''}"></div>
             ${fut ? '' : `<div style="width:${V === 'mes' ? 14 : 9}px; height:${Math.round(c / maxR * 114)}px; background:var(--green); border-radius:3px 3px 0 0;"></div>
             <div style="width:${V === 'mes' ? 14 : 9}px; height:${Math.round(a / maxR * 114)}px; background:${a >= x.obj ? '#a78bfa' : '#a78bfa'}; opacity:.9; border-radius:3px 3px 0 0;"></div>`}
             ${x.obj ? `<div style="position:absolute; left:-2px; right:-2px; bottom:${Math.round(x.obj / maxR * 114)}px; border-top:2px dashed var(--red);"></div>` : ''}
           </div>
-          <div style="font-size:10.5px; font-weight:700; color:${fut ? 'var(--text-dim)' : col};">${fut ? t : (tv ? c + '/' + tv : '—')}</div>
-          ${fut ? '' : `<div style="font-size:10px; font-weight:700; color:${a >= x.obj ? 'var(--green)' : 'var(--red)'};" title="Alistados vs. objetivo">${a}/${x.obj}</div>`}
+          ${fut ? `<div style="font-size:10px; color:var(--text-dim);">${t} turnos</div>` : `<div style="font-size:12px; font-weight:800; color:${a >= x.obj ? 'var(--green)' : 'var(--red)'};" title="Autos alistados / objetivo">${a}<span style="font-size:9.5px; font-weight:600; color:var(--text-faint);">/${x.obj}</span></div>
+          <div style="font-size:9.5px; color:${col};" title="Turnos cumplidos / turnos">${tv ? c + '/' + tv + ' t.' : '—'}</div>`}
           <div class="hint" style="font-size:9.5px; line-height:1.1; text-align:center; ${x.actual ? 'color:var(--blue); font-weight:700;' : ''}">${lbl(x)}</div></div>`; }).join('') + '</div>' +
-        `<div class="hint" style="margin-top:6px; font-size:12px; line-height:1.55;"><span style="color:var(--blue); opacity:.7;">■</span> turnos de alistaje · <span style="color:var(--green);">■</span> cumplidos (alistado el día del turno o antes) · <span style="color:#a78bfa;">■</span> autos alistados en total · <span style="color:var(--red);">- - -</span> objetivo (${objDia} por día hábil) · barras punteadas = programados<br>` +
+        `<div class="hint" style="margin-top:6px; font-size:12px; line-height:1.55;"><b>Número grande</b> = autos alistados ${V === 'dia' ? 'ese día' : 'en el período'} / objetivo · debajo, turnos cumplidos / turnos.<br><span style="color:#a78bfa;">■</span> autos alistados · <span style="color:var(--red);">- - -</span> objetivo (${objDia} por día hábil) · <span style="color:var(--blue); opacity:.7;">■</span> turnos de alistaje · <span style="color:var(--green);">■</span> turnos cumplidos (alistado el día del turno o antes) · barras punteadas = programados.<br>Los alistados pueden ser más que los turnos: también se alistan autos sin turno o con turno de otro día.<br>` +
         (() => { const pp = pasados.filter(x => x.obj); const okP = pp.filter(x => (alis[x.key] || 0) >= x.obj).length; const objT = pp.reduce((a2, x) => a2 + x.obj, 0);
           const diasH = V === 'dia' ? pp.length : pp.reduce((a2, x) => a2 + x.obj / objDia, 0);
           return `🎯 <b>Objetivo de alistaje:</b> se alistaron <b>${totA}</b> de <b>${objT}</b> (${objT ? Math.round(totA / objT * 100) : 0}%) · promedio <b>${(totA / Math.max(1, diasH)).toFixed(1).replace('.', ',')}</b> por día hábil vs. ${objDia} · ${V === 'dia' ? 'días' : V === 'sem' ? 'semanas' : 'meses'} que llegaron al objetivo: <b style="color:${okP === pp.length ? 'var(--green)' : 'var(--red)'};">${okP} de ${pp.length}</b><br>`; })() +
@@ -4902,11 +4903,11 @@
         (!totA && !totE ? 'sin movimientos' : totA >= totE ? '<span style="color:var(--green); font-weight:700;">la cola se achica ✅</span>' : `<span style="color:var(--red); font-weight:700;">la cola crece (+${totE - totA})</span>`) +
         `<br>Programados después del ${entFmt(hoyR)}: <b>${totF}</b> turnos</div>` +
         // Tabla: turnos que había y cuántos se finalizaron en cada período
-        `<div class="table-scroll" style="max-height:260px; margin-top:10px;"><table class="data-table"><thead><tr><th>${V === 'dia' ? 'Día' : V === 'sem' ? 'Semana' : 'Mes'}</th><th style="text-align:right;">Turnos</th><th style="text-align:right;">Finalizados a tiempo</th><th style="text-align:right;">Finalizados tarde</th><th style="text-align:right;">Sin finalizar</th><th style="text-align:right;">Cumplimiento</th><th style="text-align:right;">Alistados total / objetivo</th></tr></thead><tbody>` +
+        `<div class="table-scroll" style="max-height:260px; margin-top:10px;"><table class="data-table"><thead><tr><th>${V === 'dia' ? 'Día' : V === 'sem' ? 'Semana' : 'Mes'}</th><th style="text-align:right;">🧹 Autos alistados / objetivo</th><th style="text-align:right;">Turnos</th><th style="text-align:right;">Finalizados a tiempo</th><th style="text-align:right;">Finalizados tarde</th><th style="text-align:right;">Sin finalizar</th><th style="text-align:right;">Cumplimiento del turno</th></tr></thead><tbody>` +
         pasados.slice().reverse().map(x => { const tv = venc[x.key] || 0, c = cum[x.key] || 0, ta = tarde[x.key] || 0, pe = pendT[x.key] || 0, pc = tv ? Math.round(c / tv * 100) : null;
           const col = pc === null ? 'var(--text-faint)' : pc >= 90 ? 'var(--green)' : pc >= 70 ? 'var(--amber)' : 'var(--red)';
           const nom = V === 'dia' ? `${dn[x.ini.getDay()]} ${entFmt(x.ini)}` : V === 'sem' ? `${entFmt(x.ini).slice(0, 5)} al ${entFmt(x.fin).slice(0, 5)}` : `${mn[x.ini.getMonth()]} ${x.ini.getFullYear()}`;
-          return `<tr${x.actual ? ' style="background:rgba(76,141,255,.08);"' : ''}><td>${nom}${x.actual ? ' <span class="hint">(en curso)</span>' : ''}</td><td style="text-align:right;"><b>${tv}</b></td><td style="text-align:right; color:var(--green);">${c}</td><td style="text-align:right; color:var(--amber);">${ta || '—'}</td><td style="text-align:right; color:${pe ? 'var(--red)' : 'var(--text-faint)'};">${pe || '—'}</td><td style="text-align:right; font-weight:700; color:${col};">${pc === null ? '—' : pc + '%'}</td><td style="text-align:right; font-weight:700; color:${(alis[x.key] || 0) >= x.obj ? 'var(--green)' : 'var(--red)'};">${alis[x.key] || 0} / ${x.obj}</td></tr>`; }).join('') +
+          return `<tr${x.actual ? ' style="background:rgba(76,141,255,.08);"' : ''}><td>${nom}${x.actual ? ' <span class="hint">(en curso)</span>' : ''}</td><td style="text-align:right; font-weight:800; color:${(alis[x.key] || 0) >= x.obj ? 'var(--green)' : 'var(--red)'};" title="${aConT[x.key] || 0} con turno ese día · ${aOtroT[x.key] || 0} con turno de otro día · ${aSinT[x.key] || 0} sin turno">${alis[x.key] || 0} / ${x.obj}</td><td style="text-align:right;"><b>${tv}</b></td><td style="text-align:right; color:var(--green);">${c}</td><td style="text-align:right; color:var(--amber);">${ta || '—'}</td><td style="text-align:right; color:${pe ? 'var(--red)' : 'var(--text-faint)'};">${pe || '—'}</td><td style="text-align:right; font-weight:700; color:${col};">${pc === null ? '—' : pc + '%'}</td></tr>`; }).join('') +
         '</tbody></table></div>';
     }
     // Cola de trabajo
