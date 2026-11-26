@@ -1583,7 +1583,24 @@
             <label class="hint" for="algFecha">Hasta</label><input type="date" id="algFecha" class="month-select" style="padding:5px 8px;">
             <div class="segmented" id="algVista"><button type="button" data-v="dia" class="active">Diaria</button><button type="button" data-v="sem">Semanal</button><button type="button" data-v="mes">Mensual</button></div>
             <button type="button" class="page-btn" id="algHoyBtn" style="font-size:12px;">Hoy</button>
-            <label class="hint" for="algObj" style="margin-left:6px;">🎯 Objetivo por día</label><input type="number" id="algObj" min="1" step="1" value="24" class="month-select" style="width:64px; padding:5px 6px;">
+            <button type="button" class="page-btn" id="algCfgBtn" title="Operarios y objetivo por día" style="font-size:12px; margin-left:auto;">⚙️ Operarios y objetivo</button>
+          </div>
+          <div id="algCfg" style="display:none; margin:6px 0 10px; padding:12px; border:1px solid var(--border); border-radius:12px; background:var(--surface-2);">
+            <div style="display:flex; gap:12px; flex-wrap:wrap; align-items:center;">
+              <label class="hint">Operarios habituales <input type="number" id="algCfgOps" min="1" step="1" style="width:60px; padding:4px 6px; border:1px solid var(--border); border-radius:8px; background:var(--surface); color:var(--text); font:inherit;"></label>
+              <label class="hint">Autos por operario por día <input type="number" id="algCfgPor" min="1" step="1" style="width:60px; padding:4px 6px; border:1px solid var(--border); border-radius:8px; background:var(--surface); color:var(--text); font:inherit;"></label>
+              <span class="hint">→ objetivo habitual: <b id="algCfgObj" style="color:var(--text);">—</b> autos por día</span>
+            </div>
+            <div class="an-sub" style="margin:12px 0 6px;">📆 Días con otra cantidad de operarios (feriados puente, licencias, capacitaciones…)</div>
+            <div id="algCfgExc"></div>
+            <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-top:6px;">
+              <input type="date" id="algCfgFecha" style="padding:4px 6px; border:1px solid var(--border); border-radius:8px; background:var(--surface); color:var(--text); font:inherit;">
+              <label class="hint">operarios <input type="number" id="algCfgFOps" min="0" step="1" style="width:60px; padding:4px 6px; border:1px solid var(--border); border-radius:8px; background:var(--surface); color:var(--text); font:inherit;"></label>
+              <button type="button" class="page-btn" id="algCfgAdd" style="font-size:12px;">➕ Agregar día</button>
+              <span style="flex:1;"></span>
+              <span class="hint" id="algCfgEstado"></span>
+              <button type="button" class="page-btn" id="algCfgSave" style="font-size:12px;">💾 Guardar para todos</button>
+            </div>
           </div>
           <div id="algRitmo"></div>
         </div>
@@ -3603,7 +3620,7 @@
       if (!seccion.startsWith('snapshot_')) showToast('⚠️ Tu rol (Accesorios) solo puede consultar esta sección, no modificarla.', true);
       return Promise.reject(new Error('Tu rol solo puede cargar observaciones de accesorios.'));
     }
-    if (CURRENT_SESSION && (CURRENT_SESSION.role === 'entregas' || CURRENT_SESSION.role === 'call') && seccion !== 'contactacion' && seccion !== 'contactacionfinalizado' && seccion !== 'bloqueosaldo' && seccion !== 'clienteexterno' && seccion !== 'excepcion' && seccion !== 'turnoinfo' && seccion !== 'notaentrega' && !seccion.startsWith('snapshot_')){
+    if (CURRENT_SESSION && (CURRENT_SESSION.role === 'entregas' || CURRENT_SESSION.role === 'call') && seccion !== 'contactacion' && seccion !== 'contactacionfinalizado' && seccion !== 'bloqueosaldo' && seccion !== 'clienteexterno' && seccion !== 'excepcion' && seccion !== 'turnoinfo' && seccion !== 'notaentrega' && seccion !== 'alistajecfg' && !seccion.startsWith('snapshot_')){
       showToast('⚠️ Tu rol (entregas) solo puede editar Contactación.', true);
       return Promise.reject(new Error('Rol sin permiso de edición para esta sección'));
     }
@@ -4722,6 +4739,25 @@
     5: {t:'🔵 Stock (sin operación)', c:'var(--blue)'}
   };
   const algHoy = () => { const h = new Date(); h.setHours(0,0,0,0); return h; };
+  // Operarios de alistaje: objetivo del día = operarios × autos por operario (se guarda compartido en la app)
+  const ALG_CFG_KEY = ['__ALISTAJE__', 'alistajecfg'];
+  let ALG_CFG_EDIT = null;
+  function algCfg(){
+    let c = null;
+    try { const o = OBSERVATIONS.get(obsKey(ALG_CFG_KEY[0], ALG_CFG_KEY[1])); if (o && o.observacion) c = JSON.parse(o.observacion); } catch(e){}
+    c = c || {};
+    return {ops: c.ops || 3, por: c.por || 8, exc: c.exc || {}};
+  }
+  const algIso = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  function algObjDe(d, cfg){ const e = cfg.exc[algIso(d)]; return (e !== undefined ? e : cfg.ops) * cfg.por; }
+  function algCfgRender(){
+    const c = ALG_CFG_EDIT; if (!c) return;
+    $('algCfgOps').value = c.ops; $('algCfgPor').value = c.por; $('algCfgObj').textContent = c.ops * c.por;
+    const ks = Object.keys(c.exc).sort();
+    $('algCfgExc').innerHTML = ks.length ? ks.map(k => { const d = new Date(k + 'T00:00:00');
+      return `<div style="display:flex; gap:10px; align-items:center; padding:4px 0; border-bottom:1px dashed var(--border);"><span style="min-width:150px;">${['dom','lun','mar','mié','jue','vie','sáb'][d.getDay()]} ${entFmt(d)}</span><b>${c.exc[k]} operarios</b><span class="hint">→ objetivo ${c.exc[k] * c.por}</span><button type="button" class="page-btn" data-del="${k}" style="font-size:11px; padding:2px 8px;">✕</button></div>`; }).join('')
+      : '<div class="hint">Ninguno: todos los días con los operarios habituales</div>';
+  }
   // Cumplimiento del turno de alistaje: autos con turno en los últimos 10 días hábiles (hasta hoy)
   // → ¿se alistaron el día del turno (o antes)?
   function algCumplimiento(marcasOk){
@@ -4785,8 +4821,21 @@
     $('algVista').addEventListener('click', e => { const b = e.target.closest('button[data-v]'); if (!b) return; ALG.vista = b.dataset.v;
       $('algVista').querySelectorAll('button').forEach(x => x.classList.toggle('active', x === b)); renderAlistajeGest(); });
     $('algFecha').addEventListener('change', e => { const v = e.target.value; ALG.ref = v ? new Date(v + 'T00:00:00') : null; renderAlistajeGest(); });
-    try { const o = localStorage.getItem('algObjDia'); if (o) $('algObj').value = o; } catch(e){}
-    $('algObj').addEventListener('change', e => { try { localStorage.setItem('algObjDia', e.target.value); } catch(_){} renderAlistajeGest(); });
+    $('algCfgBtn').addEventListener('click', () => { const v = $('algCfg').style.display === 'none'; $('algCfg').style.display = v ? '' : 'none';
+      if (v){ ALG_CFG_EDIT = JSON.parse(JSON.stringify(algCfg())); $('algCfgFecha').value = algIso(algHoy()); $('algCfgFOps').value = Math.max(0, ALG_CFG_EDIT.ops - 1); $('algCfgEstado').textContent = ''; algCfgRender(); } });
+    $('algCfgOps').addEventListener('input', e => { ALG_CFG_EDIT.ops = Math.max(1, parseInt(e.target.value, 10) || 1); $('algCfgObj').textContent = ALG_CFG_EDIT.ops * ALG_CFG_EDIT.por; });
+    $('algCfgPor').addEventListener('input', e => { ALG_CFG_EDIT.por = Math.max(1, parseInt(e.target.value, 10) || 1); algCfgRender(); });
+    $('algCfgAdd').addEventListener('click', () => { const f = $('algCfgFecha').value, n = parseInt($('algCfgFOps').value, 10); if (!f || isNaN(n) || n < 0) return; ALG_CFG_EDIT.exc[f] = n; algCfgRender(); });
+    $('algCfgExc').addEventListener('click', e => { const b = e.target.closest('[data-del]'); if (!b) return; delete ALG_CFG_EDIT.exc[b.dataset.del]; algCfgRender(); });
+    $('algCfgSave').addEventListener('click', () => {
+      // se guardan solo los días desde hace 3 meses (lo viejo no hace falta)
+      const lim = algIso(new Date(Date.now() - 95 * 864e5)); Object.keys(ALG_CFG_EDIT.exc).forEach(k => { if (k < lim) delete ALG_CFG_EDIT.exc[k]; });
+      $('algCfgEstado').textContent = 'Guardando…';
+      saveObservation(ALG_CFG_KEY[0], ALG_CFG_KEY[1], {observacion: JSON.stringify(ALG_CFG_EDIT)})
+        .then(() => { $('algCfgEstado').textContent = '✅ Guardado'; renderAlistajeGest(); })
+        .catch(err => { $('algCfgEstado').textContent = '⚠️ ' + (err && err.message || 'No se pudo guardar'); });
+      renderAlistajeGest();
+    });
     $('algHoyBtn').addEventListener('click', () => { ALG.ref = null; $('algFecha').value = ''; renderAlistajeGest(); });
     $('algExcel').addEventListener('click', () => {
       const data = (ALG.ult || []).map(([r, x]) => ({
@@ -4872,9 +4921,10 @@
           if (!t) aSinT[ka] = (aSinT[ka] || 0) + 1; else if (kOf(t) === ka) aConT[ka] = (aConT[ka] || 0) + 1; else aOtroT[ka] = (aOtroT[ka] || 0) + 1; }
         if (fr && fr <= hoyR) arr[kOf(fr)] = (arr[kOf(fr)] || 0) + 1;
       });
-      const objDia = Math.max(1, parseInt($('algObj').value, 10) || 24);
-      const habEntre = (a, b) => { let n = 0; const d2 = new Date(a); while (d2 <= b){ if (esHab(d2)) n++; d2.setDate(d2.getDate() + 1); } return n; };
-      per.forEach(x => { x.obj = objDia * (V === 'dia' ? (esHab(x.ini) ? 1 : 0) : habEntre(x.ini, x.actual ? hoyR : x.fin)); });
+      const cfgA = (ALG_CFG_EDIT && $('algCfg').style.display !== 'none') ? ALG_CFG_EDIT : algCfg();
+      const objDia = cfgA.ops * cfgA.por;
+      const objEntre = (a, b) => { let n = 0; const d2 = new Date(a); while (d2 <= b){ if (esHab(d2)) n += algObjDe(d2, cfgA); d2.setDate(d2.getDate() + 1); } return n; };
+      per.forEach(x => { x.obj = V === 'dia' ? (esHab(x.ini) ? algObjDe(x.ini, cfgA) : 0) : objEntre(x.ini, x.actual ? hoyR : x.fin); });
       const maxR = Math.max(1, ...per.map(x => Math.max(tur[x.key] || 0, alis[x.key] || 0, x.obj || 0)));
       const dn = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'], mn = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
       const lbl = x => V === 'dia' ? (x.actual ? (ALG.ref ? 'ref.' : 'HOY') + `<br>${x.ini.getDate()}/${x.ini.getMonth() + 1}` : `${dn[x.ini.getDay()]}<br>${x.ini.getDate()}/${x.ini.getMonth() + 1}`)
@@ -4888,15 +4938,17 @@
       const cerrados = pasados.filter(x => x.obj && !(x.actual && !ALG.ref));
       const okP = cerrados.filter(x => (alis[x.key] || 0) >= x.obj).length, conObj = cerrados.length;
       const objT = pasados.reduce((a2, x) => a2 + (x.obj || 0), 0);
-      const diasH = pasados.reduce((a2, x) => a2 + (x.obj || 0) / objDia, 0);
+      const habN = (a, b) => { let n = 0; const d2 = new Date(a); while (d2 <= b){ if (esHab(d2)) n++; d2.setDate(d2.getDate() + 1); } return n; };
+      const diasH = pasados.reduce((a2, x) => a2 + (V === 'dia' ? (x.obj ? 1 : 0) : habN(x.ini, x.actual ? hoyR : x.fin)), 0);
+      const objProm = diasH ? pasados.reduce((a2, x) => a2 + (x.obj || 0), 0) / diasH : objDia;
       const nomP = V === 'dia' ? 'días' : V === 'sem' ? 'semanas' : 'meses';
       $('algRitmo').innerHTML =
-        `<div style="font-size:13px; margin:2px 0 8px;">Turnos: <b>${sum(pasados, tur)}</b> · alistados: <b>${totA}</b> · Promedio: <b style="font-size:18px; color:${totA / Math.max(1, diasH) >= objDia ? 'var(--green)' : 'var(--red)'};">${(totA / Math.max(1, diasH)).toFixed(1).replace('.', ',')}</b> autos por día · objetivo <b>${objDia}</b> · llegaron al objetivo <b>${okP} de ${conObj}</b> ${nomP}</div>` +
+        `<div style="font-size:13px; margin:2px 0 8px;">Turnos: <b>${sum(pasados, tur)}</b> · alistados: <b>${totA}</b> · Promedio: <b style="font-size:18px; color:${totA / Math.max(1, diasH) >= objProm ? 'var(--green)' : 'var(--red)'};">${(totA / Math.max(1, diasH)).toFixed(1).replace('.', ',')}</b> autos por día · objetivo <b>${Number.isInteger(objProm) ? objProm : objProm.toFixed(1).replace('.', ',')}</b> · llegaron al objetivo <b>${okP} de ${conObj}</b> ${nomP}</div>` +
         `<div style="position:relative; display:flex; gap:6px; align-items:flex-end; min-height:200px; padding:8px 0 0; margin-top:6px;">` + pasados.map(x => {
           const a = alis[x.key] || 0, ok = a >= x.obj, enCurso = x.actual && !ok && !ALG.ref;
           const colB = ok ? 'var(--green)' : enCurso ? 'var(--blue)' : 'var(--red)';
           const rango = V === 'dia' ? entFmt(x.ini) : `${entFmt(x.ini)} al ${entFmt(x.fin)}`;
-          return `<div style="flex:1; display:flex; flex-direction:column; align-items:center; gap:4px;" title="${rango}: había ${tur[x.key] || 0} turnos de alistaje y se alistaron ${a} autos · objetivo ${x.obj} · ${ok ? 'objetivo cumplido ✅' : (enCurso ? 'en curso: faltan ' : 'faltaron ') + (x.obj - a)}">
+          return `<div style="flex:1; display:flex; flex-direction:column; align-items:center; gap:4px;" title="${rango}: había ${tur[x.key] || 0} turnos de alistaje y se alistaron ${a} autos · objetivo ${x.obj}${V === 'dia' && cfgA.exc[algIso(x.ini)] !== undefined ? ` (${cfgA.exc[algIso(x.ini)]} operarios ese día)` : ''} · ${ok ? 'objetivo cumplido ✅' : (enCurso ? 'en curso: faltan ' : 'faltaron ') + (x.obj - a)}">
             <div style="font-size:13px; font-weight:800; color:${colB}; line-height:1;">${a}</div>
             <div style="font-size:10px; color:var(--text-dim); line-height:1;">de ${tur[x.key] || 0} turnos</div>
             <div style="position:relative; width:100%; max-width:42px; height:130px; display:flex; align-items:flex-end; justify-content:center;">
@@ -4904,8 +4956,8 @@
               <div style="position:relative; width:62%; height:${Math.round(a / maxS * 128)}px; background:${colB}; opacity:.9; border-radius:4px 4px 0 0;"></div>
               ${x.obj ? `<div style="position:absolute; left:-3px; right:-3px; bottom:${Math.round(x.obj / maxS * 128)}px; border-top:2px dashed var(--text);"></div>` : ''}
             </div>
-            <div class="hint" style="font-size:10px; line-height:1.15; text-align:center; ${x.actual ? 'color:var(--blue); font-weight:700;' : ''}">${lbl(x)}</div></div>`; }).join('') + '</div>' +
-        `<div class="hint" style="margin-top:6px; font-size:12px;"><span style="display:inline-block; width:10px; height:10px; border:2px solid var(--text-dim); vertical-align:middle;"></span> turnos de alistaje de ese día · barra de color = autos alistados: <span style="color:var(--green);">■</span> llegó al objetivo · <span style="color:var(--red);">■</span> no llegó · <span style="color:var(--blue);">■</span> en curso (hoy / período actual) · <b>- - -</b> objetivo (${objDia} autos por día hábil${V === 'dia' ? '' : ', multiplicado por los días hábiles del período'})</div>` +
+            <div class="hint" style="font-size:10px; line-height:1.15; text-align:center; ${x.actual ? 'color:var(--blue); font-weight:700;' : ''}">${lbl(x)}${V === 'dia' && cfgA.exc[algIso(x.ini)] !== undefined ? `<br><span style="color:var(--amber);">👷 ${cfgA.exc[algIso(x.ini)]}</span>` : ''}</div></div>`; }).join('') + '</div>' +
+        `<div class="hint" style="margin-top:6px; font-size:12px;"><span style="display:inline-block; width:10px; height:10px; border:2px solid var(--text-dim); vertical-align:middle;"></span> turnos de alistaje de ese día · barra de color = autos alistados: <span style="color:var(--green);">■</span> llegó al objetivo · <span style="color:var(--red);">■</span> no llegó · <span style="color:var(--blue);">■</span> en curso (hoy / período actual) · <b>- - -</b> objetivo (operarios del día × ${cfgA.por} autos · habitual ${objDia}${V === 'dia' ? '' : '; se suma por cada día hábil del período'}) · se ajusta con ⚙️</div>` +
         `<details style="margin-top:10px;"><summary class="hint" style="cursor:pointer; font-size:12px;">Ver detalle de turnos de alistaje (para supervisión)</summary>` +
         `<div class="hint" style="margin-top:6px; font-size:12px; line-height:1.55;">Turnos de alistaje en el período: <b>${totT}</b>, cumplidos a tiempo <b>${totC}</b>${totT ? ` (${Math.round(totC / totT * 100)}%)` : ''} · arribaron <b>${totE}</b> autos · ` +
         (!totA && !totE ? 'sin movimientos' : totA >= totE ? '<span style="color:var(--green); font-weight:700;">la cola se achica ✅</span>' : `<span style="color:var(--red); font-weight:700;">la cola crece (+${totE - totA})</span>`) +
