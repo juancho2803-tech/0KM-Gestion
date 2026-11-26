@@ -1583,15 +1583,16 @@
             <label class="hint" for="algFecha">Hasta</label><input type="date" id="algFecha" class="month-select" style="padding:5px 8px;">
             <div class="segmented" id="algVista"><button type="button" data-v="dia" class="active">Diaria</button><button type="button" data-v="sem">Semanal</button><button type="button" data-v="mes">Mensual</button></div>
             <button type="button" class="page-btn" id="algHoyBtn" style="font-size:12px;">Hoy</button>
-            <button type="button" class="page-btn" id="algCfgBtn" title="Operarios y objetivo por día" style="font-size:12px; margin-left:auto;">⚙️ Operarios y objetivo</button>
+            <button type="button" class="page-btn" id="algCfgBtn" title="Objetivo, operarios y capacidad por día" style="font-size:12px; margin-left:auto;">⚙️ Objetivo y capacidad</button>
           </div>
           <div id="algCfg" style="display:none; margin:6px 0 10px; padding:12px; border:1px solid var(--border); border-radius:12px; background:var(--surface-2);">
             <div style="display:flex; gap:12px; flex-wrap:wrap; align-items:center;">
+              <label class="hint">🎯 Objetivo diario <input type="number" id="algCfgMeta" min="1" step="1" style="width:60px; padding:4px 6px; border:1px solid var(--border); border-radius:8px; background:var(--surface); color:var(--text); font:inherit;"></label>
               <label class="hint">Operarios habituales <input type="number" id="algCfgOps" min="1" step="1" style="width:60px; padding:4px 6px; border:1px solid var(--border); border-radius:8px; background:var(--surface); color:var(--text); font:inherit;"></label>
               <label class="hint">Autos por operario por día <input type="number" id="algCfgPor" min="1" step="1" style="width:60px; padding:4px 6px; border:1px solid var(--border); border-radius:8px; background:var(--surface); color:var(--text); font:inherit;"></label>
-              <span class="hint">→ objetivo habitual: <b id="algCfgObj" style="color:var(--text);">—</b> autos por día</span>
+              <span class="hint">→ capacidad habitual: <b id="algCfgObj" style="color:var(--text);">—</b> autos por día</span>
             </div>
-            <div class="an-sub" style="margin:12px 0 6px;">📆 Días con otra cantidad de operarios (feriados puente, licencias, capacitaciones…)</div>
+            <div class="an-sub" style="margin:12px 0 6px;">📆 Días con otra cantidad de operarios (licencias, capacitaciones…) — cambia la capacidad, no el objetivo</div>
             <div id="algCfgExc"></div>
             <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-top:6px;">
               <input type="date" id="algCfgFecha" style="padding:4px 6px; border:1px solid var(--border); border-radius:8px; background:var(--surface); color:var(--text); font:inherit;">
@@ -4746,16 +4747,17 @@
     let c = null;
     try { const o = OBSERVATIONS.get(obsKey(ALG_CFG_KEY[0], ALG_CFG_KEY[1])); if (o && o.observacion) c = JSON.parse(o.observacion); } catch(e){}
     c = c || {};
-    return {ops: c.ops || 3, por: c.por || 8, exc: c.exc || {}};
+    return {meta: c.meta || 24, ops: c.ops || 3, por: c.por || 8, exc: c.exc || {}};
   }
   const algIso = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-  function algObjDe(d, cfg){ const e = cfg.exc[algIso(d)]; return (e !== undefined ? e : cfg.ops) * cfg.por; }
+  // Capacidad operativa del día = operarios de ese día × autos por operario (el objetivo es fijo: cfg.meta)
+  function algCapDe(d, cfg){ const e = cfg.exc[algIso(d)]; return (e !== undefined ? e : cfg.ops) * cfg.por; }
   function algCfgRender(){
     const c = ALG_CFG_EDIT; if (!c) return;
-    $('algCfgOps').value = c.ops; $('algCfgPor').value = c.por; $('algCfgObj').textContent = c.ops * c.por;
+    $('algCfgMeta').value = c.meta; $('algCfgOps').value = c.ops; $('algCfgPor').value = c.por; $('algCfgObj').textContent = c.ops * c.por;
     const ks = Object.keys(c.exc).sort();
     $('algCfgExc').innerHTML = ks.length ? ks.map(k => { const d = new Date(k + 'T00:00:00');
-      return `<div style="display:flex; gap:10px; align-items:center; padding:4px 0; border-bottom:1px dashed var(--border);"><span style="min-width:150px;">${['dom','lun','mar','mié','jue','vie','sáb'][d.getDay()]} ${entFmt(d)}</span><b>${c.exc[k]} operarios</b><span class="hint">→ objetivo ${c.exc[k] * c.por}</span><button type="button" class="page-btn" data-del="${k}" style="font-size:11px; padding:2px 8px;">✕</button></div>`; }).join('')
+      return `<div style="display:flex; gap:10px; align-items:center; padding:4px 0; border-bottom:1px dashed var(--border);"><span style="min-width:150px;">${['dom','lun','mar','mié','jue','vie','sáb'][d.getDay()]} ${entFmt(d)}</span><b>${c.exc[k]} operarios</b><span class="hint">→ capacidad ${c.exc[k] * c.por} (objetivo ${c.meta})</span><button type="button" class="page-btn" data-del="${k}" style="font-size:11px; padding:2px 8px;">✕</button></div>`; }).join('')
       : '<div class="hint">Ninguno: todos los días con los operarios habituales</div>';
   }
   // Cumplimiento del turno de alistaje: autos con turno en los últimos 10 días hábiles (hasta hoy)
@@ -4823,6 +4825,7 @@
     $('algFecha').addEventListener('change', e => { const v = e.target.value; ALG.ref = v ? new Date(v + 'T00:00:00') : null; renderAlistajeGest(); });
     $('algCfgBtn').addEventListener('click', () => { const v = $('algCfg').style.display === 'none'; $('algCfg').style.display = v ? '' : 'none';
       if (v){ ALG_CFG_EDIT = JSON.parse(JSON.stringify(algCfg())); $('algCfgFecha').value = algIso(algHoy()); $('algCfgFOps').value = Math.max(0, ALG_CFG_EDIT.ops - 1); $('algCfgEstado').textContent = ''; algCfgRender(); } });
+    $('algCfgMeta').addEventListener('input', e => { ALG_CFG_EDIT.meta = Math.max(1, parseInt(e.target.value, 10) || 1); renderAlistajeGest(); });
     $('algCfgOps').addEventListener('input', e => { ALG_CFG_EDIT.ops = Math.max(1, parseInt(e.target.value, 10) || 1); $('algCfgObj').textContent = ALG_CFG_EDIT.ops * ALG_CFG_EDIT.por; });
     $('algCfgPor').addEventListener('input', e => { ALG_CFG_EDIT.por = Math.max(1, parseInt(e.target.value, 10) || 1); algCfgRender(); });
     $('algCfgAdd').addEventListener('click', () => { const f = $('algCfgFecha').value, n = parseInt($('algCfgFOps').value, 10); if (!f || isNaN(n) || n < 0) return; ALG_CFG_EDIT.exc[f] = n; algCfgRender(); });
@@ -4922,9 +4925,10 @@
         if (fr && fr <= hoyR) arr[kOf(fr)] = (arr[kOf(fr)] || 0) + 1;
       });
       const cfgA = (ALG_CFG_EDIT && $('algCfg').style.display !== 'none') ? ALG_CFG_EDIT : algCfg();
-      const objDia = cfgA.ops * cfgA.por;
-      const objEntre = (a, b) => { let n = 0; const d2 = new Date(a); while (d2 <= b){ if (esHab(d2)) n += algObjDe(d2, cfgA); d2.setDate(d2.getDate() + 1); } return n; };
-      per.forEach(x => { x.obj = V === 'dia' ? (esHab(x.ini) ? algObjDe(x.ini, cfgA) : 0) : objEntre(x.ini, x.actual ? hoyR : x.fin); });
+      const objDia = cfgA.meta;
+      const sumEntre = (a, b, f) => { let n = 0; const d2 = new Date(a); while (d2 <= b){ if (esHab(d2)) n += f(d2); d2.setDate(d2.getDate() + 1); } return n; };
+      per.forEach(x => { const fin = V === 'dia' ? x.ini : (x.actual ? hoyR : x.fin);
+        x.obj = sumEntre(x.ini, fin, () => objDia); x.cap = sumEntre(x.ini, fin, d2 => algCapDe(d2, cfgA)); });
       const maxR = Math.max(1, ...per.map(x => Math.max(tur[x.key] || 0, alis[x.key] || 0, x.obj || 0)));
       const dn = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'], mn = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
       const lbl = x => V === 'dia' ? (x.actual ? (ALG.ref ? 'ref.' : 'HOY') + `<br>${x.ini.getDate()}/${x.ini.getMonth() + 1}` : `${dn[x.ini.getDay()]}<br>${x.ini.getDate()}/${x.ini.getMonth() + 1}`)
@@ -4934,30 +4938,33 @@
       const totT = sum(pasados, venc), totC = sum(pasados, cum), totA = sum(pasados, alis), totE = sum(pasados, arr), totF = sum(futuros, tur) + (pasados.find(x => x.actual) ? (tur[pasados.find(x => x.actual).key] || 0) - (venc[pasados.find(x => x.actual).key] || 0) : 0);
       const nomPer = {dia:['días hábiles', 'por día'], sem:['semanas', 'por semana'], mes:['meses', 'por mes']}[V];
       // Gráfico simple: una barra por período = autos alistados; verde si llegó al objetivo, rojo si no
-      const maxS = Math.max(1, ...pasados.map(x => Math.max(alis[x.key] || 0, x.obj || 0, tur[x.key] || 0)));
+      const maxS = Math.max(1, ...pasados.map(x => Math.max(alis[x.key] || 0, x.obj || 0, x.cap || 0, tur[x.key] || 0)));
       const cerrados = pasados.filter(x => x.obj && !(x.actual && !ALG.ref));
       const okP = cerrados.filter(x => (alis[x.key] || 0) >= x.obj).length, conObj = cerrados.length;
       const objT = pasados.reduce((a2, x) => a2 + (x.obj || 0), 0);
       const habN = (a, b) => { let n = 0; const d2 = new Date(a); while (d2 <= b){ if (esHab(d2)) n++; d2.setDate(d2.getDate() + 1); } return n; };
       const diasH = pasados.reduce((a2, x) => a2 + (V === 'dia' ? (x.obj ? 1 : 0) : habN(x.ini, x.actual ? hoyR : x.fin)), 0);
-      const objProm = diasH ? pasados.reduce((a2, x) => a2 + (x.obj || 0), 0) / diasH : objDia;
+      const objProm = objDia;
+      const capT = pasados.reduce((a2, x) => a2 + (x.cap || 0), 0);
       const nomP = V === 'dia' ? 'días' : V === 'sem' ? 'semanas' : 'meses';
       $('algRitmo').innerHTML =
-        `<div style="font-size:13px; margin:2px 0 8px;">Turnos: <b>${sum(pasados, tur)}</b> · alistados: <b>${totA}</b> · Promedio: <b style="font-size:18px; color:${totA / Math.max(1, diasH) >= objProm ? 'var(--green)' : 'var(--red)'};">${(totA / Math.max(1, diasH)).toFixed(1).replace('.', ',')}</b> autos por día · objetivo <b>${Number.isInteger(objProm) ? objProm : objProm.toFixed(1).replace('.', ',')}</b> · llegaron al objetivo <b>${okP} de ${conObj}</b> ${nomP}</div>` +
+        `<div style="font-size:13px; margin:2px 0 8px;">Turnos: <b>${sum(pasados, tur)}</b> · alistados: <b>${totA}</b> · Promedio: <b style="font-size:18px; color:${totA / Math.max(1, diasH) >= objProm ? 'var(--green)' : 'var(--red)'};">${(totA / Math.max(1, diasH)).toFixed(1).replace('.', ',')}</b> autos por día · objetivo <b>${Number.isInteger(objProm) ? objProm : objProm.toFixed(1).replace('.', ',')}</b> · llegaron al objetivo <b>${okP} de ${conObj}</b> ${nomP} · capacidad operativa promedio <b style="color:#f59e0b;">${(capT / Math.max(1, diasH)).toFixed(1).replace('.', ',')}</b></div>` +
         `<div style="position:relative; display:flex; gap:6px; align-items:flex-end; min-height:200px; padding:8px 0 0; margin-top:6px;">` + pasados.map(x => {
-          const a = alis[x.key] || 0, ok = a >= x.obj, enCurso = x.actual && !ok && !ALG.ref;
-          const colB = ok ? 'var(--green)' : enCurso ? 'var(--blue)' : 'var(--red)';
+          const a = alis[x.key] || 0, ok = a >= x.obj, enCurso = x.actual && !ok && !ALG.ref, okCap = !ok && x.cap < x.obj && a >= x.cap;
+          // verde: llegó al objetivo · ámbar: no llegó, pero hizo todo lo que permitía la capacidad · rojo: por debajo de la capacidad
+          const colB = ok ? 'var(--green)' : enCurso ? 'var(--blue)' : okCap ? 'var(--amber)' : 'var(--red)';
           const rango = V === 'dia' ? entFmt(x.ini) : `${entFmt(x.ini)} al ${entFmt(x.fin)}`;
-          return `<div style="flex:1; display:flex; flex-direction:column; align-items:center; gap:4px;" title="${rango}: había ${tur[x.key] || 0} turnos de alistaje y se alistaron ${a} autos · objetivo ${x.obj}${V === 'dia' && cfgA.exc[algIso(x.ini)] !== undefined ? ` (${cfgA.exc[algIso(x.ini)]} operarios ese día)` : ''} · ${ok ? 'objetivo cumplido ✅' : (enCurso ? 'en curso: faltan ' : 'faltaron ') + (x.obj - a)}">
+          return `<div style="flex:1; display:flex; flex-direction:column; align-items:center; gap:4px;" title="${rango}: había ${tur[x.key] || 0} turnos de alistaje y se alistaron ${a} autos · objetivo ${x.obj} · capacidad operativa ${x.cap}${V === 'dia' && cfgA.exc[algIso(x.ini)] !== undefined ? ` (${cfgA.exc[algIso(x.ini)]} operarios ese día)` : ''} · ${ok ? 'objetivo cumplido ✅' : (enCurso ? 'en curso: faltan ' : 'faltaron ') + (x.obj - a)}">
             <div style="font-size:13px; font-weight:800; color:${colB}; line-height:1;">${a}</div>
             <div style="font-size:10px; color:var(--text-dim); line-height:1;">de ${tur[x.key] || 0} turnos</div>
             <div style="position:relative; width:100%; max-width:42px; height:130px; display:flex; align-items:flex-end; justify-content:center;">
               <div style="position:absolute; bottom:0; left:0; right:0; height:${Math.round((tur[x.key] || 0) / maxS * 128)}px; border:2px solid var(--text-dim); border-bottom:none; border-radius:5px 5px 0 0; background:rgba(148,163,184,.12);"></div>
               <div style="position:relative; width:62%; height:${Math.round(a / maxS * 128)}px; background:${colB}; opacity:.9; border-radius:4px 4px 0 0;"></div>
               ${x.obj ? `<div style="position:absolute; left:-3px; right:-3px; bottom:${Math.round(x.obj / maxS * 128)}px; border-top:2px dashed var(--text);"></div>` : ''}
+              ${x.cap ? `<div style="position:absolute; left:-3px; right:-3px; bottom:${Math.round(x.cap / maxS * 128)}px; border-top:2px dotted #f59e0b;"></div>` : ''}
             </div>
             <div class="hint" style="font-size:10px; line-height:1.15; text-align:center; ${x.actual ? 'color:var(--blue); font-weight:700;' : ''}">${lbl(x)}${V === 'dia' && cfgA.exc[algIso(x.ini)] !== undefined ? `<br><span style="color:var(--amber);">👷 ${cfgA.exc[algIso(x.ini)]}</span>` : ''}</div></div>`; }).join('') + '</div>' +
-        `<div class="hint" style="margin-top:6px; font-size:12px;"><span style="display:inline-block; width:10px; height:10px; border:2px solid var(--text-dim); vertical-align:middle;"></span> turnos de alistaje de ese día · barra de color = autos alistados: <span style="color:var(--green);">■</span> llegó al objetivo · <span style="color:var(--red);">■</span> no llegó · <span style="color:var(--blue);">■</span> en curso (hoy / período actual) · <b>- - -</b> objetivo (operarios del día × ${cfgA.por} autos · habitual ${objDia}${V === 'dia' ? '' : '; se suma por cada día hábil del período'}) · se ajusta con ⚙️</div>` +
+        `<div class="hint" style="margin-top:6px; font-size:12px;"><span style="display:inline-block; width:10px; height:10px; border:2px solid var(--text-dim); vertical-align:middle;"></span> turnos de alistaje de ese día · barra de color = autos alistados: <span style="color:var(--green);">■</span> llegó al objetivo · <span style="color:var(--amber);">■</span> no llegó, pero cubrió la capacidad del día · <span style="color:var(--red);">■</span> no llegó · <span style="color:var(--blue);">■</span> en curso · <b>- - -</b> objetivo (${objDia} por día hábil) · <b style="color:#f59e0b;">· · ·</b> capacidad operativa (operarios del día × ${cfgA.por}; habitual ${cfgA.ops * cfgA.por})${V === 'dia' ? '' : ' · se suman los días hábiles del período'} · se ajusta con ⚙️</div>` +
         `<details style="margin-top:10px;"><summary class="hint" style="cursor:pointer; font-size:12px;">Ver detalle de turnos de alistaje (para supervisión)</summary>` +
         `<div class="hint" style="margin-top:6px; font-size:12px; line-height:1.55;">Turnos de alistaje en el período: <b>${totT}</b>, cumplidos a tiempo <b>${totC}</b>${totT ? ` (${Math.round(totC / totT * 100)}%)` : ''} · arribaron <b>${totE}</b> autos · ` +
         (!totA && !totE ? 'sin movimientos' : totA >= totE ? '<span style="color:var(--green); font-weight:700;">la cola se achica ✅</span>' : `<span style="color:var(--red); font-weight:700;">la cola crece (+${totE - totA})</span>`) +
