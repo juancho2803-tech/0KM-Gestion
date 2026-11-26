@@ -4741,8 +4741,9 @@
     const est = categorize(r);
     const fArr = entMid(parseDateFlexible(r['Fecha Arribo Unidad']));
     const fv = entMid(parseDateFlexible(r['Fecha Venta']));
-    const vendido = est !== 'Sin operacion';
-    // Desde cuándo se puede alistar: arribo (stock) o lo último entre venta y arribo (vendidos)
+    // Objetivo de alistaje (1 dh) solo para facturados / patentados: desde la factura o el arribo, lo último.
+    // Reservados y stock no tienen objetivo: se cuenta la espera desde el arribo.
+    const vendido = est === 'Facturado' || est === 'Patentado';
     const desde = vendido && fv && fArr ? (fv > fArr ? fv : fArr) : fArr;
     const espera = desde && desde <= hoy ? (diasHabilesSLA(desde, hoy) || 0) : 0;
     const objA = (typeof entObjetivos === 'function' ? entObjetivos().alistaje : 1) || 1;
@@ -4757,13 +4758,14 @@
   }
   const ALG_CARDS = [
     {k:'todos',   t:'🧹 Pendientes de alistar', d:'autos arribados que todavía no se alistaron', c:'var(--blue)', f:() => true},
-    {k:'venc',    t:'⏰ Vendidos demorados', d:'reservados, facturados o patentados que pasaron el objetivo de alistaje (1 dh desde la venta o el arribo)', c:'var(--red)', f:(r, x) => x.vencido},
+    {k:'venc',    t:'⏰ Facturados demorados', d:'facturados o patentados que pasaron el objetivo de alistaje (1 dh desde la factura o el arribo, lo último)', c:'var(--red)', f:(r, x) => x.vencido},
     {k:'vendsin', t:'🗓️ Vendidos sin turno de alistaje', d:'vendidos que todavía no tienen turno de alistaje asignado', c:'var(--amber)', f:(r, x) => x.est !== 'Sin operacion' && !x.tAl},
     {k:'talhoy',  t:'📅 Turno de alistaje HOY', d:'tienen turno hoy y todavía no se alistaron: deben terminarse hoy', c:'var(--blue)', f:(r, x) => !!x.tAl && x.tAl.getTime() === algHoy().getTime()},
     {k:'talvenc', t:'❌ Turno de alistaje vencido', d:'el día del turno ya pasó y el auto sigue sin alistar', c:'var(--red)', f:(r, x) => !!x.tAl && x.tAl < algHoy()},
     {k:'tal',     t:'🗂️ Con turno de alistaje', d:'ya tienen turno asignado (hoy, vencido o futuro)', c:'var(--green)', f:(r, x) => !!x.tAl},
     {k:'av',      t:'⚠️ Con avería abierta', d:'la avería puede frenar el alistaje', c:'var(--red)', f:(r, x) => x.averia},
     {k:'acc',     t:'🎒 Con accesorios a colocar', d:'hay que coordinar accesorios', c:'var(--orange)', f:(r, x) => x.acc},
+    {k:'usado',   t:'🚗 Con usado en la operación', d:'se recibe un usado en la entrega: coordinar la toma', c:'var(--orange)', f:(r, x) => x.usado},
     {k:'mas5',    t:'🐢 Más de 5 días esperando', d:'más de 5 días hábiles desde que se pudo alistar', c:'var(--gray)', f:(r, x) => x.espera > 5}
   ];
   function algInit(){
@@ -4926,7 +4928,7 @@
     const filtros = [ALG.card && ALG_CARDS.find(c => c.k === ALG.card).t, ALG.cell && ((ALG.cell.e ? STK_EST_LBL[ALG.cell.e] : 'Todos los estados') + ' · ' + (ALG.cell.m ? lblM(ALG.cell.m) : 'todas las marcas')), ALG.ubic && '📍 ' + ALG.ubic].filter(Boolean);
     $('algHint').textContent = `${rows.length} autos${filtros.length ? ' · ' + filtros.join(' + ') : ''} · ordenados por prioridad: patentados → facturados → reservados → stock; dentro de cada uno, primero los de turno de alistaje hoy o vencido y después los que más esperan`;
     const chip = (t, c) => `<span class="stk-chip" style="border-color:${c}; color:${c};">${t}</span>`;
-    $('algTabla').innerHTML = `<thead><tr><th>Prioridad</th><th>Interno</th><th>Marca</th><th>Modelo · color</th><th>Estado</th><th style="text-align:right;">Esperando</th><th>Ubicación</th><th>Turno alistaje</th><th>Ojo con</th></tr></thead><tbody>` +
+    $('algTabla').innerHTML = `<thead><tr><th>Prioridad</th><th>Interno</th><th>Marca</th><th>Modelo · color</th><th>Estado</th><th style="text-align:right;">Esperando</th><th>Ubicación</th><th>Turno alistaje</th><th>Avería · accesorios · usado</th></tr></thead><tbody>` +
       (rows.length ? rows.slice(0, 600).map(([r, x]) => {
         const p = ALG_PRIO[x.prio];
         return `<tr data-i="${escapeHtml(stkTxt(r, 'Interno'))}" style="cursor:pointer;"><td><span class="stk-chip" style="border-color:${p.c}; color:${p.c}; font-weight:700;">${p.t}</span></td>
@@ -4935,7 +4937,7 @@
           <td style="text-align:right; font-weight:700; color:${x.vencido ? 'var(--red)' : (x.espera > 5 ? 'var(--amber)' : 'var(--text)')};">${x.espera} dh${x.vencido ? '<div style="font-size:10.5px;">vencido</div>' : ''}</td>
           <td>${escapeHtml(stkTxt(r, 'Ubicacion') || '—')}</td>
           <td>${x.tAl ? (x.tAl.getTime() === algHoy().getTime() ? `<b style="color:var(--blue);">HOY</b><div class="hint">debe terminarse hoy</div>` : x.tAl < algHoy() ? `<b style="color:var(--red);">${entFmt(x.tAl)}</b><div style="font-size:10.5px; color:var(--red);">vencido</div>` : entFmt(x.tAl)) : '<span class="hint">sin turno</span>'}</td>
-          <td>${[x.averia && chip('⚠️ avería', 'var(--red)'), x.acc && chip('🎒 accesorios', 'var(--orange)'), x.usado && chip('🚗 usado', 'var(--amber)')].filter(Boolean).join('') || '<span class="hint">—</span>'}</td></tr>`; }).join('')
+          <td>${[x.averia && chip('⚠️ avería', 'var(--red)'), x.acc && chip('🎒 accesorios', 'var(--orange)'), x.usado && chip('🚗 recibe usado', 'var(--amber)')].filter(Boolean).join('') || '<span class="hint">—</span>'}</td></tr>`; }).join('')
       : '<tr><td colspan="9" class="table-empty">Nada pendiente de alistar con estos filtros 🎉</td></tr>') + '</tbody>';
   }
 
