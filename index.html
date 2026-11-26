@@ -10036,7 +10036,7 @@
     if (fPat) items.push({d: fPat, pat: true});
     // Fecha en que se cargó la avería (siempre visible si el auto tuvo avería)
     const fAvC = tuvoAveria(u.r) ? entMid(parseDateFlexible(u.r['Fecha Averia'])) : null;
-    if (fAvC && !u.avEntrega) items.push({d: fAvC, av: true});
+    // (la fecha de carga se muestra dentro de la fila "Cierre avería", no en una fila aparte)
     if (u.avEntrega) items.push({d: u.avEntrega.carga, avE: true});
     const ord = x => x.venta ? 0 : x.av ? 1 : x.pat ? 3 : x.avE ? 4 : 2;
     const filas = items.sort((a, b) => a.d - b.d || ord(a) - ord(b)).map(({e, venta, pat, av, avE}) => {
@@ -10051,7 +10051,9 @@
       const est = e.impacto ? '<span class="ent-tag main">aportó demora</span>'
         : (e.exceso > 0 ? '<span class="ent-tag" style="color:var(--amber);">se pasó, pero no aportó</span>' : '<span class="ent-tag" style="color:var(--green);">cumplió</span>');
       const disp = !e.start ? '—' : (e.end < e.start ? `<span style="color:var(--text-faint);">ya estaba (${entFmt(e.end)})</span>` : entFmt(e.start));
-      return `<tr><td>${icon} ${escapeHtml(e.label)}</td><td>${disp}</td><td>${obj}</td><td>${entFmt(e.end)}</td>
+      let lbl = escapeHtml(e.label);
+      if (e.key === 'averia') lbl = `⚠️ <b>Avería</b> <span class="hint">· cargada el <b style="color:var(--text);">${fAvC ? entFmt(fAvC) : 'sin fecha'}</b>${fAvC && u.fv ? (fAvC < u.fv ? ' (antes de la venta)' : ` (${dh(u.fv, fAvC)} dh después de la venta)`) : ''} · cerrada el <b style="color:var(--text);">${entFmt(e.end)}</b> · el objetivo cuenta desde la venta</span>`;
+      return `<tr><td>${e.key === 'averia' ? '' : icon + ' '}${lbl}</td><td>${disp}</td><td>${obj}</td><td>${entFmt(e.end)}</td>
         <td>${tardo === null ? '—' : tardo + ' dh'}</td><td style="color:${e.exceso > 0 ? 'var(--amber)' : 'var(--green)'};">${e.exceso > 0 ? '+' + e.exceso : '0'}</td>
         <td style="font-weight:700; color:${e.aporte > 0 ? 'var(--red)' : 'var(--text-faint)'};">${e.aporte > 0 ? '+' + e.aporte : '—'}</td><td>${est}</td></tr>`;
     });
