@@ -4715,7 +4715,6 @@
   // ================= 🧹 Alistaje — gestión (Entregas) =================
   const ALG = {vista:'dia', ref:null, init:false, marcas:new Set(), estados:new Set(['Patentado', 'Facturado', 'Reservado', 'Sin operacion']), canales:new Set(), allCanales:[], card:null, cell:null, ubic:null, q:''};
   const ALG_PRIO = {
-    1: {t:'🔥 Turno de entrega encima', c:'var(--red)'},
     2: {t:'🔴 Patentado', c:'#ef4444'},
     3: {t:'🟠 Facturado', c:'var(--orange)'},
     4: {t:'🟡 Reservado', c:'var(--amber)'},
@@ -4751,21 +4750,20 @@
     if (!turno){ const ft = entMid(parseDateFlexible(r['Fecha Turno Entrega'])); if (ft) turno = {fecha: ft, hora: '', origen: 'base'}; }
     const dTurno = turno && turno.fecha >= hoy ? (diasHabilesSLA(hoy, turno.fecha) || 0) : null;
     const tAl = entMid(parseDateFlexible(r['Fecha Turno Alistaje']));
-    const prio = (dTurno !== null && dTurno <= 3) ? 1 : ({Patentado:2, Facturado:3, Reservado:4})[est] || 5;
+    const prio = ({Patentado:2, Facturado:3, Reservado:4})[est] || 5;
     // dentro de su prioridad, los que tienen turno de alistaje hoy o vencido van primero (ver orden de la cola)
     return {est, fArr, desde, espera, vencido, turno, dTurno, tAl, prio, averia: hasAveria(r), acc: tieneAccesorios(r) && !accesoriosListos(r), usado: esUsado(r)};
   }
   const ALG_CARDS = [
-    {k:'todos',   t:'🧹 Pendientes de alistar', c:'var(--blue)',   f:() => true},
-    {k:'urg',     t:'🔥 Turno de entrega en ≤3 días', c:'var(--red)', f:(r, x) => x.prio === 1},
-    {k:'venc',    t:'⏰ Vendidos con objetivo vencido', c:'var(--red)', f:(r, x) => x.vencido},
-    {k:'vendsin', t:'🗓️ Vendidos sin turno de alistaje', c:'var(--amber)', f:(r, x) => x.est !== 'Sin operacion' && !x.tAl},
-    {k:'talhoy',  t:'📅 Turno de alistaje HOY (debe terminarse hoy)', c:'var(--blue)', f:(r, x) => !!x.tAl && x.tAl.getTime() === algHoy().getTime()},
-    {k:'talvenc', t:'❌ Turno de alistaje vencido, sin alistar', c:'var(--red)', f:(r, x) => !!x.tAl && x.tAl < algHoy()},
-    {k:'tal',     t:'📅 Con turno de alistaje', c:'var(--green)', f:(r, x) => !!x.tAl},
-    {k:'av',      t:'⚠️ Con avería abierta', c:'var(--red)', f:(r, x) => x.averia},
-    {k:'acc',     t:'🎒 Con accesorios a colocar', c:'var(--orange)', f:(r, x) => x.acc},
-    {k:'mas5',    t:'🐢 Más de 5 días hábiles esperando', c:'var(--gray)', f:(r, x) => x.espera > 5}
+    {k:'todos',   t:'🧹 Pendientes de alistar', d:'autos arribados que todavía no se alistaron', c:'var(--blue)', f:() => true},
+    {k:'venc',    t:'⏰ Vendidos demorados', d:'reservados, facturados o patentados que pasaron el objetivo de alistaje (1 dh desde la venta o el arribo)', c:'var(--red)', f:(r, x) => x.vencido},
+    {k:'vendsin', t:'🗓️ Vendidos sin turno de alistaje', d:'vendidos que todavía no tienen turno de alistaje asignado', c:'var(--amber)', f:(r, x) => x.est !== 'Sin operacion' && !x.tAl},
+    {k:'talhoy',  t:'📅 Turno de alistaje HOY', d:'tienen turno hoy y todavía no se alistaron: deben terminarse hoy', c:'var(--blue)', f:(r, x) => !!x.tAl && x.tAl.getTime() === algHoy().getTime()},
+    {k:'talvenc', t:'❌ Turno de alistaje vencido', d:'el día del turno ya pasó y el auto sigue sin alistar', c:'var(--red)', f:(r, x) => !!x.tAl && x.tAl < algHoy()},
+    {k:'tal',     t:'🗂️ Con turno de alistaje', d:'ya tienen turno asignado (hoy, vencido o futuro)', c:'var(--green)', f:(r, x) => !!x.tAl},
+    {k:'av',      t:'⚠️ Con avería abierta', d:'la avería puede frenar el alistaje', c:'var(--red)', f:(r, x) => x.averia},
+    {k:'acc',     t:'🎒 Con accesorios a colocar', d:'hay que coordinar accesorios', c:'var(--orange)', f:(r, x) => x.acc},
+    {k:'mas5',    t:'🐢 Más de 5 días esperando', d:'más de 5 días hábiles desde que se pudo alistar', c:'var(--gray)', f:(r, x) => x.espera > 5}
   ];
   function algInit(){
     if (ALG.init) return; ALG.init = true;
@@ -4790,7 +4788,7 @@
         'Prioridad': ALG_PRIO[x.prio].t.replace(/^\S+\s/, ''), 'Interno': stkTxt(r, 'Interno'), 'Marca': stkTxt(r, 'Marca'), 'Modelo': stkTxt(r, 'Modelo'), 'Color': stkTxt(r, 'Color'),
         'Estado comercial': STK_EST_LBL[x.est].replace(/^\S+\s/, ''), 'Cliente': stkTxt(r, 'Cliente'), 'Canal': stkTxt(r, 'Canal'), 'Ubicacion': stkTxt(r, 'Ubicacion'),
         'Arribo': x.fArr ? entFmt(x.fArr) : '', 'Esperando desde': x.desde ? entFmt(x.desde) : '', 'Dias habiles esperando': x.espera, 'Objetivo vencido': x.vencido ? 'SI' : '',
-        'Turno alistaje': x.tAl ? entFmt(x.tAl) : '', 'Turno entrega': x.turno ? entFmt(x.turno.fecha) + (x.turno.hora ? ' ' + x.turno.hora : '') : '',
+        'Turno alistaje': x.tAl ? entFmt(x.tAl) : '',
         'Averia abierta': x.averia ? 'SI' : '', 'Accesorios a colocar': x.acc ? 'SI' : '', 'Usado en la operacion': x.usado ? 'SI' : ''
       }));
       if (!data.length) return;
@@ -4815,13 +4813,11 @@
       (!q || ['Interno', 'Cliente', 'Modelo', 'Color'].some(c => stkTxt(r, c).toLowerCase().includes(q))));
     // Tarjetas
     const cum = algCumplimiento(r => ALG.marcas.has(stkTxt(r, 'Marca').toUpperCase()) && ALG.canales.has(stkTxt(r, 'Canal') || '(sin canal)'));
-    const sub = c => c.k === 'todos' ? 'arribados, sin alistar'
-      : c.k === 'talhoy' ? `${cum.hoyOk} ya alistados de ${cum.hoyTot} turnos de hoy`
-      : (base.length ? Math.round(base.filter(([r, x]) => c.f(r, x)).length / base.length * 100) + '% de los pendientes' : '');
+    const sub = c => c.k === 'talhoy' ? `${c.d} · ya se alistaron ${cum.hoyOk} de ${cum.hoyTot} turnos de hoy` : c.d;
     const cumCol = cum.pct === null ? 'var(--gray)' : cum.pct >= 90 ? 'var(--green)' : cum.pct >= 70 ? 'var(--amber)' : 'var(--red)';
     $('algCards').innerHTML = `<div class="stk-card ${ALG.card === 'talvenc' ? 'on' : ''}" data-k="talvenc" style="--kc:${cumCol};" title="Turnos de alistaje de los últimos 10 días hábiles (sin contar hoy): alistado el día del turno o antes = cumplido · clic para ver los vencidos sin alistar">
         <div class="t">🎯 Cumplimiento del turno de alistaje</div><div class="v" style="color:${cumCol};">${cum.pct === null ? '—' : cum.pct + '%'}</div>
-        <div class="s">${cum.tot ? `${cum.ok} de ${cum.tot} a tiempo · ${cum.tarde} tarde · ${cum.sinAl} sin alistar (últ. 10 dh)` : 'sin turnos de alistaje en los últimos 10 días hábiles'}</div></div>` +
+        <div class="s">de los turnos de los últimos 10 días hábiles, ${cum.tot ? `${cum.ok} de ${cum.tot} se alistaron el día del turno · ${cum.tarde} tarde · ${cum.sinAl} sin alistar` : 'no hubo turnos'}</div></div>` +
       ALG_CARDS.map(c => { const n = base.filter(([r, x]) => c.f(r, x)).length; const on = (ALG.card === c.k) || (c.k === 'todos' && !ALG.card);
       return `<div class="stk-card ${on ? 'on' : ''}" data-k="${c.k}" style="--kc:${c.c};"><div class="t">${c.t}</div><div class="v">${n.toLocaleString('es-AR')}</div><div class="s">${sub(c)}</div></div>`; }).join('');
     const cardF = ALG.card ? ALG_CARDS.find(c => c.k === ALG.card).f : () => true;
@@ -4906,12 +4902,12 @@
     if (ALG.cell) rows = rows.filter(([r, x]) => (!ALG.cell.e || x.est === ALG.cell.e) && (!ALG.cell.m || stkTxt(r, 'Marca').toUpperCase() === ALG.cell.m));
     if (ALG.ubic) rows = rows.filter(([r]) => (stkTxt(r, 'Ubicacion') || '(sin ubicación)') === ALG.ubic);
     const hoyA = algHoy(), tA = x => x.tAl && x.tAl <= hoyA ? 0 : 1;
-    rows = rows.slice().sort((a, b) => (a[1].prio - b[1].prio) || ((a[1].dTurno ?? 99) - (b[1].dTurno ?? 99)) || (tA(a[1]) - tA(b[1])) || (b[1].espera - a[1].espera));
+    rows = rows.slice().sort((a, b) => (a[1].prio - b[1].prio) || (tA(a[1]) - tA(b[1])) || (b[1].espera - a[1].espera));
     ALG.ult = rows;
     const filtros = [ALG.card && ALG_CARDS.find(c => c.k === ALG.card).t, ALG.cell && ((ALG.cell.e ? STK_EST_LBL[ALG.cell.e] : 'Todos los estados') + ' · ' + (ALG.cell.m ? lblM(ALG.cell.m) : 'todas las marcas')), ALG.ubic && '📍 ' + ALG.ubic].filter(Boolean);
-    $('algHint').textContent = `${rows.length} autos${filtros.length ? ' · ' + filtros.join(' + ') : ''} · ordenados por prioridad: turno de entrega encima → patentados → facturados → reservados → stock, y dentro de cada uno por días esperando`;
+    $('algHint').textContent = `${rows.length} autos${filtros.length ? ' · ' + filtros.join(' + ') : ''} · ordenados por prioridad: patentados → facturados → reservados → stock; dentro de cada uno, primero los de turno de alistaje hoy o vencido y después los que más esperan`;
     const chip = (t, c) => `<span class="stk-chip" style="border-color:${c}; color:${c};">${t}</span>`;
-    $('algTabla').innerHTML = `<thead><tr><th>Prioridad</th><th>Interno</th><th>Marca</th><th>Modelo · color</th><th>Estado</th><th style="text-align:right;">Esperando</th><th>Ubicación</th><th>Turno alistaje</th><th>Turno entrega</th><th>Ojo con</th></tr></thead><tbody>` +
+    $('algTabla').innerHTML = `<thead><tr><th>Prioridad</th><th>Interno</th><th>Marca</th><th>Modelo · color</th><th>Estado</th><th style="text-align:right;">Esperando</th><th>Ubicación</th><th>Turno alistaje</th><th>Ojo con</th></tr></thead><tbody>` +
       (rows.length ? rows.slice(0, 600).map(([r, x]) => {
         const p = ALG_PRIO[x.prio];
         return `<tr data-i="${escapeHtml(stkTxt(r, 'Interno'))}" style="cursor:pointer;"><td><span class="stk-chip" style="border-color:${p.c}; color:${p.c}; font-weight:700;">${p.t}</span></td>
@@ -4920,9 +4916,8 @@
           <td style="text-align:right; font-weight:700; color:${x.vencido ? 'var(--red)' : (x.espera > 5 ? 'var(--amber)' : 'var(--text)')};">${x.espera} dh${x.vencido ? '<div style="font-size:10.5px;">vencido</div>' : ''}</td>
           <td>${escapeHtml(stkTxt(r, 'Ubicacion') || '—')}</td>
           <td>${x.tAl ? (x.tAl.getTime() === algHoy().getTime() ? `<b style="color:var(--blue);">HOY</b><div class="hint">debe terminarse hoy</div>` : x.tAl < algHoy() ? `<b style="color:var(--red);">${entFmt(x.tAl)}</b><div style="font-size:10.5px; color:var(--red);">vencido</div>` : entFmt(x.tAl)) : '<span class="hint">sin turno</span>'}</td>
-          <td>${x.turno ? `<b style="color:${x.prio === 1 ? 'var(--red)' : 'var(--text)'};">${entFmt(x.turno.fecha)}${x.turno.hora ? ' ' + escapeHtml(x.turno.hora) : ''}</b>${x.dTurno !== null ? `<div class="hint">en ${x.dTurno} dh${x.turno.origen === 'agenda' ? ' · agenda' : ''}</div>` : ''}` : '—'}</td>
           <td>${[x.averia && chip('⚠️ avería', 'var(--red)'), x.acc && chip('🎒 accesorios', 'var(--orange)'), x.usado && chip('🚗 usado', 'var(--amber)')].filter(Boolean).join('') || '<span class="hint">—</span>'}</td></tr>`; }).join('')
-      : '<tr><td colspan="10" class="table-empty">Nada pendiente de alistar con estos filtros 🎉</td></tr>') + '</tbody>';
+      : '<tr><td colspan="9" class="table-empty">Nada pendiente de alistar con estos filtros 🎉</td></tr>') + '</tbody>';
   }
 
   // ================= 📦 Stock sin entregar =================
