@@ -2932,7 +2932,7 @@
       </div>
 
       <div class="panel">
-        <div class="panel-head"><h3>📅 Evolución mensual</h3><div class="hint">Unidades por mes según la fecha de cada evento</div></div>
+        <div class="panel-head"><h3>📅 Evolución mensual</h3><div class="hint" id="anEvolHint">Unidades por mes según la fecha de cada evento</div></div>
         <div style="position:relative; height:280px;"><canvas id="anEvolChart"></canvas></div>
       </div>
 
@@ -13561,7 +13561,10 @@
       : `${anMkLabel(mes)} cerrado (${dhTot} días hábiles) contra ${anMkLabel(mesAnt)} completo.`;
 
     // ---------- Evolución ----------
-    const mesesEvol = []; for (let i = 11; i >= 0; i--) mesesEvol.push(anShiftMk(mes, -i));
+    // Cantidad de meses según "Rankings sobre" (mes elegido → se muestran 3 para ver la tendencia)
+    const nEvol = AN.periodo === 1 ? 3 : AN.periodo;
+    const mesesEvol = []; for (let i = nEvol - 1; i >= 0; i--) mesesEvol.push(anShiftMk(mes, -i));
+    if ($('anEvolHint')) $('anEvolHint').textContent = `Unidades por mes según la fecha de cada evento · ${nEvol === 12 ? 'últimos 12 meses' : 'últimos 3 meses'} hasta ${anMkLabel(mes)}${AN.periodo === 1 ? ' (con "el mes elegido" se muestran 3 meses para ver la tendencia)' : ''}`;
     const serie = k => mesesEvol.map(m => ev.filter(x => x.e[k] && anMk(x.e[k]) === m).length);
     const css = getComputedStyle(document.body);
     const cText = css.getPropertyValue('--text-dim').trim() || '#8b95a3';
