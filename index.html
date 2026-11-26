@@ -1578,7 +1578,7 @@
           <div id="algUbic"></div>
         </div>
         <div class="panel">
-          <div class="panel-head"><h3>📈 Ritmo de alistaje</h3><div class="hint">Autos alistados por día hábil (últimos 10 días hábiles con datos) vs. lo que entra a la cola (arribos)</div></div>
+          <div class="panel-head"><h3>📈 Turnos de alistaje por día</h3><div class="hint">Cuántos turnos había cada día y cuántos se cumplieron (últimos 10 días hábiles) + los programados para los próximos 5 · pasá el mouse por cada día para el detalle</div></div>
           <div id="algRitmo"></div>
         </div>
       </div>
@@ -4832,28 +4832,41 @@
     const ubs = Object.entries(ubCount).sort((a, b) => b[1] - a[1]); const maxU = Math.max(1, ...ubs.map(x => x[1]));
     $('algUbic').innerHTML = ubs.slice(0, 10).map(([u, n]) => `<div class="pat-motivo ${ALG.ubic === u ? 'active' : ''}" data-u="${escapeHtml(u)}" title="Clic para filtrar la cola"><span class="pm-label">${escapeHtml(u)}</span><span class="pm-bar"><span style="width:${Math.max(3, Math.round(n / maxU * 100))}%; background:var(--blue);"></span></span><span class="pm-n">${n}</span></div>`).join('') +
       (ubs.length > 10 ? `<div class="hint">… y ${ubs.length - 10} ubicaciones más</div>` : '') || '<div class="hint">—</div>';
-    // Ritmo: alistados vs. entradas a la cola, últimos 10 días hábiles
+    // Turnos de alistaje por día: cuántos había y cuántos se cumplieron (+ lo que viene)
     {
-      // Se ancla al último día con alistajes en la base (si la base es de días atrás, igual muestra algo útil)
-      let hoy = new Date(); hoy.setHours(0,0,0,0);
-      let ult = null; ALL_ROWS.forEach(r => { const fa = entMid(parseDateFlexible(r['Fecha Alistaje'])); if (fa && fa <= hoy && (!ult || fa > ult)) ult = fa; });
-      if (ult) hoy = ult;
-      const dias = []; const d = new Date(hoy); while (dias.length < 10){ if (d.getDay() % 6 && !(typeof esFeriadoSLA === 'function' && esFeriadoSLA(d))) dias.unshift(new Date(d)); d.setDate(d.getDate() - 1); }
+      const hoyR = algHoy();
+      const esHab = d => d.getDay() % 6 && !(typeof esFeriadoSLA === 'function' && esFeriadoSLA(d));
+      const pasados = []; const d = new Date(hoyR); while (pasados.length < 10){ if (esHab(d)) pasados.unshift(new Date(d)); d.setDate(d.getDate() - 1); }
+      const futuros = []; const f = new Date(hoyR); while (futuros.length < 5){ f.setDate(f.getDate() + 1); if (esHab(f)) futuros.push(new Date(f)); }
       const k = x => x ? x.getFullYear() + '-' + x.getMonth() + '-' + x.getDate() : '';
-      const al = {}, en = {};
-      ALL_ROWS.forEach(r => { if (!ALG.marcas.has(stkTxt(r, 'Marca').toUpperCase())) return;
-        const fa = entMid(parseDateFlexible(r['Fecha Alistaje'])); if (fa) al[k(fa)] = (al[k(fa)] || 0) + 1;
-        const arr = entMid(parseDateFlexible(r['Fecha Arribo Unidad'])); if (arr) en[k(arr)] = (en[k(arr)] || 0) + 1; });
-      const maxR = Math.max(1, ...dias.map(x => Math.max(al[k(x)] || 0, en[k(x)] || 0)));
-      const totA = dias.reduce((a, x) => a + (al[k(x)] || 0), 0), totE = dias.reduce((a, x) => a + (en[k(x)] || 0), 0);
+      const tur = {}, cum = {}, alis = {}, arr = {};
+      ALL_ROWS.forEach(r => {
+        if (!ALG.marcas.has(stkTxt(r, 'Marca').toUpperCase()) || !ALG.canales.has(stkTxt(r, 'Canal') || '(sin canal)')) return;
+        const t = entMid(parseDateFlexible(r['Fecha Turno Alistaje'])), fa = entMid(parseDateFlexible(r['Fecha Alistaje'])), fr = entMid(parseDateFlexible(r['Fecha Arribo Unidad']));
+        if (t){ tur[k(t)] = (tur[k(t)] || 0) + 1; if (fa && fa <= t) cum[k(t)] = (cum[k(t)] || 0) + 1; }
+        if (fa) alis[k(fa)] = (alis[k(fa)] || 0) + 1;
+        if (fr) arr[k(fr)] = (arr[k(fr)] || 0) + 1;
+      });
+      const dias = pasados.concat(futuros);
+      const maxR = Math.max(1, ...dias.map(x => Math.max(tur[k(x)] || 0, alis[k(x)] || 0)));
       const dn = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'];
-      $('algRitmo').innerHTML = `<div style="display:flex; gap:6px; align-items:flex-end; height:150px; padding:6px 0;">` + dias.map(x => { const a = al[k(x)] || 0, e = en[k(x)] || 0;
-        return `<div style="flex:1; display:flex; flex-direction:column; align-items:center; gap:3px;" title="${entFmt(x)}: ${a} alistados · ${e} arribos">
-          <div style="display:flex; gap:2px; align-items:flex-end; height:118px;"><div style="width:11px; height:${Math.round(a / maxR * 112)}px; background:var(--green); border-radius:3px 3px 0 0;"></div><div style="width:11px; height:${Math.round(e / maxR * 112)}px; background:var(--gray); opacity:.6; border-radius:3px 3px 0 0;"></div></div>
-          <div class="hint" style="font-size:10px; line-height:1.1; text-align:center;"><b style="color:var(--text);">${a}</b><br>${dn[x.getDay()]} ${x.getDate()}</div></div>`; }).join('') + '</div>' +
-        `<div class="hint" style="margin-top:6px; font-size:12px; line-height:1.5;"><span style="color:var(--green);">■</span> alistados: <b>${totA}</b> (${(totA / 10).toFixed(1).replace('.', ',')} por día) · <span style="opacity:.6;">■</span> arribos: <b>${totE}</b> · ` +
-        (!totA && !totE ? '<span class="hint">sin movimientos en el período</span>' : totA >= totE ? '<span style="color:var(--green); font-weight:700;">la cola se achica ✅</span>' : `<span style="color:var(--red); font-weight:700;">la cola crece (+${totE - totA} en 2 semanas)</span>`) +
-        (totA ? ` · al ritmo actual, los ${base.length} pendientes se alistan en ~${Math.ceil(base.length / (totA / 10))} días hábiles` : '') + '</div>';
+      const totT = pasados.reduce((a, x) => a + (tur[k(x)] || 0), 0), totC = pasados.reduce((a, x) => a + (cum[k(x)] || 0), 0);
+      const totA = pasados.reduce((a, x) => a + (alis[k(x)] || 0), 0), totE = pasados.reduce((a, x) => a + (arr[k(x)] || 0), 0);
+      const totF = futuros.reduce((a, x) => a + (tur[k(x)] || 0), 0);
+      $('algRitmo').innerHTML = `<div style="display:flex; gap:4px; align-items:flex-end; height:160px; padding:6px 0;">` + dias.map(x => {
+        const t = tur[k(x)] || 0, c = cum[k(x)] || 0, a = alis[k(x)] || 0, fut = x > hoyR, esHoy = x.getTime() === hoyR.getTime();
+        const pc = t ? Math.round(c / t * 100) : null, col = pc === null ? 'var(--text-faint)' : pc >= 90 ? 'var(--green)' : pc >= 70 ? 'var(--amber)' : 'var(--red)';
+        return `<div style="flex:1; display:flex; flex-direction:column; align-items:center; gap:3px; ${fut ? 'opacity:.75;' : ''}" title="${entFmt(x)}: ${t} turnos de alistaje${fut ? ' programados' : ` · ${c} cumplidos · ${a} autos alistados ese día`}">
+          <div style="display:flex; gap:2px; align-items:flex-end; height:120px;">
+            <div style="width:10px; height:${Math.round(t / maxR * 114)}px; background:var(--blue); opacity:${fut ? .45 : .55}; border-radius:3px 3px 0 0; ${fut ? 'border:1px dashed var(--blue);' : ''}"></div>
+            ${fut ? '' : `<div style="width:10px; height:${Math.round(c / maxR * 114)}px; background:var(--green); border-radius:3px 3px 0 0;"></div>`}
+          </div>
+          <div style="font-size:10.5px; font-weight:700; color:${fut ? 'var(--text-dim)' : col};">${fut ? t : (t ? c + '/' + t : '—')}</div>
+          <div class="hint" style="font-size:9.5px; line-height:1.1; text-align:center; ${esHoy ? 'color:var(--blue); font-weight:700;' : ''}">${esHoy ? 'HOY' : dn[x.getDay()]}<br>${x.getDate()}/${x.getMonth() + 1}</div></div>`; }).join('') + '</div>' +
+        `<div class="hint" style="margin-top:6px; font-size:12px; line-height:1.55;"><span style="color:var(--blue); opacity:.7;">■</span> turnos de alistaje · <span style="color:var(--green);">■</span> cumplidos (alistado el día del turno o antes) · punteado = programados<br>` +
+        `Últimos 10 días hábiles: <b>${totT}</b> turnos (${(totT / 10).toFixed(1).replace('.', ',')} por día), <b>${totC}</b> cumplidos${totT ? ` (<b>${Math.round(totC / totT * 100)}%</b>)` : ''} · se alistaron <b>${totA}</b> autos en total (con y sin turno) · arribaron <b>${totE}</b> · ` +
+        (!totA && !totE ? 'sin movimientos' : totA >= totE ? '<span style="color:var(--green); font-weight:700;">la cola se achica ✅</span>' : `<span style="color:var(--red); font-weight:700;">la cola crece (+${totE - totA})</span>`) +
+        `<br>Próximos 5 días hábiles: <b>${totF}</b> turnos programados</div>`;
     }
     // Cola de trabajo
     let rows = conCard;
