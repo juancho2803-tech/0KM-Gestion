@@ -4882,26 +4882,28 @@
       const totT = sum(pasados, venc), totC = sum(pasados, cum), totA = sum(pasados, alis), totE = sum(pasados, arr), totF = sum(futuros, tur) + (pasados.find(x => x.actual) ? (tur[pasados.find(x => x.actual).key] || 0) - (venc[pasados.find(x => x.actual).key] || 0) : 0);
       const nomPer = {dia:['días hábiles', 'por día'], sem:['semanas', 'por semana'], mes:['meses', 'por mes']}[V];
       // Gráfico simple: una barra por período = autos alistados; verde si llegó al objetivo, rojo si no
-      const maxS = Math.max(1, ...pasados.map(x => Math.max(alis[x.key] || 0, x.obj || 0)));
+      const maxS = Math.max(1, ...pasados.map(x => Math.max(alis[x.key] || 0, x.obj || 0, tur[x.key] || 0)));
       const cerrados = pasados.filter(x => x.obj && !(x.actual && !ALG.ref));
       const okP = cerrados.filter(x => (alis[x.key] || 0) >= x.obj).length, conObj = cerrados.length;
       const objT = pasados.reduce((a2, x) => a2 + (x.obj || 0), 0);
       const diasH = pasados.reduce((a2, x) => a2 + (x.obj || 0) / objDia, 0);
       const nomP = V === 'dia' ? 'días' : V === 'sem' ? 'semanas' : 'meses';
       $('algRitmo').innerHTML =
-        `<div style="font-size:13px; margin:2px 0 8px;">Promedio: <b style="font-size:18px; color:${totA / Math.max(1, diasH) >= objDia ? 'var(--green)' : 'var(--red)'};">${(totA / Math.max(1, diasH)).toFixed(1).replace('.', ',')}</b> autos por día · objetivo <b>${objDia}</b> · llegaron al objetivo <b>${okP} de ${conObj}</b> ${nomP}</div>` +
-        `<div style="position:relative; display:flex; gap:6px; align-items:flex-end; height:170px; padding:18px 0 0;">` + pasados.map(x => {
+        `<div style="font-size:13px; margin:2px 0 8px;">Turnos: <b>${sum(pasados, tur)}</b> · alistados: <b>${totA}</b> · Promedio: <b style="font-size:18px; color:${totA / Math.max(1, diasH) >= objDia ? 'var(--green)' : 'var(--red)'};">${(totA / Math.max(1, diasH)).toFixed(1).replace('.', ',')}</b> autos por día · objetivo <b>${objDia}</b> · llegaron al objetivo <b>${okP} de ${conObj}</b> ${nomP}</div>` +
+        `<div style="position:relative; display:flex; gap:6px; align-items:flex-end; min-height:200px; padding:8px 0 0; margin-top:6px;">` + pasados.map(x => {
           const a = alis[x.key] || 0, ok = a >= x.obj, enCurso = x.actual && !ok && !ALG.ref;
           const colB = ok ? 'var(--green)' : enCurso ? 'var(--blue)' : 'var(--red)';
           const rango = V === 'dia' ? entFmt(x.ini) : `${entFmt(x.ini)} al ${entFmt(x.fin)}`;
-          return `<div style="flex:1; display:flex; flex-direction:column; align-items:center; gap:4px;" title="${rango}: se alistaron ${a} autos · objetivo ${x.obj} · ${ok ? 'objetivo cumplido ✅' : (enCurso ? 'en curso: faltan ' : 'faltaron ') + (x.obj - a)}">
-            <div style="font-size:13px; font-weight:800; color:${colB};">${a}</div>
-            <div style="position:relative; width:100%; max-width:42px; height:130px; display:flex; align-items:flex-end;">
-              <div style="width:100%; height:${Math.round(a / maxS * 128)}px; background:${colB}; opacity:.85; border-radius:5px 5px 0 0;"></div>
+          return `<div style="flex:1; display:flex; flex-direction:column; align-items:center; gap:4px;" title="${rango}: había ${tur[x.key] || 0} turnos de alistaje y se alistaron ${a} autos · objetivo ${x.obj} · ${ok ? 'objetivo cumplido ✅' : (enCurso ? 'en curso: faltan ' : 'faltaron ') + (x.obj - a)}">
+            <div style="font-size:13px; font-weight:800; color:${colB}; line-height:1;">${a}</div>
+            <div style="font-size:10px; color:var(--text-dim); line-height:1;">de ${tur[x.key] || 0} turnos</div>
+            <div style="position:relative; width:100%; max-width:42px; height:130px; display:flex; align-items:flex-end; justify-content:center;">
+              <div style="position:absolute; bottom:0; left:0; right:0; height:${Math.round((tur[x.key] || 0) / maxS * 128)}px; border:2px solid var(--text-dim); border-bottom:none; border-radius:5px 5px 0 0; background:rgba(148,163,184,.12);"></div>
+              <div style="position:relative; width:62%; height:${Math.round(a / maxS * 128)}px; background:${colB}; opacity:.9; border-radius:4px 4px 0 0;"></div>
               ${x.obj ? `<div style="position:absolute; left:-3px; right:-3px; bottom:${Math.round(x.obj / maxS * 128)}px; border-top:2px dashed var(--text);"></div>` : ''}
             </div>
             <div class="hint" style="font-size:10px; line-height:1.15; text-align:center; ${x.actual ? 'color:var(--blue); font-weight:700;' : ''}">${lbl(x)}</div></div>`; }).join('') + '</div>' +
-        `<div class="hint" style="margin-top:6px; font-size:12px;"><span style="color:var(--green);">■</span> llegó al objetivo · <span style="color:var(--red);">■</span> no llegó · <span style="color:var(--blue);">■</span> en curso (hoy / período actual) · <b>- - -</b> objetivo (${objDia} autos por día hábil${V === 'dia' ? '' : ', multiplicado por los días hábiles del período'})</div>` +
+        `<div class="hint" style="margin-top:6px; font-size:12px;"><span style="display:inline-block; width:10px; height:10px; border:2px solid var(--text-dim); vertical-align:middle;"></span> turnos de alistaje de ese día · barra de color = autos alistados: <span style="color:var(--green);">■</span> llegó al objetivo · <span style="color:var(--red);">■</span> no llegó · <span style="color:var(--blue);">■</span> en curso (hoy / período actual) · <b>- - -</b> objetivo (${objDia} autos por día hábil${V === 'dia' ? '' : ', multiplicado por los días hábiles del período'})</div>` +
         `<details style="margin-top:10px;"><summary class="hint" style="cursor:pointer; font-size:12px;">Ver detalle de turnos de alistaje (para supervisión)</summary>` +
         `<div class="hint" style="margin-top:6px; font-size:12px; line-height:1.55;">Turnos de alistaje en el período: <b>${totT}</b>, cumplidos a tiempo <b>${totC}</b>${totT ? ` (${Math.round(totC / totT * 100)}%)` : ''} · arribaron <b>${totE}</b> autos · ` +
         (!totA && !totE ? 'sin movimientos' : totA >= totE ? '<span style="color:var(--green); font-weight:700;">la cola se achica ✅</span>' : `<span style="color:var(--red); font-weight:700;">la cola crece (+${totE - totA})</span>`) +
