@@ -4878,7 +4878,7 @@
         const t = tur[x.key] || 0, tv = venc[x.key] || 0, c = cum[x.key] || 0, a = alis[x.key] || 0, fut = x.fut;
         const pc = tv ? Math.round(c / tv * 100) : null, col = pc === null ? 'var(--text-faint)' : pc >= 90 ? 'var(--green)' : pc >= 70 ? 'var(--amber)' : 'var(--red)';
         const rango = V === 'dia' ? entFmt(x.ini) : `${entFmt(x.ini)} al ${entFmt(x.fin)}`;
-        return `<div style="flex:1; display:flex; flex-direction:column; align-items:center; gap:3px; ${fut ? 'opacity:.75;' : ''}" title="${rango}: ${t} turnos de alistaje${fut ? ' programados' : ` · ${c} cumplidos de ${tv} ya vencidos${t > tv ? ` · ${t - tv} todavía por venir` : ''} · ${a} autos alistados (con y sin turno)`}">
+        return `<div style="flex:1; display:flex; flex-direction:column; align-items:center; gap:3px; ${fut ? 'opacity:.75;' : ''}" title="${rango}&#10;${fut ? `${t} turnos de alistaje programados` : `Turnos de alistaje: ${tv}&#10;✔ Alistados a tiempo: ${c}&#10;⏱ Alistados después del turno: ${tarde[x.key] || 0}&#10;✖ Todavía sin alistar: ${pendT[x.key] || 0}${t > tv ? `&#10;Además, ${t - tv} turnos más adelante en el período` : ''}&#10;Autos alistados en total (con y sin turno): ${a}`}">
           <div style="display:flex; gap:2px; align-items:flex-end; height:120px;">
             <div style="width:${V === 'mes' ? 16 : 10}px; height:${Math.round(t / maxR * 114)}px; background:var(--blue); opacity:${fut ? .45 : .55}; border-radius:3px 3px 0 0; ${fut ? 'border:1px dashed var(--blue);' : ''}"></div>
             ${fut ? '' : `<div style="width:${V === 'mes' ? 16 : 10}px; height:${Math.round(c / maxR * 114)}px; background:var(--green); border-radius:3px 3px 0 0;"></div>`}
