@@ -8336,6 +8336,11 @@
 
   const ENTREGA_MOTIVOS = ['ENTREGA CON UNIDAD FACTURADA','VENDIDO A REVENTA','ENTREGA USADOS STORE','ENTREGA USADOS','TRASLADO','VENDIDO SIN FACTURAR','USADO VENDIDO A REVENTA','UNIDADA DEVUELTA A FABRICA'];
 
+  // Entregado con unidad facturada y sin turno de entrega: la entrega la gestionó el vendedor
+  function entregaVendedor(row){
+    const mot = (row['Motivo Cambio Ubicacion'] || '').toString().trim().toUpperCase();
+    return mot === 'ENTREGA CON UNIDAD FACTURADA' && !(row['Fecha Turno Entrega'] || '').toString().trim() && isEntregado(row);
+  }
   function entregadoManual(row){
     try { return typeof OBSERVATIONS !== 'undefined' && OBSERVATIONS.has(obsKey(row['Interno'], 'entregadoManual')); } catch(e){ return false; }
   }
@@ -9796,12 +9801,13 @@
     const base = entFiltrar(all);
     const tarde = base.filter(u => u.tarde);
     try { entRenderPromedios(base); } catch(e){ console.error('entRenderPromedios', e); }
-    const sinTurno = ALL_ROWS.filter(r => {
+    const sinTurnoRows = ALL_ROWS.filter(r => {
       if (!entSinTurno(r)) return false;
       const m = (r['Marca'] || '').toString().trim().toUpperCase();
       const mes = entMonthKey(entMid(parseDateFlexible(r['Fecha Entrega Unidad'])));
       return ENT_STATE.brands.has(m) && ENT_STATE.mes.has(mes);
-    }).length;
+    });
+    const sinTurno = sinTurnoRows.length, porVendedor = sinTurnoRows.filter(entregaVendedor).length;
     const brandLabel = b => (typeof PATENTADOS_BRAND_LABELS !== 'undefined' && PATENTADOS_BRAND_LABELS[b]) || b;
 
     // ---- KPIs ----
@@ -9813,7 +9819,7 @@
     const top = ordenCausas[0], top2 = ordenCausas[1];
     const kpi = (l, v, s, c) => `<div class="ent-kpi" style="--kc:${c}"><div class="l">${l}</div><div class="v">${v}</div><div class="s">${s}</div></div>`;
     $('entKpis').innerHTML =
-      kpi('🚚 Entregados', base.length.toLocaleString('es-AR'), `según fecha de turno · ${sinTurno.toLocaleString('es-AR')} sin turno: no son entregas de Maipú (no se analizan)`, 'var(--blue)') +
+      kpi('🚚 Entregados', base.length.toLocaleString('es-AR'), `según fecha de turno · ${sinTurno.toLocaleString('es-AR')} sin turno: no son entregas de Maipú (no se analizan)${porVendedor ? ` · ${porVendedor.toLocaleString('es-AR')} de ellas: 🧑‍💼 entrega gestionada por vendedor` : ''}`, 'var(--blue)') +
       kpi('⏰ Fuera de plazo', `${tarde.length.toLocaleString('es-AR')} · ${pct}%`, `${base.length - tarde.length} en plazo`, pct >= 30 ? 'var(--red)' : 'var(--amber)') +
       kpi('📏 Atraso promedio', tarde.length ? prom.toFixed(1) + ' dh' : '—', 'días hábiles sobre el plazo', 'var(--orange)') +
       kpi('🥇 Área #1', top ? `${ENT_AREAS[top[0]].icon} ${Math.round(top[1] / tarde.length * 100)}%` : '—', top ? `${ENT_AREAS[top[0]].label} · causa principal en ${top[1]} autos` : 'sin entregas tarde', 'var(--red)') +
@@ -14410,6 +14416,7 @@
     if (fa && !fiTxt(r, 'Fecha Entrega Unidad') && !fiTxt(r, 'Fecha Turno Entrega')) return `Turno cumplido en la Agenda de la app (${entFmt(fa)}) — todavía no figura en el sistema`;
     if (fiTxt(r, 'Fecha Entrega Unidad')) return `Fecha Entrega Unidad cargada (${formatDateDisplay(r['Fecha Entrega Unidad'])})`;
     const mot = fiTxt(r, 'Motivo Cambio Ubicacion').toUpperCase();
+    if (mot === 'ENTREGA CON UNIDAD FACTURADA' && !fiTxt(r, 'Fecha Turno Entrega')) return 'Entrega gestionada por vendedor (unidad facturada, sin turno de entrega)';
     if (ENTREGA_MOTIVOS.includes(mot)) return `Motivo de ubicación "${mot}"`;
     const ft = fiD(r, 'Fecha Turno Entrega');
     if (ft && ft <= new Date()) return `Turno de entrega ya cumplido (${formatDateDisplay(r['Fecha Turno Entrega'])})`;
@@ -14535,6 +14542,7 @@
         <span class="hint">${escapeHtml(fiTxt(r, 'Color'))} · VIN ${escapeHtml(fiTxt(r, 'Chasis'))}</span>
       </div>
       <div style="margin:8px 0 10px; display:flex; gap:8px; flex-wrap:wrap; align-items:center;">${estado}
+        ${entregaVendedor(r) ? `<span style="display:inline-block; padding:4px 10px; border-radius:14px; font-weight:700; font-size:12.5px; background:rgba(56,189,248,.16); color:#38bdf8; border:1px solid rgba(56,189,248,.45);">🧑‍💼 Entrega gestionada por vendedor</span>` : ''}
         ${isInvitado(r)
           ? `<span style="display:inline-block; padding:4px 10px; border-radius:14px; font-weight:700; font-size:12.5px; background:rgba(168,85,247,.18); color:#c084fc; border:1px solid rgba(168,85,247,.45);">🤝 Operación con invitado: ${escapeHtml(fiTxt(r, 'Invitado'))}</span>`
           : `<span class="hint" style="padding:3px 10px; border-radius:14px; border:1px solid var(--border); font-size:12px;">Sin invitado</span>`}</div>
