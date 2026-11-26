@@ -1583,6 +1583,7 @@
             <label class="hint" for="algFecha">Hasta</label><input type="date" id="algFecha" class="month-select" style="padding:5px 8px;">
             <div class="segmented" id="algVista"><button type="button" data-v="dia" class="active">Diaria</button><button type="button" data-v="sem">Semanal</button><button type="button" data-v="mes">Mensual</button></div>
             <button type="button" class="page-btn" id="algHoyBtn" style="font-size:12px;">Hoy</button>
+            <label class="hint" for="algObj" style="margin-left:6px;">🎯 Objetivo por día</label><input type="number" id="algObj" min="1" step="1" value="24" class="month-select" style="width:64px; padding:5px 6px;">
           </div>
           <div id="algRitmo"></div>
         </div>
@@ -4782,6 +4783,8 @@
     $('algVista').addEventListener('click', e => { const b = e.target.closest('button[data-v]'); if (!b) return; ALG.vista = b.dataset.v;
       $('algVista').querySelectorAll('button').forEach(x => x.classList.toggle('active', x === b)); renderAlistajeGest(); });
     $('algFecha').addEventListener('change', e => { const v = e.target.value; ALG.ref = v ? new Date(v + 'T00:00:00') : null; renderAlistajeGest(); });
+    try { const o = localStorage.getItem('algObjDia'); if (o) $('algObj').value = o; } catch(e){}
+    $('algObj').addEventListener('change', e => { try { localStorage.setItem('algObjDia', e.target.value); } catch(_){} renderAlistajeGest(); });
     $('algHoyBtn').addEventListener('click', () => { ALG.ref = null; $('algFecha').value = ''; renderAlistajeGest(); });
     $('algExcel').addEventListener('click', () => {
       const data = (ALG.ult || []).map(([r, x]) => ({
@@ -4866,7 +4869,10 @@
         if (fa && fa <= hoyR) alis[kOf(fa)] = (alis[kOf(fa)] || 0) + 1;
         if (fr && fr <= hoyR) arr[kOf(fr)] = (arr[kOf(fr)] || 0) + 1;
       });
-      const maxR = Math.max(1, ...per.map(x => Math.max(tur[x.key] || 0, alis[x.key] || 0)));
+      const objDia = Math.max(1, parseInt($('algObj').value, 10) || 24);
+      const habEntre = (a, b) => { let n = 0; const d2 = new Date(a); while (d2 <= b){ if (esHab(d2)) n++; d2.setDate(d2.getDate() + 1); } return n; };
+      per.forEach(x => { x.obj = objDia * (V === 'dia' ? (esHab(x.ini) ? 1 : 0) : habEntre(x.ini, x.actual ? hoyR : x.fin)); });
+      const maxR = Math.max(1, ...per.map(x => Math.max(tur[x.key] || 0, alis[x.key] || 0, x.obj || 0)));
       const dn = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'], mn = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
       const lbl = x => V === 'dia' ? (x.actual ? (ALG.ref ? 'ref.' : 'HOY') + `<br>${x.ini.getDate()}/${x.ini.getMonth() + 1}` : `${dn[x.ini.getDay()]}<br>${x.ini.getDate()}/${x.ini.getMonth() + 1}`)
         : V === 'sem' ? `sem<br>${x.ini.getDate()}/${x.ini.getMonth() + 1}` : `${mn[x.ini.getMonth()]}<br>${String(x.ini.getFullYear()).slice(2)}`;
@@ -4878,23 +4884,29 @@
         const t = tur[x.key] || 0, tv = venc[x.key] || 0, c = cum[x.key] || 0, a = alis[x.key] || 0, fut = x.fut;
         const pc = tv ? Math.round(c / tv * 100) : null, col = pc === null ? 'var(--text-faint)' : pc >= 90 ? 'var(--green)' : pc >= 70 ? 'var(--amber)' : 'var(--red)';
         const rango = V === 'dia' ? entFmt(x.ini) : `${entFmt(x.ini)} al ${entFmt(x.fin)}`;
-        return `<div style="flex:1; display:flex; flex-direction:column; align-items:center; gap:3px; ${fut ? 'opacity:.75;' : ''}" title="${rango}&#10;${fut ? `${t} turnos de alistaje programados` : `Turnos de alistaje: ${tv}&#10;✔ Alistados a tiempo: ${c}&#10;⏱ Alistados después del turno: ${tarde[x.key] || 0}&#10;✖ Todavía sin alistar: ${pendT[x.key] || 0}${t > tv ? `&#10;Además, ${t - tv} turnos más adelante en el período` : ''}&#10;Autos alistados en total (con y sin turno): ${a}`}">
-          <div style="display:flex; gap:2px; align-items:flex-end; height:120px;">
-            <div style="width:${V === 'mes' ? 16 : 10}px; height:${Math.round(t / maxR * 114)}px; background:var(--blue); opacity:${fut ? .45 : .55}; border-radius:3px 3px 0 0; ${fut ? 'border:1px dashed var(--blue);' : ''}"></div>
-            ${fut ? '' : `<div style="width:${V === 'mes' ? 16 : 10}px; height:${Math.round(c / maxR * 114)}px; background:var(--green); border-radius:3px 3px 0 0;"></div>`}
+        return `<div style="flex:1; display:flex; flex-direction:column; align-items:center; gap:3px; ${fut ? 'opacity:.75;' : ''}" title="${rango}&#10;${fut ? `${t} turnos de alistaje programados` : `Turnos de alistaje: ${tv}&#10;✔ Alistados a tiempo: ${c}&#10;⏱ Alistados después del turno: ${tarde[x.key] || 0}&#10;✖ Todavía sin alistar: ${pendT[x.key] || 0}${t > tv ? `&#10;Además, ${t - tv} turnos más adelante en el período` : ''}&#10;Autos alistados en total (con y sin turno): ${a}&#10;🎯 Objetivo: ${x.obj} (${objDia} por día hábil) → ${a >= x.obj ? 'cumplido ✅' : 'faltaron ' + (x.obj - a)}`}">
+          <div style="position:relative; display:flex; gap:2px; align-items:flex-end; height:120px; padding:0 2px;">
+            <div style="width:${V === 'mes' ? 14 : 9}px; height:${Math.round(t / maxR * 114)}px; background:var(--blue); opacity:${fut ? .45 : .55}; border-radius:3px 3px 0 0; ${fut ? 'border:1px dashed var(--blue);' : ''}"></div>
+            ${fut ? '' : `<div style="width:${V === 'mes' ? 14 : 9}px; height:${Math.round(c / maxR * 114)}px; background:var(--green); border-radius:3px 3px 0 0;"></div>
+            <div style="width:${V === 'mes' ? 14 : 9}px; height:${Math.round(a / maxR * 114)}px; background:${a >= x.obj ? '#a78bfa' : '#a78bfa'}; opacity:.9; border-radius:3px 3px 0 0;"></div>`}
+            ${x.obj ? `<div style="position:absolute; left:-2px; right:-2px; bottom:${Math.round(x.obj / maxR * 114)}px; border-top:2px dashed var(--red);"></div>` : ''}
           </div>
           <div style="font-size:10.5px; font-weight:700; color:${fut ? 'var(--text-dim)' : col};">${fut ? t : (tv ? c + '/' + tv : '—')}</div>
+          ${fut ? '' : `<div style="font-size:10px; font-weight:700; color:${a >= x.obj ? 'var(--green)' : 'var(--red)'};" title="Alistados vs. objetivo">${a}/${x.obj}</div>`}
           <div class="hint" style="font-size:9.5px; line-height:1.1; text-align:center; ${x.actual ? 'color:var(--blue); font-weight:700;' : ''}">${lbl(x)}</div></div>`; }).join('') + '</div>' +
-        `<div class="hint" style="margin-top:6px; font-size:12px; line-height:1.55;"><span style="color:var(--blue); opacity:.7;">■</span> turnos de alistaje · <span style="color:var(--green);">■</span> cumplidos (alistado el día del turno o antes) · punteado = programados<br>` +
+        `<div class="hint" style="margin-top:6px; font-size:12px; line-height:1.55;"><span style="color:var(--blue); opacity:.7;">■</span> turnos de alistaje · <span style="color:var(--green);">■</span> cumplidos (alistado el día del turno o antes) · <span style="color:#a78bfa;">■</span> autos alistados en total · <span style="color:var(--red);">- - -</span> objetivo (${objDia} por día hábil) · barras punteadas = programados<br>` +
+        (() => { const pp = pasados.filter(x => x.obj); const okP = pp.filter(x => (alis[x.key] || 0) >= x.obj).length; const objT = pp.reduce((a2, x) => a2 + x.obj, 0);
+          const diasH = V === 'dia' ? pp.length : pp.reduce((a2, x) => a2 + x.obj / objDia, 0);
+          return `🎯 <b>Objetivo de alistaje:</b> se alistaron <b>${totA}</b> de <b>${objT}</b> (${objT ? Math.round(totA / objT * 100) : 0}%) · promedio <b>${(totA / Math.max(1, diasH)).toFixed(1).replace('.', ',')}</b> por día hábil vs. ${objDia} · ${V === 'dia' ? 'días' : V === 'sem' ? 'semanas' : 'meses'} que llegaron al objetivo: <b style="color:${okP === pp.length ? 'var(--green)' : 'var(--red)'};">${okP} de ${pp.length}</b><br>`; })() +
         `${V === 'sem' ? 'Últimas' : 'Últimos'} ${pasados.length} ${nomPer[0]} (hasta el ${entFmt(hoyR)}): <b>${totT}</b> turnos (${(totT / Math.max(1, pasados.length)).toFixed(1).replace('.', ',')} ${nomPer[1]}), <b>${totC}</b> cumplidos${totT ? ` (<b>${Math.round(totC / totT * 100)}%</b>)` : ''} · se alistaron <b>${totA}</b> autos (con y sin turno) · arribaron <b>${totE}</b> · ` +
         (!totA && !totE ? 'sin movimientos' : totA >= totE ? '<span style="color:var(--green); font-weight:700;">la cola se achica ✅</span>' : `<span style="color:var(--red); font-weight:700;">la cola crece (+${totE - totA})</span>`) +
         `<br>Programados después del ${entFmt(hoyR)}: <b>${totF}</b> turnos</div>` +
         // Tabla: turnos que había y cuántos se finalizaron en cada período
-        `<div class="table-scroll" style="max-height:260px; margin-top:10px;"><table class="data-table"><thead><tr><th>${V === 'dia' ? 'Día' : V === 'sem' ? 'Semana' : 'Mes'}</th><th style="text-align:right;">Turnos</th><th style="text-align:right;">Finalizados a tiempo</th><th style="text-align:right;">Finalizados tarde</th><th style="text-align:right;">Sin finalizar</th><th style="text-align:right;">Cumplimiento</th></tr></thead><tbody>` +
+        `<div class="table-scroll" style="max-height:260px; margin-top:10px;"><table class="data-table"><thead><tr><th>${V === 'dia' ? 'Día' : V === 'sem' ? 'Semana' : 'Mes'}</th><th style="text-align:right;">Turnos</th><th style="text-align:right;">Finalizados a tiempo</th><th style="text-align:right;">Finalizados tarde</th><th style="text-align:right;">Sin finalizar</th><th style="text-align:right;">Cumplimiento</th><th style="text-align:right;">Alistados total / objetivo</th></tr></thead><tbody>` +
         pasados.slice().reverse().map(x => { const tv = venc[x.key] || 0, c = cum[x.key] || 0, ta = tarde[x.key] || 0, pe = pendT[x.key] || 0, pc = tv ? Math.round(c / tv * 100) : null;
           const col = pc === null ? 'var(--text-faint)' : pc >= 90 ? 'var(--green)' : pc >= 70 ? 'var(--amber)' : 'var(--red)';
           const nom = V === 'dia' ? `${dn[x.ini.getDay()]} ${entFmt(x.ini)}` : V === 'sem' ? `${entFmt(x.ini).slice(0, 5)} al ${entFmt(x.fin).slice(0, 5)}` : `${mn[x.ini.getMonth()]} ${x.ini.getFullYear()}`;
-          return `<tr${x.actual ? ' style="background:rgba(76,141,255,.08);"' : ''}><td>${nom}${x.actual ? ' <span class="hint">(en curso)</span>' : ''}</td><td style="text-align:right;"><b>${tv}</b></td><td style="text-align:right; color:var(--green);">${c}</td><td style="text-align:right; color:var(--amber);">${ta || '—'}</td><td style="text-align:right; color:${pe ? 'var(--red)' : 'var(--text-faint)'};">${pe || '—'}</td><td style="text-align:right; font-weight:700; color:${col};">${pc === null ? '—' : pc + '%'}</td></tr>`; }).join('') +
+          return `<tr${x.actual ? ' style="background:rgba(76,141,255,.08);"' : ''}><td>${nom}${x.actual ? ' <span class="hint">(en curso)</span>' : ''}</td><td style="text-align:right;"><b>${tv}</b></td><td style="text-align:right; color:var(--green);">${c}</td><td style="text-align:right; color:var(--amber);">${ta || '—'}</td><td style="text-align:right; color:${pe ? 'var(--red)' : 'var(--text-faint)'};">${pe || '—'}</td><td style="text-align:right; font-weight:700; color:${col};">${pc === null ? '—' : pc + '%'}</td><td style="text-align:right; font-weight:700; color:${(alis[x.key] || 0) >= x.obj ? 'var(--green)' : 'var(--red)'};">${alis[x.key] || 0} / ${x.obj}</td></tr>`; }).join('') +
         '</tbody></table></div>';
     }
     // Cola de trabajo
