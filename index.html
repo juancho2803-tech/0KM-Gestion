@@ -14502,11 +14502,11 @@
       });
     } catch(e){}
     ev.sort((a,b) => a.d - b.d);
-    const fv = fiD(r, 'Fecha Venta');
+    const fPatT = fiD(r, 'Fecha Patentamiento');
     const tl = ev.map((e, k) => {
       const prev = k ? ev[k-1].d : null, dd = fiDias(prev, e.d);
       return `<tr><td class="col-fecha">${entFmt(e.d)}</td><td><b>${escapeHtml(e.l)}</b>${e.x ? ` <span class="hint">· ${escapeHtml(e.x)}</span>` : ''}</td>
-        <td class="num">${dd !== null && dd > 0 ? '+' + dd + ' d' : ''}</td><td class="num">${fv && e.d >= fv ? (fiDias(fv, e.d) + ' d') : ''}</td></tr>`;
+        <td class="num">${dd !== null && dd > 0 ? '+' + dd + ' d' : ''}</td><td class="num">${fPatT && e.d >= fPatT ? (fiDias(fPatT, e.d) + ' d') : ''}</td></tr>`;
     }).join('');
 
     // Análisis de entrega (si ya se entregó con turno)
@@ -14583,7 +14583,7 @@
       ${analisis ? `<div style="margin-top:10px;">${analisis}</div>` : ''}
       <div class="an-sub" style="margin-top:12px;">Recorrido (en orden de fecha)</div>
       <div class="table-scroll" style="max-height:330px;"><table class="data-table an-table">
-        <thead><tr><th>Fecha</th><th>Evento</th><th class="num">Desde el anterior</th><th class="num">Desde la venta</th></tr></thead>
+        <thead><tr><th>Fecha</th><th>Evento</th><th class="num">Desde el anterior</th><th class="num">Desde el patentamiento</th></tr></thead>
         <tbody>${tl || '<tr><td colspan="4" class="table-empty">Sin fechas cargadas</td></tr>'}</tbody></table></div>
       ${agenda.length ? `<div class="an-sub" style="margin-top:12px;">📅 Agenda de turnos</div><ul class="fi-an">${agenda.map(t => `<li>${entFmt(agFromKey(t.fecha))} ${escapeHtml(t.hora)} · ${escapeHtml(t.entregador)} · ${(AG_ESTADOS[t.estado] || {label:t.estado}).label}${t.nota ? ' · ' + escapeHtml(t.nota) : ''} <span class="hint">(${escapeHtml(t.usuario || '')})</span></li>`).join('')}</ul>` : ''}
       ${obs.length ? `<div class="an-sub" style="margin-top:12px;">📝 Observaciones cargadas en la app</div><ul class="fi-an">${obs.join('')}</ul>` : ''}`;
