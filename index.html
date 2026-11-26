@@ -1578,7 +1578,12 @@
           <div id="algUbic"></div>
         </div>
         <div class="panel">
-          <div class="panel-head"><h3>📈 Turnos de alistaje por día</h3><div class="hint">Cuántos turnos había cada día y cuántos se cumplieron (últimos 10 días hábiles) + los programados para los próximos 5 · pasá el mouse por cada día para el detalle</div></div>
+          <div class="panel-head"><h3>📈 Turnos de alistaje</h3><div class="hint">Cuántos turnos había y cuántos se cumplieron (alistado el día del turno o antes) + lo programado · pasá el mouse por cada barra para el detalle</div></div>
+          <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:6px;">
+            <label class="hint" for="algFecha">Hasta</label><input type="date" id="algFecha" class="month-select" style="padding:5px 8px;">
+            <div class="segmented" id="algVista"><button type="button" data-v="dia" class="active">Diaria</button><button type="button" data-v="sem">Semanal</button><button type="button" data-v="mes">Mensual</button></div>
+            <button type="button" class="page-btn" id="algHoyBtn" style="font-size:12px;">Hoy</button>
+          </div>
           <div id="algRitmo"></div>
         </div>
       </div>
@@ -4708,7 +4713,7 @@
   }
 
   // ================= 🧹 Alistaje — gestión (Entregas) =================
-  const ALG = {init:false, marcas:new Set(), estados:new Set(['Patentado', 'Facturado', 'Reservado', 'Sin operacion']), canales:new Set(), allCanales:[], card:null, cell:null, ubic:null, q:''};
+  const ALG = {vista:'dia', ref:null, init:false, marcas:new Set(), estados:new Set(['Patentado', 'Facturado', 'Reservado', 'Sin operacion']), canales:new Set(), allCanales:[], card:null, cell:null, ubic:null, q:''};
   const ALG_PRIO = {
     1: {t:'🔥 Turno de entrega encima', c:'var(--red)'},
     2: {t:'🔴 Patentado', c:'#ef4444'},
@@ -4776,6 +4781,10 @@
       ALG.card = null; ALG.cell = null; ALG.ubic = null; ALG.q = ''; $('algBuscar').value = ''; renderAlistajeGest(); });
     let t; $('algBuscar').addEventListener('input', e => { clearTimeout(t); t = setTimeout(() => { ALG.q = e.target.value.trim().toLowerCase(); renderAlistajeGest(); }, 200); });
     $('algTabla').addEventListener('click', e => { const tr = e.target.closest('tr[data-i]'); if (tr && typeof fiAbrir === 'function') fiAbrir(tr.dataset.i); });
+    $('algVista').addEventListener('click', e => { const b = e.target.closest('button[data-v]'); if (!b) return; ALG.vista = b.dataset.v;
+      $('algVista').querySelectorAll('button').forEach(x => x.classList.toggle('active', x === b)); renderAlistajeGest(); });
+    $('algFecha').addEventListener('change', e => { const v = e.target.value; ALG.ref = v ? new Date(v + 'T00:00:00') : null; renderAlistajeGest(); });
+    $('algHoyBtn').addEventListener('click', () => { ALG.ref = null; $('algFecha').value = ''; renderAlistajeGest(); });
     $('algExcel').addEventListener('click', () => {
       const data = (ALG.ult || []).map(([r, x]) => ({
         'Prioridad': ALG_PRIO[x.prio].t.replace(/^\S+\s/, ''), 'Interno': stkTxt(r, 'Interno'), 'Marca': stkTxt(r, 'Marca'), 'Modelo': stkTxt(r, 'Modelo'), 'Color': stkTxt(r, 'Color'),
@@ -4832,41 +4841,58 @@
     const ubs = Object.entries(ubCount).sort((a, b) => b[1] - a[1]); const maxU = Math.max(1, ...ubs.map(x => x[1]));
     $('algUbic').innerHTML = ubs.slice(0, 10).map(([u, n]) => `<div class="pat-motivo ${ALG.ubic === u ? 'active' : ''}" data-u="${escapeHtml(u)}" title="Clic para filtrar la cola"><span class="pm-label">${escapeHtml(u)}</span><span class="pm-bar"><span style="width:${Math.max(3, Math.round(n / maxU * 100))}%; background:var(--blue);"></span></span><span class="pm-n">${n}</span></div>`).join('') +
       (ubs.length > 10 ? `<div class="hint">… y ${ubs.length - 10} ubicaciones más</div>` : '') || '<div class="hint">—</div>';
-    // Turnos de alistaje por día: cuántos había y cuántos se cumplieron (+ lo que viene)
+    // Turnos de alistaje por período (día / semana / mes): cuántos había, cuántos se cumplieron y lo programado
     {
-      const hoyR = algHoy();
+      const hoyR = ALG.ref ? new Date(ALG.ref) : algHoy(); hoyR.setHours(0,0,0,0);
+      const pad = n => String(n).padStart(2, '0');
+      if (!$('algFecha').value) $('algFecha').value = `${hoyR.getFullYear()}-${pad(hoyR.getMonth() + 1)}-${pad(hoyR.getDate())}`;
       const esHab = d => d.getDay() % 6 && !(typeof esFeriadoSLA === 'function' && esFeriadoSLA(d));
-      const pasados = []; const d = new Date(hoyR); while (pasados.length < 10){ if (esHab(d)) pasados.unshift(new Date(d)); d.setDate(d.getDate() - 1); }
-      const futuros = []; const f = new Date(hoyR); while (futuros.length < 5){ f.setDate(f.getDate() + 1); if (esHab(f)) futuros.push(new Date(f)); }
-      const k = x => x ? x.getFullYear() + '-' + x.getMonth() + '-' + x.getDate() : '';
-      const tur = {}, cum = {}, alis = {}, arr = {};
+      const V = ALG.vista;
+      const lunes = d => { const x = new Date(d); x.setHours(0,0,0,0); x.setDate(x.getDate() - ((x.getDay() + 6) % 7)); return x; };
+      const kOf = d => V === 'dia' ? d.getFullYear() + '-' + d.getMonth() + '-' + d.getDate() : V === 'sem' ? (() => { const l = lunes(d); return l.getFullYear() + '-' + l.getMonth() + '-' + l.getDate(); })() : d.getFullYear() + '-' + d.getMonth();
+      // Períodos: diaria 10 dh atrás + 5 adelante · semanal 8 atrás + 2 adelante · mensual 6 atrás + 1 adelante
+      const per = []; // {ini, fin, key, fut, actual}
+      if (V === 'dia'){
+        const atr = []; const d = new Date(hoyR); while (atr.length < 10){ if (esHab(d)) atr.unshift(new Date(d)); d.setDate(d.getDate() - 1); }
+        const ade = []; const f = new Date(hoyR); while (ade.length < 5){ f.setDate(f.getDate() + 1); if (esHab(f)) ade.push(new Date(f)); }
+        atr.concat(ade).forEach(x => per.push({ini:x, fin:x, key:kOf(x), fut:x > hoyR, actual:x.getTime() === hoyR.getTime()}));
+      } else if (V === 'sem'){
+        const l0 = lunes(hoyR);
+        for (let i = -7; i <= 2; i++){ const a = new Date(l0); a.setDate(a.getDate() + i * 7); const b = new Date(a); b.setDate(b.getDate() + 6); per.push({ini:a, fin:b, key:kOf(a), fut:i > 0, actual:i === 0}); }
+      } else {
+        for (let i = -5; i <= 1; i++){ const a = new Date(hoyR.getFullYear(), hoyR.getMonth() + i, 1); const b = new Date(a.getFullYear(), a.getMonth() + 1, 0); per.push({ini:a, fin:b, key:kOf(a), fut:i > 0, actual:i === 0}); }
+      }
+      const tur = {}, cum = {}, venc = {}, alis = {}, arr = {};
       ALL_ROWS.forEach(r => {
         if (!ALG.marcas.has(stkTxt(r, 'Marca').toUpperCase()) || !ALG.canales.has(stkTxt(r, 'Canal') || '(sin canal)')) return;
         const t = entMid(parseDateFlexible(r['Fecha Turno Alistaje'])), fa = entMid(parseDateFlexible(r['Fecha Alistaje'])), fr = entMid(parseDateFlexible(r['Fecha Arribo Unidad']));
-        if (t){ tur[k(t)] = (tur[k(t)] || 0) + 1; if (fa && fa <= t) cum[k(t)] = (cum[k(t)] || 0) + 1; }
-        if (fa) alis[k(fa)] = (alis[k(fa)] || 0) + 1;
-        if (fr) arr[k(fr)] = (arr[k(fr)] || 0) + 1;
+        if (t){ const kk = kOf(t); tur[kk] = (tur[kk] || 0) + 1; if (t <= hoyR){ venc[kk] = (venc[kk] || 0) + 1; if (fa && fa <= t) cum[kk] = (cum[kk] || 0) + 1; } }
+        if (fa && fa <= hoyR) alis[kOf(fa)] = (alis[kOf(fa)] || 0) + 1;
+        if (fr && fr <= hoyR) arr[kOf(fr)] = (arr[kOf(fr)] || 0) + 1;
       });
-      const dias = pasados.concat(futuros);
-      const maxR = Math.max(1, ...dias.map(x => Math.max(tur[k(x)] || 0, alis[k(x)] || 0)));
-      const dn = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'];
-      const totT = pasados.reduce((a, x) => a + (tur[k(x)] || 0), 0), totC = pasados.reduce((a, x) => a + (cum[k(x)] || 0), 0);
-      const totA = pasados.reduce((a, x) => a + (alis[k(x)] || 0), 0), totE = pasados.reduce((a, x) => a + (arr[k(x)] || 0), 0);
-      const totF = futuros.reduce((a, x) => a + (tur[k(x)] || 0), 0);
-      $('algRitmo').innerHTML = `<div style="display:flex; gap:4px; align-items:flex-end; height:160px; padding:6px 0;">` + dias.map(x => {
-        const t = tur[k(x)] || 0, c = cum[k(x)] || 0, a = alis[k(x)] || 0, fut = x > hoyR, esHoy = x.getTime() === hoyR.getTime();
-        const pc = t ? Math.round(c / t * 100) : null, col = pc === null ? 'var(--text-faint)' : pc >= 90 ? 'var(--green)' : pc >= 70 ? 'var(--amber)' : 'var(--red)';
-        return `<div style="flex:1; display:flex; flex-direction:column; align-items:center; gap:3px; ${fut ? 'opacity:.75;' : ''}" title="${entFmt(x)}: ${t} turnos de alistaje${fut ? ' programados' : ` · ${c} cumplidos · ${a} autos alistados ese día`}">
+      const maxR = Math.max(1, ...per.map(x => Math.max(tur[x.key] || 0, alis[x.key] || 0)));
+      const dn = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'], mn = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+      const lbl = x => V === 'dia' ? (x.actual ? (ALG.ref ? 'ref.' : 'HOY') + `<br>${x.ini.getDate()}/${x.ini.getMonth() + 1}` : `${dn[x.ini.getDay()]}<br>${x.ini.getDate()}/${x.ini.getMonth() + 1}`)
+        : V === 'sem' ? `sem<br>${x.ini.getDate()}/${x.ini.getMonth() + 1}` : `${mn[x.ini.getMonth()]}<br>${String(x.ini.getFullYear()).slice(2)}`;
+      const pasados = per.filter(x => !x.fut), futuros = per.filter(x => x.fut);
+      const sum = (arrP, o) => arrP.reduce((a, x) => a + (o[x.key] || 0), 0);
+      const totT = sum(pasados, venc), totC = sum(pasados, cum), totA = sum(pasados, alis), totE = sum(pasados, arr), totF = sum(futuros, tur) + (pasados.find(x => x.actual) ? (tur[pasados.find(x => x.actual).key] || 0) - (venc[pasados.find(x => x.actual).key] || 0) : 0);
+      const nomPer = {dia:['días hábiles', 'por día'], sem:['semanas', 'por semana'], mes:['meses', 'por mes']}[V];
+      $('algRitmo').innerHTML = `<div style="display:flex; gap:4px; align-items:flex-end; height:160px; padding:6px 0;">` + per.map(x => {
+        const t = tur[x.key] || 0, tv = venc[x.key] || 0, c = cum[x.key] || 0, a = alis[x.key] || 0, fut = x.fut;
+        const pc = tv ? Math.round(c / tv * 100) : null, col = pc === null ? 'var(--text-faint)' : pc >= 90 ? 'var(--green)' : pc >= 70 ? 'var(--amber)' : 'var(--red)';
+        const rango = V === 'dia' ? entFmt(x.ini) : `${entFmt(x.ini)} al ${entFmt(x.fin)}`;
+        return `<div style="flex:1; display:flex; flex-direction:column; align-items:center; gap:3px; ${fut ? 'opacity:.75;' : ''}" title="${rango}: ${t} turnos de alistaje${fut ? ' programados' : ` · ${c} cumplidos de ${tv} ya vencidos${t > tv ? ` · ${t - tv} todavía por venir` : ''} · ${a} autos alistados (con y sin turno)`}">
           <div style="display:flex; gap:2px; align-items:flex-end; height:120px;">
-            <div style="width:10px; height:${Math.round(t / maxR * 114)}px; background:var(--blue); opacity:${fut ? .45 : .55}; border-radius:3px 3px 0 0; ${fut ? 'border:1px dashed var(--blue);' : ''}"></div>
-            ${fut ? '' : `<div style="width:10px; height:${Math.round(c / maxR * 114)}px; background:var(--green); border-radius:3px 3px 0 0;"></div>`}
+            <div style="width:${V === 'mes' ? 16 : 10}px; height:${Math.round(t / maxR * 114)}px; background:var(--blue); opacity:${fut ? .45 : .55}; border-radius:3px 3px 0 0; ${fut ? 'border:1px dashed var(--blue);' : ''}"></div>
+            ${fut ? '' : `<div style="width:${V === 'mes' ? 16 : 10}px; height:${Math.round(c / maxR * 114)}px; background:var(--green); border-radius:3px 3px 0 0;"></div>`}
           </div>
-          <div style="font-size:10.5px; font-weight:700; color:${fut ? 'var(--text-dim)' : col};">${fut ? t : (t ? c + '/' + t : '—')}</div>
-          <div class="hint" style="font-size:9.5px; line-height:1.1; text-align:center; ${esHoy ? 'color:var(--blue); font-weight:700;' : ''}">${esHoy ? 'HOY' : dn[x.getDay()]}<br>${x.getDate()}/${x.getMonth() + 1}</div></div>`; }).join('') + '</div>' +
+          <div style="font-size:10.5px; font-weight:700; color:${fut ? 'var(--text-dim)' : col};">${fut ? t : (tv ? c + '/' + tv : '—')}</div>
+          <div class="hint" style="font-size:9.5px; line-height:1.1; text-align:center; ${x.actual ? 'color:var(--blue); font-weight:700;' : ''}">${lbl(x)}</div></div>`; }).join('') + '</div>' +
         `<div class="hint" style="margin-top:6px; font-size:12px; line-height:1.55;"><span style="color:var(--blue); opacity:.7;">■</span> turnos de alistaje · <span style="color:var(--green);">■</span> cumplidos (alistado el día del turno o antes) · punteado = programados<br>` +
-        `Últimos 10 días hábiles: <b>${totT}</b> turnos (${(totT / 10).toFixed(1).replace('.', ',')} por día), <b>${totC}</b> cumplidos${totT ? ` (<b>${Math.round(totC / totT * 100)}%</b>)` : ''} · se alistaron <b>${totA}</b> autos en total (con y sin turno) · arribaron <b>${totE}</b> · ` +
+        `${V === 'sem' ? 'Últimas' : 'Últimos'} ${pasados.length} ${nomPer[0]} (hasta el ${entFmt(hoyR)}): <b>${totT}</b> turnos (${(totT / Math.max(1, pasados.length)).toFixed(1).replace('.', ',')} ${nomPer[1]}), <b>${totC}</b> cumplidos${totT ? ` (<b>${Math.round(totC / totT * 100)}%</b>)` : ''} · se alistaron <b>${totA}</b> autos (con y sin turno) · arribaron <b>${totE}</b> · ` +
         (!totA && !totE ? 'sin movimientos' : totA >= totE ? '<span style="color:var(--green); font-weight:700;">la cola se achica ✅</span>' : `<span style="color:var(--red); font-weight:700;">la cola crece (+${totE - totA})</span>`) +
-        `<br>Próximos 5 días hábiles: <b>${totF}</b> turnos programados</div>`;
+        `<br>Programados después del ${entFmt(hoyR)}: <b>${totF}</b> turnos</div>`;
     }
     // Cola de trabajo
     let rows = conCard;
