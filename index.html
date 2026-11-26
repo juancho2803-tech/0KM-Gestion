@@ -14534,7 +14534,10 @@
         <h3 style="margin:0;">🔎 ${escapeHtml(i)} · ${escapeHtml(PATENTADOS_BRAND_LABELS[mk] || mk)} ${escapeHtml(fiTxt(r, 'Modelo'))}</h3>
         <span class="hint">${escapeHtml(fiTxt(r, 'Color'))} · VIN ${escapeHtml(fiTxt(r, 'Chasis'))}</span>
       </div>
-      <div style="margin:8px 0 10px;">${estado}</div>
+      <div style="margin:8px 0 10px; display:flex; gap:8px; flex-wrap:wrap; align-items:center;">${estado}
+        ${isInvitado(r)
+          ? `<span style="display:inline-block; padding:4px 10px; border-radius:14px; font-weight:700; font-size:12.5px; background:rgba(168,85,247,.18); color:#c084fc; border:1px solid rgba(168,85,247,.45);">🤝 Operación con invitado: ${escapeHtml(fiTxt(r, 'Invitado'))}</span>`
+          : `<span class="hint" style="padding:3px 10px; border-radius:14px; border:1px solid var(--border); font-size:12px;">Sin invitado</span>`}</div>
       <div class="fi-datos">
         ${dato('Cliente', fiTxt(r, 'Cliente'))}${dato('Nro. operación', fiTxt(r, 'Nro. Operacion'))}${dato('Dominio', fiTxt(r, 'Dominio'))}${dato('Canal', fiTxt(r, 'Canal'))}
         ${dato('Tipo compra', fiTxt(r, 'Tipo Compra Stock'))}${dato('Invitado', fiTxt(r, 'Invitado'))}${dato('Patenta', fiTxt(r, 'Patenta?'))}
