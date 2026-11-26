@@ -11201,7 +11201,8 @@
           }).join('') || '<div class="hint">Sin pendientes con estos filtros</div>'}</div></div>`;
         const pal = FAC ? 'Facturados' : 'Patentados';
         // Usados pendientes de recibir: se reciben con la entrega del 0km (hasta la fecha de turno)
-        const usados = baseRowsConFiltros.filter(esUsado);
+        // Sigue todos los filtros activos (estado, motivo, localidad, mes, trámite), igual que la tabla
+        const usados = rows.filter(esUsado);
         const hoy0 = new Date(); hoy0.setHours(0,0,0,0);
         const finSem = new Date(hoy0); finSem.setDate(hoy0.getDate() + 7);
         let conT = 0, semana = 0;
@@ -11209,7 +11210,7 @@
         const usadoCard = `<div class="pat-brand-card ${patUsadoFilter === 'SI' ? 'active' : ''}" data-usados="1" title="Clic para ver solo estos autos">
           <div class="brand-name">${agUsadoIcon(true)} Usados pendientes de recibir</div>
           <div class="brand-count" style="color:#f97316">${usados.length.toLocaleString('es-AR')}</div>
-          ${patVsAyer(usados.length, snapRef ? snapRows.filter(x => esUsado(x.r)).length : null, snapRef, true)}
+          ${patVsAyer(usados.length, snapRef ? snapRows.filter(x => esUsado(x.r) && patEstadoEntregaFilter.has(x.e) && (!patMotivoFilter || (x.e === 'noOk' && x.m.includes(patMotivoFilter))) && patLocalidadFilter.has(x.l) && (!patMesPatFilter || patMesPatDe(x.r) === patMesPatFilter)).length : null, snapRef, true)}
           <div class="brand-breakdown">${conT} con turno (${semana} en los próximos 7 días) · ${usados.length - conT} sin turno</div>
           <button type="button" class="page-btn" data-usados-xlsx="1" style="margin-top:8px; font-size:12px;">⬇️ Excel de todas las operaciones con usado</button>
         </div>`;
