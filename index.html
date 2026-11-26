@@ -1246,6 +1246,7 @@
         <button class="subtab-btn" data-subtab="facturados" type="button">🧾 Facturados</button>
         <button class="subtab-btn active" data-subtab="patentados" type="button">✅ Patentados</button>
         <button class="subtab-btn" data-subtab="agenda" type="button">📅 Agenda de turnos</button>
+        <button class="subtab-btn" data-subtab="alistajegest" type="button">🧹 Alistaje</button>
         <button class="subtab-btn" data-subtab="averias" type="button">⚠️ Averías</button>
         <button class="subtab-btn" data-subtab="fueradq" type="button">📍 No en DQ</button>
         <button class="subtab-btn" data-subtab="accesorios" type="button">🎒 Accesorios</button>
@@ -1553,6 +1554,43 @@
         <div class="hint" id="avTableHint" style="margin-top:10px;">Mostrando 0 de 0 registros</div>
       </div>
     </div><!-- /tabAverias -->
+
+    <div class="subtab-content" id="tabAlistajeGest">
+      <div class="panel">
+        <div class="panel-head">
+          <h3>🧹 Alistaje — gestión del día</h3>
+          <div class="hint">Autos arribados y sin alistar (no entregados), priorizados para trabajar · las tarjetas, el cuadro y la lista de ubicaciones filtran la cola · clic en un auto para abrir su ficha · los plazos se miden en Aceleración › Alistaje</div>
+        </div>
+        <div class="filter-row">
+          <div class="pill-group"><span class="pill-group-label">Marca</span><div class="pill-list" id="algMarca"></div></div>
+          <div class="pill-group"><span class="pill-group-label">Estado comercial</span><div class="pill-list" id="algEstado"></div></div>
+          <div class="pill-group"><span class="pill-group-label">Canal</span><div class="pill-list" id="algCanal"></div></div>
+          <button class="page-btn" id="algLimpiar" type="button">🧹 Limpiar filtros</button>
+          <div class="table-search"><input type="text" id="algBuscar" placeholder="Buscar interno, cliente, modelo o color…" autocomplete="off"></div>
+        </div>
+        <div class="stk-cards" id="algCards"></div>
+      </div>
+      <div class="ent-grid2">
+        <div class="panel">
+          <div class="panel-head"><h3>📊 Pendientes por estado y marca</h3><div class="hint">Clic en una celda para ver esos autos · entre paréntesis, los que ya vencieron su objetivo</div></div>
+          <div style="overflow-x:auto;"><table class="data-table stk-mx" id="algMatriz"></table></div>
+          <div class="an-sub" style="margin-top:14px;">📍 Dónde están (situación de stock)</div>
+          <div id="algUbic"></div>
+        </div>
+        <div class="panel">
+          <div class="panel-head"><h3>📈 Ritmo de alistaje</h3><div class="hint">Autos alistados por día hábil (últimos 10 días hábiles con datos) vs. lo que entra a la cola (arribos)</div></div>
+          <div id="algRitmo"></div>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="panel-head">
+          <h3>📋 Cola de trabajo</h3>
+          <div class="hint" id="algHint"></div>
+          <div class="export-group"><button class="page-btn" id="algExcel" type="button">⬇️ Excel</button></div>
+        </div>
+        <div class="table-scroll" style="max-height:640px;"><table class="data-table" id="algTabla"></table></div>
+      </div>
+    </div>
 
     <div class="subtab-content" id="tabFueraDQ">
       <div class="panel">
@@ -4667,6 +4705,151 @@
     html += entries.map(([k,v]) => `<tr><td>${escapeHtml(k)}</td><td style="text-align:right;">${v}</td></tr>`).join('');
     html += `</tbody></table></div>`;
     return html;
+  }
+
+  // ================= 🧹 Alistaje — gestión (Entregas) =================
+  const ALG = {init:false, marcas:new Set(), estados:new Set(['Patentado', 'Facturado', 'Reservado', 'Sin operacion']), canales:new Set(), allCanales:[], card:null, cell:null, ubic:null, q:''};
+  const ALG_PRIO = {
+    1: {t:'🔥 Turno de entrega encima', c:'var(--red)'},
+    2: {t:'🔴 Patentado', c:'#ef4444'},
+    3: {t:'🟠 Facturado', c:'var(--orange)'},
+    4: {t:'🟡 Reservado', c:'var(--amber)'},
+    5: {t:'🔵 Stock (sin operación)', c:'var(--blue)'}
+  };
+  function algInfo(r){
+    const hoy = new Date(); hoy.setHours(0,0,0,0);
+    const est = categorize(r);
+    const fArr = entMid(parseDateFlexible(r['Fecha Arribo Unidad']));
+    const fv = entMid(parseDateFlexible(r['Fecha Venta']));
+    const vendido = est !== 'Sin operacion';
+    // Desde cuándo se puede alistar: arribo (stock) o lo último entre venta y arribo (vendidos)
+    const desde = vendido && fv && fArr ? (fv > fArr ? fv : fArr) : fArr;
+    const espera = desde && desde <= hoy ? (diasHabilesSLA(desde, hoy) || 0) : 0;
+    const objA = (typeof entObjetivos === 'function' ? entObjetivos().alistaje : 1) || 1;
+    const vencido = vendido && espera > objA;
+    let turno = null; try { turno = usadoTurno(r); } catch(e){}
+    if (!turno){ const ft = entMid(parseDateFlexible(r['Fecha Turno Entrega'])); if (ft) turno = {fecha: ft, hora: '', origen: 'base'}; }
+    const dTurno = turno && turno.fecha >= hoy ? (diasHabilesSLA(hoy, turno.fecha) || 0) : null;
+    const tAl = entMid(parseDateFlexible(r['Fecha Turno Alistaje']));
+    const prio = (dTurno !== null && dTurno <= 3) ? 1 : ({Patentado:2, Facturado:3, Reservado:4})[est] || 5;
+    return {est, fArr, desde, espera, vencido, turno, dTurno, tAl, prio, averia: hasAveria(r), acc: tieneAccesorios(r) && !accesoriosListos(r), usado: esUsado(r)};
+  }
+  const ALG_CARDS = [
+    {k:'todos',   t:'🧹 Pendientes de alistar', c:'var(--blue)',   f:() => true},
+    {k:'urg',     t:'🔥 Turno de entrega en ≤3 días', c:'var(--red)', f:(r, x) => x.prio === 1},
+    {k:'venc',    t:'⏰ Vendidos con objetivo vencido', c:'var(--red)', f:(r, x) => x.vencido},
+    {k:'vendsin', t:'🗓️ Vendidos sin turno de alistaje', c:'var(--amber)', f:(r, x) => x.est !== 'Sin operacion' && !x.tAl},
+    {k:'tal',     t:'📅 Con turno de alistaje', c:'var(--green)', f:(r, x) => !!x.tAl},
+    {k:'av',      t:'⚠️ Con avería abierta', c:'var(--red)', f:(r, x) => x.averia},
+    {k:'acc',     t:'🎒 Con accesorios a colocar', c:'var(--orange)', f:(r, x) => x.acc},
+    {k:'mas5',    t:'🐢 Más de 5 días hábiles esperando', c:'var(--gray)', f:(r, x) => x.espera > 5}
+  ];
+  function algInit(){
+    if (ALG.init) return; ALG.init = true;
+    CAR_BRANDS.forEach(b => ALG.marcas.add(b));
+    const bind = (id, set) => $(id).addEventListener('click', e => { const b = e.target.closest('button[data-v]'); if (!b) return;
+      const v = b.dataset.v; if (set.has(v)) set.delete(v); else set.add(v); ALG.cell = null; renderAlistajeGest(); });
+    bind('algMarca', ALG.marcas); bind('algEstado', ALG.estados); bind('algCanal', ALG.canales);
+    $('algCards').addEventListener('click', e => { const c = e.target.closest('[data-k]'); if (!c) return; ALG.card = (ALG.card === c.dataset.k || c.dataset.k === 'todos') ? null : c.dataset.k; renderAlistajeGest(); });
+    $('algMatriz').addEventListener('click', e => { const c = e.target.closest('td[data-e]'); if (!c) return; const nv = {e:c.dataset.e, m:c.dataset.m};
+      ALG.cell = (ALG.cell && ALG.cell.e === nv.e && ALG.cell.m === nv.m) ? null : nv; renderAlistajeGest(); });
+    $('algUbic').addEventListener('click', e => { const c = e.target.closest('[data-u]'); if (!c) return; ALG.ubic = ALG.ubic === c.dataset.u ? null : c.dataset.u; renderAlistajeGest(); });
+    $('algLimpiar').addEventListener('click', () => { CAR_BRANDS.forEach(b => ALG.marcas.add(b)); ['Patentado', 'Facturado', 'Reservado', 'Sin operacion'].forEach(x => ALG.estados.add(x)); ALG.allCanales.forEach(x => ALG.canales.add(x));
+      ALG.card = null; ALG.cell = null; ALG.ubic = null; ALG.q = ''; $('algBuscar').value = ''; renderAlistajeGest(); });
+    let t; $('algBuscar').addEventListener('input', e => { clearTimeout(t); t = setTimeout(() => { ALG.q = e.target.value.trim().toLowerCase(); renderAlistajeGest(); }, 200); });
+    $('algTabla').addEventListener('click', e => { const tr = e.target.closest('tr[data-i]'); if (tr && typeof fiAbrir === 'function') fiAbrir(tr.dataset.i); });
+    $('algExcel').addEventListener('click', () => {
+      const data = (ALG.ult || []).map(([r, x]) => ({
+        'Prioridad': ALG_PRIO[x.prio].t.replace(/^\S+\s/, ''), 'Interno': stkTxt(r, 'Interno'), 'Marca': stkTxt(r, 'Marca'), 'Modelo': stkTxt(r, 'Modelo'), 'Color': stkTxt(r, 'Color'),
+        'Estado comercial': STK_EST_LBL[x.est].replace(/^\S+\s/, ''), 'Cliente': stkTxt(r, 'Cliente'), 'Canal': stkTxt(r, 'Canal'), 'Ubicacion': stkTxt(r, 'Ubicacion'),
+        'Arribo': x.fArr ? entFmt(x.fArr) : '', 'Esperando desde': x.desde ? entFmt(x.desde) : '', 'Dias habiles esperando': x.espera, 'Objetivo vencido': x.vencido ? 'SI' : '',
+        'Turno alistaje': x.tAl ? entFmt(x.tAl) : '', 'Turno entrega': x.turno ? entFmt(x.turno.fecha) + (x.turno.hora ? ' ' + x.turno.hora : '') : '',
+        'Averia abierta': x.averia ? 'SI' : '', 'Accesorios a colocar': x.acc ? 'SI' : '', 'Usado en la operacion': x.usado ? 'SI' : ''
+      }));
+      if (!data.length) return;
+      const ws = XLSX.utils.json_to_sheet(data), wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Alistaje pendiente');
+      XLSX.writeFile(wb, `alistaje_pendiente_${todayStamp()}.xlsx`);
+    });
+  }
+  function renderAlistajeGest(){
+    if (!$('tabAlistajeGest') || !ALL_ROWS.length) return;
+    algInit();
+    const lblM = b => (typeof PATENTADOS_BRAND_LABELS !== 'undefined' && PATENTADOS_BRAND_LABELS[b]) || b;
+    // Universo: arribados, sin alistar, sin entregar
+    const pend = ALL_ROWS.filter(r => !isEntregado(r) && stkTxt(r, 'Fecha Arribo Unidad') && !isAlistado(r)).map(r => [r, algInfo(r)]);
+    const canales = [...new Set(pend.map(([r]) => stkTxt(r, 'Canal') || '(sin canal)'))].sort();
+    canales.forEach(c => { if (!ALG.allCanales.includes(c)){ ALG.allCanales.push(c); ALG.canales.add(c); } });
+    stkPills('algMarca', CAR_BRANDS, ALG.marcas, lblM);
+    stkPills('algEstado', STK_ESTADOS, ALG.estados, e => STK_EST_LBL[e]);
+    stkPills('algCanal', canales, ALG.canales);
+    const q = ALG.q;
+    const base = pend.filter(([r, x]) => ALG.marcas.has(stkTxt(r, 'Marca').toUpperCase()) && ALG.estados.has(x.est) && ALG.canales.has(stkTxt(r, 'Canal') || '(sin canal)') &&
+      (!q || ['Interno', 'Cliente', 'Modelo', 'Color'].some(c => stkTxt(r, c).toLowerCase().includes(q))));
+    // Tarjetas
+    $('algCards').innerHTML = ALG_CARDS.map(c => { const n = base.filter(([r, x]) => c.f(r, x)).length; const on = (ALG.card === c.k) || (c.k === 'todos' && !ALG.card);
+      return `<div class="stk-card ${on ? 'on' : ''}" data-k="${c.k}" style="--kc:${c.c};"><div class="t">${c.t}</div><div class="v">${n.toLocaleString('es-AR')}</div><div class="s">${c.k === 'todos' ? 'arribados, sin alistar' : (base.length ? Math.round(n / base.length * 100) + '% de los pendientes' : '')}</div></div>`; }).join('');
+    const cardF = ALG.card ? ALG_CARDS.find(c => c.k === ALG.card).f : () => true;
+    const conCard = base.filter(([r, x]) => cardF(r, x));
+    // Cuadro estado × marca
+    const marcas = CAR_BRANDS.filter(b => ALG.marcas.has(b));
+    const ests = STK_ESTADOS.slice().reverse().filter(e => ALG.estados.has(e));
+    const sel = (e, m) => ALG.cell && ALG.cell.e === (e || '') && ALG.cell.m === (m || '');
+    const cel = (e, m, bold) => { const xs = conCard.filter(([r, x]) => (!e || x.est === e) && (!m || stkTxt(r, 'Marca').toUpperCase() === m)); const v = xs.filter(([, x]) => x.vencido).length;
+      return `<td class="c ${sel(e, m) ? 'sel' : ''}" data-e="${e || ''}" data-m="${m || ''}">${bold ? '<b>' : ''}${xs.length}${bold ? '</b>' : ''}${v ? ` <span style="color:var(--red); font-size:11px;">(${v})</span>` : ''}</td>`; };
+    $('algMatriz').innerHTML = `<thead><tr><th>Estado</th>${marcas.map(m => `<th style="text-align:right;">${escapeHtml(lblM(m))}</th>`).join('')}<th style="text-align:right;">Total</th><th style="text-align:right;">Espera prom.</th></tr></thead><tbody>` +
+      ests.map(e => { const xs = conCard.filter(([, x]) => x.est === e); const pr = xs.length ? (xs.reduce((a, [, x]) => a + x.espera, 0) / xs.length).toFixed(1).replace('.', ',') + ' dh' : '—';
+        return `<tr><td>${STK_EST_LBL[e]}</td>${marcas.map(m => cel(e, m)).join('')}${cel(e, '', true)}<td style="text-align:right;" class="hint">${pr}</td></tr>`; }).join('') +
+      `<tr style="border-top:2px solid var(--border);"><td><b>Total</b></td>${marcas.map(m => cel('', m, true)).join('')}${cel('', '', true)}<td></td></tr></tbody>`;
+    // Ubicaciones
+    const ubCount = {}; conCard.forEach(([r]) => { const u = stkTxt(r, 'Ubicacion') || '(sin ubicación)'; ubCount[u] = (ubCount[u] || 0) + 1; });
+    const ubs = Object.entries(ubCount).sort((a, b) => b[1] - a[1]); const maxU = Math.max(1, ...ubs.map(x => x[1]));
+    $('algUbic').innerHTML = ubs.slice(0, 10).map(([u, n]) => `<div class="pat-motivo ${ALG.ubic === u ? 'active' : ''}" data-u="${escapeHtml(u)}" title="Clic para filtrar la cola"><span class="pm-label">${escapeHtml(u)}</span><span class="pm-bar"><span style="width:${Math.max(3, Math.round(n / maxU * 100))}%; background:var(--blue);"></span></span><span class="pm-n">${n}</span></div>`).join('') +
+      (ubs.length > 10 ? `<div class="hint">… y ${ubs.length - 10} ubicaciones más</div>` : '') || '<div class="hint">—</div>';
+    // Ritmo: alistados vs. entradas a la cola, últimos 10 días hábiles
+    {
+      // Se ancla al último día con alistajes en la base (si la base es de días atrás, igual muestra algo útil)
+      let hoy = new Date(); hoy.setHours(0,0,0,0);
+      let ult = null; ALL_ROWS.forEach(r => { const fa = entMid(parseDateFlexible(r['Fecha Alistaje'])); if (fa && fa <= hoy && (!ult || fa > ult)) ult = fa; });
+      if (ult) hoy = ult;
+      const dias = []; const d = new Date(hoy); while (dias.length < 10){ if (d.getDay() % 6 && !(typeof esFeriadoSLA === 'function' && esFeriadoSLA(d))) dias.unshift(new Date(d)); d.setDate(d.getDate() - 1); }
+      const k = x => x ? x.getFullYear() + '-' + x.getMonth() + '-' + x.getDate() : '';
+      const al = {}, en = {};
+      ALL_ROWS.forEach(r => { if (!ALG.marcas.has(stkTxt(r, 'Marca').toUpperCase())) return;
+        const fa = entMid(parseDateFlexible(r['Fecha Alistaje'])); if (fa) al[k(fa)] = (al[k(fa)] || 0) + 1;
+        const arr = entMid(parseDateFlexible(r['Fecha Arribo Unidad'])); if (arr) en[k(arr)] = (en[k(arr)] || 0) + 1; });
+      const maxR = Math.max(1, ...dias.map(x => Math.max(al[k(x)] || 0, en[k(x)] || 0)));
+      const totA = dias.reduce((a, x) => a + (al[k(x)] || 0), 0), totE = dias.reduce((a, x) => a + (en[k(x)] || 0), 0);
+      const dn = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'];
+      $('algRitmo').innerHTML = `<div style="display:flex; gap:6px; align-items:flex-end; height:150px; padding:6px 0;">` + dias.map(x => { const a = al[k(x)] || 0, e = en[k(x)] || 0;
+        return `<div style="flex:1; display:flex; flex-direction:column; align-items:center; gap:3px;" title="${entFmt(x)}: ${a} alistados · ${e} arribos">
+          <div style="display:flex; gap:2px; align-items:flex-end; height:118px;"><div style="width:11px; height:${Math.round(a / maxR * 112)}px; background:var(--green); border-radius:3px 3px 0 0;"></div><div style="width:11px; height:${Math.round(e / maxR * 112)}px; background:var(--gray); opacity:.6; border-radius:3px 3px 0 0;"></div></div>
+          <div class="hint" style="font-size:10px; line-height:1.1; text-align:center;"><b style="color:var(--text);">${a}</b><br>${dn[x.getDay()]} ${x.getDate()}</div></div>`; }).join('') + '</div>' +
+        `<div class="hint" style="margin-top:6px; font-size:12px; line-height:1.5;"><span style="color:var(--green);">■</span> alistados: <b>${totA}</b> (${(totA / 10).toFixed(1).replace('.', ',')} por día) · <span style="opacity:.6;">■</span> arribos: <b>${totE}</b> · ` +
+        (!totA && !totE ? '<span class="hint">sin movimientos en el período</span>' : totA >= totE ? '<span style="color:var(--green); font-weight:700;">la cola se achica ✅</span>' : `<span style="color:var(--red); font-weight:700;">la cola crece (+${totE - totA} en 2 semanas)</span>`) +
+        (totA ? ` · al ritmo actual, los ${base.length} pendientes se alistan en ~${Math.ceil(base.length / (totA / 10))} días hábiles` : '') + '</div>';
+    }
+    // Cola de trabajo
+    let rows = conCard;
+    if (ALG.cell) rows = rows.filter(([r, x]) => (!ALG.cell.e || x.est === ALG.cell.e) && (!ALG.cell.m || stkTxt(r, 'Marca').toUpperCase() === ALG.cell.m));
+    if (ALG.ubic) rows = rows.filter(([r]) => (stkTxt(r, 'Ubicacion') || '(sin ubicación)') === ALG.ubic);
+    rows = rows.slice().sort((a, b) => (a[1].prio - b[1].prio) || ((a[1].dTurno ?? 99) - (b[1].dTurno ?? 99)) || (b[1].espera - a[1].espera));
+    ALG.ult = rows;
+    const filtros = [ALG.card && ALG_CARDS.find(c => c.k === ALG.card).t, ALG.cell && ((ALG.cell.e ? STK_EST_LBL[ALG.cell.e] : 'Todos los estados') + ' · ' + (ALG.cell.m ? lblM(ALG.cell.m) : 'todas las marcas')), ALG.ubic && '📍 ' + ALG.ubic].filter(Boolean);
+    $('algHint').textContent = `${rows.length} autos${filtros.length ? ' · ' + filtros.join(' + ') : ''} · ordenados por prioridad: turno de entrega encima → patentados → facturados → reservados → stock, y dentro de cada uno por días esperando`;
+    const chip = (t, c) => `<span class="stk-chip" style="border-color:${c}; color:${c};">${t}</span>`;
+    $('algTabla').innerHTML = `<thead><tr><th>Prioridad</th><th>Interno</th><th>Marca</th><th>Modelo · color</th><th>Estado</th><th style="text-align:right;">Esperando</th><th>Ubicación</th><th>Turno alistaje</th><th>Turno entrega</th><th>Ojo con</th></tr></thead><tbody>` +
+      (rows.length ? rows.slice(0, 600).map(([r, x]) => {
+        const p = ALG_PRIO[x.prio];
+        return `<tr data-i="${escapeHtml(stkTxt(r, 'Interno'))}" style="cursor:pointer;"><td><span class="stk-chip" style="border-color:${p.c}; color:${p.c}; font-weight:700;">${p.t}</span></td>
+          <td><b>${escapeHtml(stkTxt(r, 'Interno'))}</b></td><td>${escapeHtml(lblM(stkTxt(r, 'Marca').toUpperCase()))}</td><td>${escapeHtml(stkTxt(r, 'Modelo'))}<div class="hint">${escapeHtml(stkTxt(r, 'Color'))}</div></td>
+          <td>${STK_EST_LBL[x.est]}${stkTxt(r, 'Cliente') && x.est !== 'Sin operacion' ? `<div class="hint">${escapeHtml(stkTxt(r, 'Cliente'))}</div>` : ''}</td>
+          <td style="text-align:right; font-weight:700; color:${x.vencido ? 'var(--red)' : (x.espera > 5 ? 'var(--amber)' : 'var(--text)')};">${x.espera} dh${x.vencido ? '<div style="font-size:10.5px;">vencido</div>' : ''}</td>
+          <td>${escapeHtml(stkTxt(r, 'Ubicacion') || '—')}</td>
+          <td>${x.tAl ? entFmt(x.tAl) : '<span class="hint">sin turno</span>'}</td>
+          <td>${x.turno ? `<b style="color:${x.prio === 1 ? 'var(--red)' : 'var(--text)'};">${entFmt(x.turno.fecha)}${x.turno.hora ? ' ' + escapeHtml(x.turno.hora) : ''}</b>${x.dTurno !== null ? `<div class="hint">en ${x.dTurno} dh${x.turno.origen === 'agenda' ? ' · agenda' : ''}</div>` : ''}` : '—'}</td>
+          <td>${[x.averia && chip('⚠️ avería', 'var(--red)'), x.acc && chip('🎒 accesorios', 'var(--orange)'), x.usado && chip('🚗 usado', 'var(--amber)')].filter(Boolean).join('') || '<span class="hint">—</span>'}</td></tr>`; }).join('')
+      : '<tr><td colspan="10" class="table-empty">Nada pendiente de alistar con estos filtros 🎉</td></tr>') + '</tbody>';
   }
 
   // ================= 📦 Stock sin entregar =================
@@ -9325,7 +9508,7 @@
   });
 
   // ---------- Sub-pestañas de Entregas ----------
-  const SUBTAB_TARGETS = {facturados:'tabPatentados', patentados:'tabPatentados', averias:'tabAverias', fueradq:'tabFueraDQ', accesorios:'tabAccesorios', contactacion:'tabContactacion', clienteexterno:'tabClienteExterno', agenda:'tabAgenda'};
+  const SUBTAB_TARGETS = {alistajegest:'tabAlistajeGest', facturados:'tabPatentados', patentados:'tabPatentados', averias:'tabAverias', fueradq:'tabFueraDQ', accesorios:'tabAccesorios', contactacion:'tabContactacion', clienteexterno:'tabClienteExterno', agenda:'tabAgenda'};
   document.querySelectorAll('#entregasSubNav .subtab-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       if (typeof rolVista === 'function' && rolVista() && !rolVista().entregas.includes(btn.dataset.subtab)) return;
@@ -9338,6 +9521,7 @@
         try { renderPatentadosSection(); } catch(e){ console.error(e); }
       }
       if (btn.dataset.subtab === 'clienteexterno' && typeof renderClienteExternoSection === 'function') renderClienteExternoSection();
+      if (btn.dataset.subtab === 'alistajegest'){ try { renderAlistajeGest(); } catch(e){ console.error('renderAlistajeGest', e); } }
       if (btn.dataset.subtab === 'agenda' && typeof renderAgendaSection === 'function'){ try { renderAgendaSection(); } catch(e){ console.error('renderAgendaSection', e); } }
     });
   });
@@ -12159,6 +12343,7 @@
     safeStep(() => populateVenBrandFilter(rows), 'populateVenBrandFilter');
     safeStep(() => renderVentasSection(), 'renderVentasSection');
     safeStep(() => renderStockSection(), 'renderStockSection');
+    safeStep(() => { if ($('tabAlistajeGest') && $('tabAlistajeGest').classList.contains('active')) renderAlistajeGest(); }, 'renderAlistajeGest');
     safeStep(() => populateGesBrandFilter(rows), 'populateGesBrandFilter');
     safeStep(() => renderGestoriaSection(), 'renderGestoriaSection');
     safeStep(() => populateObjFilters(), 'populateObjFilters');
